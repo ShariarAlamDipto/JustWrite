@@ -1,0 +1,5 @@
+{
+  "name": "distill_v1",
+  "description": "Prompt template to summarize journal entry and extract tasks. Returns strict JSON {summary, tasks[] }.",
+  "prompt": "You are an assistant that converts a personal journal entry into a short summary and a list of actionable tasks.\nReturn only valid JSON with fields: summary (string), tasks (array of {title, description|null, priority: 'low'|'medium'|'high', due:null|string}). If no tasks, return tasks: [].\nEntry: '''{entry}'''"
+}

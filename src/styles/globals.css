@@ -1,0 +1,226 @@
+:root{
+  --bg: #000000;
+  --fg: #ffffff;
+  --muted: #9a9a9a;
+  --card: #070707;
+  --accent: #00ffd5; /* neon aqua */
+  --accent-2: #ff3bff; /* magenta */
+}
+
+/* Animations */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    text-shadow: 0 0 6px rgba(0, 255, 213, 0.25);
+  }
+  50% {
+    text-shadow: 0 0 12px rgba(0, 255, 213, 0.5);
+  }
+}
+
+@keyframes scan-lines {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 2px;
+  }
+}
+
+/* Import fallback if local, but primary font is loaded via Head in _app.tsx */
+html, body, #__next {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Press Start 2P', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Courier New', monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  line-height: 1.6;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+a:hover {
+  text-shadow: 0 0 8px rgba(0, 255, 213, 0.5);
+}
+
+.container {
+  max-width: 920px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+.card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+  border: 2px solid var(--accent);
+  padding: 12px;
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(0, 255, 213, 0.1);
+}
+
+.btn {
+  font-family: inherit;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: var(--fg);
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 255, 213, 0.3);
+}
+
+.btn:active {
+  transform: translateY(2px);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  font-weight: 700;
+}
+
+.btn-primary:hover {
+  background: #00e6b8;
+  box-shadow: 0 0 12px rgba(0, 255, 213, 0.6);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.entry-preview {
+  color: #ddd;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease-out;
+  z-index: 1000;
+}
+
+.modal-card {
+  width: min(920px, 96%);
+  background: var(--card);
+  color: var(--fg);
+  padding: 20px;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  box-shadow: 0 0 20px rgba(0, 255, 213, 0.3);
+  animation: slideUp 0.3s ease-out;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 255, 213, 0.3);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Arcade accent glow */
+.glow {
+  text-shadow: 0 0 10px rgba(0, 255, 213, 0.5);
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+/* Input styles */
+input,
+textarea {
+  background: var(--bg);
+  color: var(--fg);
+  border: 2px solid var(--muted);
+  padding: 12px;
+  font-family: monospace;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(0, 255, 213, 0.3);
+}
+
+textarea:placeholder-shown {
+  color: var(--muted);
+}
+
+/* Small responsive tweaks */
+@media (max-width: 600px) {
+  .container {
+    margin: 20px auto;
+  }
+
+  body {
+    font-size: 11px;
+  }
+
+  .modal-card {
+    padding: 16px;
+  }
+
+  .btn {
+    padding: 6px 10px;
+    font-size: 0.6rem;
+  }
+}
