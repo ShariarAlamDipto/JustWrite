@@ -1,11 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/useAuth';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      console.log('Already logged in, redirecting to home...');
+      router.replace('/');
+    }
+  }, [user, authLoading, router]);
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <p style={{ color: 'var(--accent)', textAlign: 'center' }}>Checking session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Already logged in, show redirect message
+  if (user) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <p style={{ color: 'var(--accent)', textAlign: 'center' }}>Already logged in! Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
