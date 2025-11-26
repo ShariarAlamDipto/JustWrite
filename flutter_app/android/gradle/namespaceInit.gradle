@@ -1,0 +1,21 @@
+// Gradle initialization script to configure namespace for plugins
+gradle.rootProject {
+    allprojects {
+        afterEvaluate { project ->
+            // Check if this is an Android plugin that needs namespace
+            if (project.hasProperty('android')) {
+                def android = project.extensions.getByName('android')
+                
+                // Only set if not already set
+                if (!android.hasProperty('namespace') || android.getProperty('namespace') == null) {
+                    try {
+                        android.namespace = 'com.example.justwrite_mobile'
+                        println "Set namespace for ${project.name}"
+                    } catch (Exception e) {
+                        println "Could not set namespace for ${project.name}: ${e.message}"
+                    }
+                }
+            }
+        }
+    }
+}

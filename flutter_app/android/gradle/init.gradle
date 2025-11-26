@@ -1,0 +1,18 @@
+// Configure namespace for all plugins
+gradle.settingsEvaluated { settings ->
+    settings.pluginManagement.repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+gradle.projectsLoaded { gradle ->
+    gradle.allprojects { project ->
+        project.afterEvaluate {
+            if (project.plugins.hasPlugin('com.android.library') || project.plugins.hasPlugin('com.android.application')) {
+                project.extensions.android.namespace = "com.example.justwrite_mobile"
+            }
+        }
+    }
+}

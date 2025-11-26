@@ -1,0 +1,85 @@
+name: justwrite_mobile
+description: JustWrite - AI-powered journaling and task management mobile app for iOS and Android.
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  provider: ^6.1.5+1
+
+  # Backend & Authentication
+  supabase_flutter: ^1.10.11
+
+  # HTTP & Networking
+  http: ^1.1.0
+
+  # Local Database
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  path_provider: ^2.1.1
+
+  # Local Storage
+  shared_preferences: ^2.2.2
+
+  # Environment Variables
+  flutter_dotenv: ^5.1.0
+
+  # Date/Time & Formatting
+  intl: ^0.19.0
+
+  # JSON Serialization
+  json_annotation: ^4.8.1
+
+  # Connectivity
+  connectivity_plus: ^5.0.0
+
+  # UUID Generation
+  uuid: ^4.0.0
+
+  # Icons & UI
+  cupertino_icons: ^1.0.2
+
+  # Image & File Handling
+  image_picker: ^1.0.4
+  # file_picker: ^6.1.1  # Commented out due to v1 embedding incompatibility - use image_picker instead
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.8
+  json_serializable: ^6.7.1
+
+dependency_overrides:
+  sign_in_with_apple: ^7.0.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+    - .env
+    - .env.example
+
+  # Fonts commented out for now - using system fonts
+  # fonts:
+  #   - family: PressStart2P
+  #     fonts:
+  #       - asset: assets/fonts/PressStart2P-Regular.ttf
+  #   - family: Roboto
+  #     fonts:
+  #       - asset: assets/fonts/Roboto-Regular.ttf
+  #       - asset: assets/fonts/Roboto-Bold.ttf
+  #         weight: 700
+  #       - asset: assets/fonts/Roboto-Italic.ttf
+  #         style: italic
