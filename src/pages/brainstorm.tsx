@@ -8,6 +8,7 @@ export default function BrainstormPage() {
   const [generatedTasks, setGeneratedTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [addingTasks, setAddingTasks] = useState(false);
 
   const handleGenerate = async () => {
     if (!freeText.trim()) return;
@@ -23,7 +24,13 @@ export default function BrainstormPage() {
       });
       if (res.ok) {
         const json = await res.json();
-        setGeneratedTasks(json.tasks || []);
+        const tasksWithIds = (json.tasks || []).map((t: any, i: number) => ({
+          ...t,
+          id: `task-${Date.now()}-${i}`
+        }));
+        setGeneratedTasks(tasksWithIds);
+        // Auto-select all tasks
+        setSelectedTasks(new Set(tasksWithIds.map((t: any) => t.id)));
       } else {
         const err = await res.json();
         console.error('Failed to generate tasks:', err.error);
@@ -35,7 +42,8 @@ export default function BrainstormPage() {
     setLoading(false);
   };
 
-  const toggleTask = (id: string) => {
+  const toggleTask = (id: string, e: React.MouseEvent | React.ChangeEvent) => {
+    e.stopPropagation();
     const newSelected = new Set(selectedTasks);
     if (newSelected.has(id)) {
       newSelected.delete(id);
@@ -45,13 +53,24 @@ export default function BrainstormPage() {
     setSelectedTasks(newSelected);
   };
 
+  const deleteTask = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setGeneratedTasks(prev => prev.filter(t => t.id !== id));
+    setSelectedTasks(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(id);
+      return newSet;
+    });
+  };
+
   const handleAddSelected = async () => {
     if (selectedTasks.size === 0) return;
+    setAddingTasks(true);
 
     const tasksToAdd = generatedTasks.filter(t => selectedTasks.has(t.id));
 
     try {
-      await Promise.all(
+      const results = await Promise.all(
         tasksToAdd.map(t =>
           fetch('/api/tasks', {
             method: 'POST',
@@ -63,17 +82,26 @@ export default function BrainstormPage() {
               title: t.title,
               description: t.description,
               priority: t.priority,
+              status: 'todo',
             }),
           })
         )
       );
-      setSelectedTasks(new Set());
-      setGeneratedTasks([]);
-      setFreeText('');
-      alert(`✓ Added ${tasksToAdd.length} task(s) to your to-do list!`);
+      
+      const allSuccess = results.every(r => r.ok);
+      if (allSuccess) {
+        setSelectedTasks(new Set());
+        setGeneratedTasks([]);
+        setFreeText('');
+        alert(`✓ Added ${tasksToAdd.length} task(s) to your to-do list!`);
+      } else {
+        alert('Some tasks failed to add. Please try again.');
+      }
     } catch (err) {
       console.error('Failed to add tasks:', err);
+      alert('Failed to add tasks. Please try again.');
     }
+    setAddingTasks(false);
   };
 
   if (authLoading) {
@@ -82,6 +110,17 @@ export default function BrainstormPage() {
         <Nav />
         <div style={styles.container}>
           <p style={styles.loading}>Loading...</p>
+        </div>
+      </>
+    );
+  }
+
+  if (!user) {
+    return (
+      <>
+        <Nav />
+        <div style={styles.container}>
+          <p style={styles.error}>Please sign in to use Brainstorm.</p>
         </div>
       </>
     );
@@ -103,13 +142,16 @@ export default function BrainstormPage() {
             value={freeText}
             onChange={e => setFreeText(e.target.value)}
             placeholder="Write anything... ideas, todos, notes, reminders..."
-            rows={8}
+            rows={6}
             style={styles.textarea}
           />
           <button
             onClick={handleGenerate}
             disabled={loading || !freeText.trim()}
-            style={styles.btnPrimary}
+            style={{
+              ...styles.btnPrimary,
+              opacity: loading || !freeText.trim() ? 0.5 : 1,
+            }}
           >
             {loading ? 'ANALYZING…' : 'GENERATE TASKS'}
           </button>
@@ -118,7 +160,11 @@ export default function BrainstormPage() {
         {/* Generated Tasks */}
         {generatedTasks.length > 0 && (
           <div style={styles.section}>
-            <label style={styles.label}>EXTRACTED TASKS ({generatedTasks.length})</label>
+            <label style={styles.label}>
+              EXTRACTED TASKS ({generatedTasks.length})
+            </label>
+            <p style={styles.hint}>Tap to select/deselect. Use ✕ to remove a task.</p>
+            
             <div style={styles.taskList}>
               {generatedTasks.map(task => (
                 <div
@@ -126,18 +172,18 @@ export default function BrainstormPage() {
                   style={{
                     ...styles.taskItem,
                     background: selectedTasks.has(task.id)
-                      ? 'rgba(0, 255, 213, 0.1)'
+                      ? 'rgba(0, 255, 213, 0.15)'
                       : 'transparent',
                     borderColor: selectedTasks.has(task.id)
                       ? 'var(--accent)'
                       : 'var(--muted)',
                   }}
-                  onClick={() => toggleTask(task.id)}
+                  onClick={(e) => toggleTask(task.id, e)}
                 >
                   <input
                     type="checkbox"
                     checked={selectedTasks.has(task.id)}
-                    onChange={() => toggleTask(task.id)}
+                    onChange={(e) => toggleTask(task.id, e)}
                     style={styles.checkbox}
                   />
                   <div style={styles.taskContent}>
@@ -151,16 +197,28 @@ export default function BrainstormPage() {
                       </span>
                     </div>
                   </div>
+                  <button
+                    onClick={(e) => deleteTask(task.id, e)}
+                    style={styles.deleteBtn}
+                    aria-label="Delete task"
+                  >
+                    ✕
+                  </button>
                 </div>
               ))}
             </div>
+
             <div style={styles.actions}>
               <button
                 onClick={handleAddSelected}
-                disabled={selectedTasks.size === 0}
-                style={styles.btnPrimary}
+                disabled={selectedTasks.size === 0 || addingTasks}
+                style={{
+                  ...styles.btnPrimary,
+                  flex: 2,
+                  opacity: selectedTasks.size === 0 || addingTasks ? 0.5 : 1,
+                }}
               >
-                ADD SELECTED ({selectedTasks.size}) TO TO-DO LIST
+                {addingTasks ? 'ADDING...' : `ADD (${selectedTasks.size}) TO LIST`}
               </button>
               <button
                 onClick={() => {
@@ -175,23 +233,13 @@ export default function BrainstormPage() {
           </div>
         )}
 
-        {/* No Tasks Message */}
-        {freeText.trim() && generatedTasks.length === 0 && !loading && (
-          <div style={styles.section}>
-            <p style={styles.emptyState}>
-              No tasks extracted. Try being more specific or add action words like "fix", "create", "implement", etc.
-            </p>
-          </div>
-        )}
-
         {/* Tips */}
         <div style={styles.section}>
           <label style={styles.label}>TIPS</label>
           <ul style={styles.tipsList}>
-            <li>Use action words: fix, create, implement, review, update, etc.</li>
-            <li>One task per line or sentence for best results</li>
-            <li>Add urgency words like "urgent" or "critical" to mark as high priority</li>
-            <li>Example: "Fix the auth bug, update documentation, deploy to production"</li>
+            <li>Use action words: fix, create, review, update</li>
+            <li>One task per line for best results</li>
+            <li>Add "urgent" to mark as high priority</li>
           </ul>
         </div>
       </div>
@@ -203,86 +251,96 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     maxWidth: 760,
     margin: '0 auto',
-    padding: '0 1rem 2rem',
+    padding: '0 12px 2rem',
   },
   section: {
-    marginBottom: '2rem',
+    marginBottom: '1.5rem',
   },
   title: {
-    fontSize: '1.2rem',
+    fontSize: '1rem',
     margin: '0 0 0.5rem',
     color: 'var(--accent)',
     textShadow: '0 0 10px rgba(0, 255, 213, 0.3)',
     letterSpacing: '0.1em',
   },
   subtitle: {
-    fontSize: '0.7rem',
+    fontSize: '0.6rem',
     color: 'var(--muted)',
     margin: 0,
     letterSpacing: '0.05em',
   },
   label: {
     display: 'block',
-    fontSize: '0.7rem',
+    fontSize: '0.6rem',
     fontWeight: 700,
     color: 'var(--accent)',
     letterSpacing: '0.1em',
+    marginBottom: '0.5rem',
+  },
+  hint: {
+    fontSize: '0.55rem',
+    color: 'var(--muted)',
     marginBottom: '0.75rem',
   },
   textarea: {
     width: '100%',
-    minHeight: '200px',
+    minHeight: '150px',
     background: 'var(--bg)',
     color: 'var(--fg)',
     border: '2px solid var(--muted)',
-    padding: '1rem',
+    padding: '0.75rem',
     fontFamily: 'monospace',
-    fontSize: '0.75rem',
+    fontSize: '16px',
     lineHeight: 1.6,
     resize: 'vertical',
+    boxSizing: 'border-box' as const,
   },
   btnPrimary: {
     width: '100%',
     background: 'var(--accent)',
     color: 'var(--bg)',
     border: 'none',
-    padding: '0.75rem',
+    padding: '0.85rem',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.65rem',
+    fontSize: '0.55rem',
     cursor: 'pointer',
     fontWeight: 700,
     transition: 'all 0.2s',
     marginTop: '0.75rem',
+    minHeight: '48px',
   },
   btnSecondary: {
     flex: 1,
     background: 'transparent',
     color: 'var(--accent)',
     border: '2px solid var(--accent)',
-    padding: '0.75rem',
+    padding: '0.85rem',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.65rem',
+    fontSize: '0.55rem',
     cursor: 'pointer',
     transition: 'all 0.2s',
+    minHeight: '48px',
   },
   taskList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.75rem',
+    gap: '0.6rem',
   },
   taskItem: {
     display: 'flex',
-    gap: '1rem',
+    gap: '0.75rem',
     alignItems: 'flex-start',
     background: 'var(--bg)',
     border: '2px solid var(--muted)',
-    padding: '1rem',
+    padding: '0.75rem',
     cursor: 'pointer',
     transition: 'all 0.2s',
+    position: 'relative' as const,
   },
   checkbox: {
-    width: '20px',
-    height: '20px',
+    width: '22px',
+    height: '22px',
+    minWidth: '22px',
     marginTop: '2px',
     cursor: 'pointer',
     accentColor: 'var(--accent)',
@@ -292,41 +350,60 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
   taskTitle: {
-    fontSize: '0.8rem',
+    fontSize: '0.7rem',
     fontWeight: 700,
     color: 'var(--fg)',
-    marginBottom: '0.5rem',
+    marginBottom: '0.4rem',
+    wordBreak: 'break-word' as const,
   },
   taskDesc: {
-    fontSize: '0.7rem',
+    fontSize: '0.6rem',
     color: 'var(--muted)',
-    marginBottom: '0.5rem',
+    marginBottom: '0.4rem',
     lineHeight: 1.5,
+    wordBreak: 'break-word' as const,
   },
   taskPriority: {
-    fontSize: '0.65rem',
+    fontSize: '0.55rem',
     color: 'var(--muted)',
+  },
+  deleteBtn: {
+    background: 'rgba(255, 59, 255, 0.2)',
+    color: '#ff3bff',
+    border: '1px solid #ff3bff',
+    width: '36px',
+    height: '36px',
+    minWidth: '36px',
+    fontSize: '1rem',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s',
+    padding: 0,
   },
   actions: {
     display: 'flex',
-    gap: '0.75rem',
+    gap: '0.6rem',
     marginTop: '1rem',
-  },
-  emptyState: {
-    fontSize: '0.75rem',
-    color: 'var(--muted)',
-    textAlign: 'center',
-    padding: '2rem 1rem',
+    flexWrap: 'wrap' as const,
   },
   tipsList: {
-    fontSize: '0.7rem',
+    fontSize: '0.6rem',
     color: 'var(--muted)',
     lineHeight: 1.8,
-    paddingLeft: '1.5rem',
+    paddingLeft: '1.25rem',
+    margin: 0,
   },
   loading: {
-    fontSize: '0.75rem',
+    fontSize: '0.7rem',
     color: 'var(--fg)',
+    textAlign: 'center',
+    padding: '2rem',
+  },
+  error: {
+    fontSize: '0.7rem',
+    color: '#ff3bff',
     textAlign: 'center',
     padding: '2rem',
   },

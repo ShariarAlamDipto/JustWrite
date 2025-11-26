@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import DistillView from '../components/DistillView';
-import { useSocket } from '../lib/useSocket';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
 
@@ -9,31 +8,17 @@ export default function Home() {
   const [content, setContent] = useState('');
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [distillLoading, setDistillLoading] = useState<string | null>(null);
   const [distillData, setDistillData] = useState<any>(null);
   const [distillOpen, setDistillOpen] = useState(false);
-  const { socket, isConnected } = useSocket();
 
   useEffect(() => { 
     if (user && token) fetchEntries();
   }, [user, token]);
 
-  // Listen for real-time entry creation
-  useEffect(() => {
-    if (!socket) return;
-    socket.on('entry:created', (newEntry: any) => {
-      setEntries(prev => [newEntry, ...prev]);
-    });
-    socket.on('task:updated', () => {
-      fetchEntries();
-    });
-    return () => {
-      socket.off('entry:created');
-      socket.off('task:updated');
-    };
-  }, [socket]);
-
   async function fetchEntries() {
+    setLoading(true);
     try {
       const res = await fetch('/api/entries', {
         headers: { 'Authorization': `Bearer ${token || ''}` }
@@ -45,11 +30,12 @@ export default function Home() {
     } catch (err) {
       console.error('Failed to fetch entries:', err);
     }
+    setLoading(false);
   }
 
   async function createEntry() {
     if (!content.trim()) return;
-    setLoading(true);
+    setSaving(true);
     try {
       const res = await fetch('/api/entries', {
         method: 'POST',
@@ -57,22 +43,23 @@ export default function Home() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token || ''}`
         },
-        body: JSON.stringify({ content })
+        body: JSON.stringify({ content: content.trim() })
       });
       if (res.ok) {
         const json = await res.json();
         setContent('');
-        socket?.emit('entry:created', json.entry);
-        await fetchEntries();
+        // Add new entry to the top of the list
+        setEntries(prev => [json.entry, ...prev]);
       } else {
         const err = await res.json();
         console.error('Failed to create entry:', err.error);
-        alert(`Error: ${err.error}`);
+        alert(`Error saving entry: ${err.error}`);
       }
     } catch (err) {
       console.error('Failed to create entry:', err);
+      alert('Failed to save entry. Please try again.');
     }
-    setLoading(false);
+    setSaving(false);
   }
 
   async function distill(entryId: string) {
@@ -105,9 +92,13 @@ export default function Home() {
         setDistillData({ entry, summary: json.summary, tasks: entryTasks });
         setDistillOpen(true);
         await fetchEntries();
+      } else {
+        const err = await res.json();
+        alert(`Distill failed: ${err.error}`);
       }
     } catch (err) {
       console.error('Failed to distill:', err);
+      alert('Failed to distill entry. Please try again.');
     }
     setDistillLoading(null);
   }
@@ -149,7 +140,15 @@ export default function Home() {
       <>
         <Nav />
         <div style={styles.container}>
-          <p style={styles.error}>Please sign in to create entries.</p>
+          <div style={styles.welcomeBox}>
+            <h1 style={styles.welcomeTitle}>JUSTWRITE</h1>
+            <p style={styles.welcomeText}>
+              Convert thoughts into actionable tasks.
+            </p>
+            <a href="/auth/login" style={styles.signInBtn}>
+              SIGN IN TO START
+            </a>
+          </div>
         </div>
       </>
     );
@@ -171,35 +170,39 @@ export default function Home() {
             value={content}
             onChange={e => setContent(e.target.value)}
             placeholder="Write your thoughts here…"
-            rows={6}
+            rows={5}
             style={styles.textarea}
           />
-          <div style={styles.buttonGroup}>
-            <button
-              onClick={createEntry}
-              disabled={loading || !content.trim()}
-              style={styles.btnPrimary}
-            >
-              {loading ? 'SAVING…' : 'SAVE ENTRY'}
-            </button>
-            {isConnected && <span style={styles.connectionStatus}>● LIVE</span>}
-          </div>
+          <button
+            onClick={createEntry}
+            disabled={saving || !content.trim()}
+            style={{
+              ...styles.btnPrimary,
+              opacity: saving || !content.trim() ? 0.5 : 1,
+            }}
+          >
+            {saving ? 'SAVING…' : 'SAVE ENTRY'}
+          </button>
         </div>
 
         {/* Recent Entries */}
         <div style={styles.section}>
-          <label style={styles.label}>RECENT ENTRIES ({entries.length})</label>
-          {entries.length === 0 ? (
+          <label style={styles.label}>
+            RECENT ENTRIES {loading ? '' : `(${entries.length})`}
+          </label>
+          {loading ? (
+            <p style={styles.loadingSmall}>Loading entries...</p>
+          ) : entries.length === 0 ? (
             <p style={styles.empty}>No entries yet. Start writing!</p>
           ) : (
             <div style={styles.entryList}>
               {entries.map(e => (
                 <div key={e.id} style={styles.entryCard}>
                   <div style={styles.entryTime}>
-                    {new Date(e.created_at).toLocaleString()}
+                    {new Date(e.created_at).toLocaleDateString()} {new Date(e.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                   </div>
                   <div style={styles.entryPreview}>
-                    {e.content.slice(0, 180) + (e.content.length > 180 ? '…' : '')}
+                    {e.content.slice(0, 150) + (e.content.length > 150 ? '…' : '')}
                   </div>
                   <div style={styles.entryActions}>
                     <button
@@ -208,6 +211,7 @@ export default function Home() {
                       style={{
                         ...styles.btnSmall,
                         background: distillLoading === e.id ? 'var(--muted)' : 'var(--accent)',
+                        color: 'var(--bg)',
                       }}
                     >
                       {distillLoading === e.id ? '…' : 'DISTILL'}
@@ -247,99 +251,88 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     maxWidth: 760,
     margin: '0 auto',
-    padding: '0 1rem 2rem',
+    padding: '0 12px 2rem',
   },
   section: {
-    marginBottom: '2rem',
+    marginBottom: '1.5rem',
   },
   title: {
-    fontSize: '1.2rem',
+    fontSize: '1rem',
     margin: '0 0 0.5rem',
     color: 'var(--accent)',
     textShadow: '0 0 10px rgba(0, 255, 213, 0.3)',
     letterSpacing: '0.1em',
   },
   subtitle: {
-    fontSize: '0.7rem',
+    fontSize: '0.6rem',
     color: 'var(--muted)',
     margin: 0,
     letterSpacing: '0.05em',
   },
   label: {
     display: 'block',
-    fontSize: '0.7rem',
+    fontSize: '0.6rem',
     fontWeight: 700,
     color: 'var(--accent)',
     letterSpacing: '0.1em',
-    marginBottom: '0.75rem',
+    marginBottom: '0.5rem',
   },
   textarea: {
     width: '100%',
-    minHeight: '150px',
+    minHeight: '120px',
     background: 'var(--bg)',
     color: 'var(--fg)',
     border: '2px solid var(--muted)',
-    padding: '1rem',
+    padding: '0.75rem',
     fontFamily: 'monospace',
-    fontSize: '0.75rem',
+    fontSize: '16px',
     lineHeight: 1.6,
     resize: 'vertical',
-  },
-  buttonGroup: {
-    display: 'flex',
-    gap: '1rem',
-    alignItems: 'center',
-    marginTop: '0.75rem',
+    boxSizing: 'border-box' as const,
   },
   btnPrimary: {
-    flex: 1,
+    width: '100%',
     background: 'var(--accent)',
     color: 'var(--bg)',
     border: 'none',
-    padding: '0.75rem',
+    padding: '0.85rem',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.65rem',
+    fontSize: '0.55rem',
     cursor: 'pointer',
     fontWeight: 700,
     transition: 'all 0.2s',
+    marginTop: '0.75rem',
+    minHeight: '48px',
   },
   btnSmall: {
     background: 'transparent',
     color: 'var(--accent)',
     border: '2px solid var(--accent)',
-    padding: '0.5rem 0.75rem',
+    padding: '0.6rem 0.85rem',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.6rem',
+    fontSize: '0.5rem',
     cursor: 'pointer',
     transition: 'all 0.2s',
-  },
-  connectionStatus: {
-    fontSize: '0.6rem',
-    color: 'var(--accent)',
-    animation: 'glow-pulse 2s ease-in-out infinite',
+    minHeight: '40px',
   },
   entryList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '1rem',
+    gap: '0.75rem',
   },
   entryCard: {
     background: 'var(--bg)',
     border: '2px solid var(--muted)',
-    padding: '1rem',
+    padding: '0.75rem',
     transition: 'all 0.2s',
   },
-  entryCardHover: {
-    borderColor: 'var(--accent)',
-    boxShadow: '0 0 10px rgba(0, 255, 213, 0.2)',
-  },
   entryTime: {
-    fontSize: '0.65rem',
+    fontSize: '0.55rem',
     color: 'var(--muted)',
     marginBottom: '0.5rem',
   },
   entryPreview: {
-    fontSize: '0.75rem',
+    fontSize: '0.65rem',
     lineHeight: 1.6,
     color: 'var(--fg)',
     marginBottom: '0.75rem',
@@ -349,23 +342,50 @@ const styles: Record<string, React.CSSProperties> = {
   entryActions: {
     display: 'flex',
     gap: '0.5rem',
+    flexWrap: 'wrap' as const,
   },
   empty: {
-    fontSize: '0.75rem',
+    fontSize: '0.65rem',
     color: 'var(--muted)',
     textAlign: 'center',
     padding: '2rem 1rem',
   },
   loading: {
-    fontSize: '0.75rem',
+    fontSize: '0.7rem',
     color: 'var(--fg)',
     textAlign: 'center',
     padding: '2rem',
   },
-  error: {
-    fontSize: '0.75rem',
-    color: '#ff3bff',
+  loadingSmall: {
+    fontSize: '0.6rem',
+    color: 'var(--muted)',
     textAlign: 'center',
-    padding: '2rem',
+    padding: '1rem',
+  },
+  welcomeBox: {
+    textAlign: 'center',
+    padding: '3rem 1rem',
+    border: '2px solid var(--accent)',
+    marginTop: '2rem',
+  },
+  welcomeTitle: {
+    fontSize: '1.2rem',
+    color: 'var(--accent)',
+    marginBottom: '1rem',
+  },
+  welcomeText: {
+    fontSize: '0.65rem',
+    color: 'var(--muted)',
+    marginBottom: '1.5rem',
+  },
+  signInBtn: {
+    display: 'inline-block',
+    background: 'var(--accent)',
+    color: 'var(--bg)',
+    padding: '0.85rem 1.5rem',
+    fontFamily: '"Press Start 2P", monospace',
+    fontSize: '0.55rem',
+    textDecoration: 'none',
+    fontWeight: 700,
   },
 };
