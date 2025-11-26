@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 // Use Supabase for persistent storage (works on Vercel serverless)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+// SECURITY: Use service role key for server-side operations only (never expose to client)
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const supabase = supabaseUrl && supabaseKey 
@@ -11,26 +12,39 @@ const supabase = supabaseUrl && supabaseKey
 // In-memory fallback for development without Supabase
 let memoryDb: { entries: any[]; tasks: any[] } = { entries: [], tasks: [] };
 
-export async function listEntries() {
+// SECURITY: All queries now filter by user_id to prevent data leakage
+export async function listEntries(userId?: string) {
   if (supabase) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('entries')
       .select('*')
       .order('created_at', { ascending: false });
+    
+    // SECURITY: Filter by user_id when provided
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    const { data, error } = await query;
     if (error) {
-      console.error('Supabase listEntries error:', error);
+      console.error('Supabase listEntries error:', error.message);
       return [];
     }
     return data || [];
   }
-  return memoryDb.entries;
+  // Filter memory DB by userId if provided
+  return userId 
+    ? memoryDb.entries.filter((e: any) => e.user_id === userId)
+    : memoryDb.entries;
 }
 
-export async function createEntry({ content, source = 'text', created_at }: any) {
+// SECURITY: Include user_id in entry creation
+export async function createEntry({ content, source = 'text', created_at, user_id }: any) {
   const entry = {
     id: crypto.randomUUID(),
     content,
     source,
+    user_id: user_id || null, // SECURITY: Associate entry with user
     created_at: created_at || new Date().toISOString(),
     summary: null,
     ai_metadata: null
@@ -43,7 +57,7 @@ export async function createEntry({ content, source = 'text', created_at }: any)
       .select()
       .single();
     if (error) {
-      console.error('Supabase createEntry error:', error);
+      console.error('Supabase createEntry error:', error.message);
       throw new Error(error.message);
     }
     return data;
@@ -53,53 +67,80 @@ export async function createEntry({ content, source = 'text', created_at }: any)
   return entry;
 }
 
-export async function getEntryById(id: string) {
+// SECURITY: Verify entry belongs to user before returning
+export async function getEntryById(id: string, userId?: string) {
   if (supabase) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('entries')
       .select('*')
-      .eq('id', id)
-      .single();
+      .eq('id', id);
+    
+    // SECURITY: Verify ownership
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    const { data, error } = await query.single();
     if (error) return null;
     return data;
   }
-  return memoryDb.entries.find((e: any) => e.id === id);
+  const entry = memoryDb.entries.find((e: any) => e.id === id);
+  // SECURITY: Verify ownership in memory mode
+  if (entry && userId && entry.user_id !== userId) return null;
+  return entry;
 }
 
-export async function updateEntrySummary(id: string, summary: string, ai_metadata: any) {
+// SECURITY: Verify ownership before updating
+export async function updateEntrySummary(id: string, summary: string, ai_metadata: any, userId?: string) {
   if (supabase) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('entries')
       .update({ summary, ai_metadata })
-      .eq('id', id)
-      .select()
-      .single();
+      .eq('id', id);
+    
+    // SECURITY: Verify ownership
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    const { data, error } = await query.select().single();
     if (error) throw new Error(error.message);
     return data;
   }
   
-  const idx = memoryDb.entries.findIndex((e: any) => e.id === id);
-  if (idx === -1) throw new Error('entry not found');
+  const idx = memoryDb.entries.findIndex((e: any) => e.id === id && (!userId || e.user_id === userId));
+  if (idx === -1) throw new Error('entry not found or access denied');
   memoryDb.entries[idx].summary = summary;
   memoryDb.entries[idx].ai_metadata = ai_metadata;
   return memoryDb.entries[idx];
 }
 
-export async function listTasks() {
+// SECURITY: Filter tasks by user_id
+export async function listTasks(userId?: string) {
   if (supabase) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('tasks')
       .select('*')
       .order('created_at', { ascending: false });
+    
+    // SECURITY: Filter by user_id when provided
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    const { data, error } = await query;
     if (error) {
-      console.error('Supabase listTasks error:', error);
+      console.error('Supabase listTasks error:', error.message);
       return [];
     }
     return data || [];
   }
-  return memoryDb.tasks;
+  return userId 
+    ? memoryDb.tasks.filter((t: any) => t.user_id === userId)
+    : memoryDb.tasks;
 }
 
+// SECURITY: Include user_id in task creation
 export async function createTask(task: any) {
   const t = {
     id: crypto.randomUUID(),
@@ -108,6 +149,7 @@ export async function createTask(task: any) {
     priority: task.priority || 'medium',
     status: task.status || 'todo',
     entry_id: task.entry_id || null,
+    user_id: task.user_id || null, // SECURITY: Associate task with user
     created_at: new Date().toISOString()
   };
 
@@ -118,7 +160,7 @@ export async function createTask(task: any) {
       .select()
       .single();
     if (error) {
-      console.error('Supabase createTask error:', error);
+      console.error('Supabase createTask error:', error.message);
       throw new Error(error.message);
     }
     return data;
@@ -128,46 +170,84 @@ export async function createTask(task: any) {
   return t;
 }
 
-export async function createTasksBulk(tasks: any[], entryId?: string) {
-  const created: any[] = [];
-  for (const t of tasks) {
-    const taskObj = { ...t, entry_id: entryId || t.entry_id };
-    const createdT = await createTask(taskObj);
-    created.push(createdT);
-  }
-  return created;
-}
+// OPTIMIZED: Bulk insert tasks in single DB call
+export async function createTasksBulk(tasks: any[], entryId?: string, userId?: string) {
+  if (!tasks.length) return [];
+  
+  const tasksToInsert = tasks.map(t => ({
+    id: crypto.randomUUID(),
+    title: t.title || '',
+    description: t.description || '',
+    priority: t.priority || 'medium',
+    status: t.status || 'todo',
+    entry_id: entryId || t.entry_id || null,
+    user_id: userId || t.user_id || null,
+    created_at: new Date().toISOString()
+  }));
 
-export async function updateTask(id: string, patch: any) {
   if (supabase) {
+    // Single bulk insert instead of loop
     const { data, error } = await supabase
       .from('tasks')
+      .insert(tasksToInsert)
+      .select();
+    
+    if (error) {
+      console.error('Supabase createTasksBulk error:', error.message);
+      throw new Error(error.message);
+    }
+    return data || [];
+  }
+  
+  // Memory fallback
+  memoryDb.tasks.unshift(...tasksToInsert);
+  return tasksToInsert;
+}
+
+// SECURITY: Verify ownership before updating task
+export async function updateTask(id: string, patch: any, userId?: string) {
+  if (supabase) {
+    let query = supabase
+      .from('tasks')
       .update({ ...patch, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
+      .eq('id', id);
+    
+    // SECURITY: Verify ownership
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    const { data, error } = await query.select().single();
     if (error) throw new Error(error.message);
     return data;
   }
   
-  const idx = memoryDb.tasks.findIndex((t: any) => t.id === id);
-  if (idx === -1) throw new Error('task not found');
+  const idx = memoryDb.tasks.findIndex((t: any) => t.id === id && (!userId || t.user_id === userId));
+  if (idx === -1) throw new Error('task not found or access denied');
   memoryDb.tasks[idx] = { ...memoryDb.tasks[idx], ...patch, updated_at: new Date().toISOString() };
   return memoryDb.tasks[idx];
 }
 
-export async function deleteTask(id: string) {
+// SECURITY: Verify ownership before deleting task
+export async function deleteTask(id: string, userId?: string) {
   if (supabase) {
-    const { error } = await supabase
+    let query = supabase
       .from('tasks')
       .delete()
       .eq('id', id);
+    
+    // SECURITY: Verify ownership
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    const { error } = await query;
     if (error) throw new Error(error.message);
     return true;
   }
   
-  const idx = memoryDb.tasks.findIndex((t: any) => t.id === id);
-  if (idx === -1) throw new Error('task not found');
+  const idx = memoryDb.tasks.findIndex((t: any) => t.id === id && (!userId || t.user_id === userId));
+  if (idx === -1) throw new Error('task not found or access denied');
   memoryDb.tasks.splice(idx, 1);
   return true;
 }

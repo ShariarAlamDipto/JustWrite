@@ -2,18 +2,31 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'task.g.dart';
 
-@JsonSerializable()
+@JsonSerializable(fieldRename: FieldRename.snake)
 class Task {
   final String id;
+  
+  @JsonKey(name: 'user_id')
   final String userId;
+  
   final String title;
   final String description;
   final String priority; // high, medium, low
   final String status; // todo, done
+  
+  @JsonKey(name: 'entry_id')
   final String? entryId;
+  
+  @JsonKey(name: 'if_then_plan')
   final String? ifThenPlan;
+  
+  @JsonKey(name: 'created_at')
   final DateTime createdAt;
+  
+  @JsonKey(name: 'updated_at')
   final DateTime? updatedAt;
+  
+  @JsonKey(name: 'due_date')
   final DateTime? dueDate;
 
   Task({

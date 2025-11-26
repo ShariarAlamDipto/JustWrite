@@ -8,33 +8,38 @@ part of 'entry.dart';
 
 Entry _$EntryFromJson(Map<String, dynamic> json) => Entry(
       id: json['id'] as String,
-      userId: json['userId'] as String,
+      userId: json['user_id'] as String,
       content: json['content'] as String,
       title: json['title'] as String?,
       summary: json['summary'] as String?,
-      mood: (json['mood'] as num).toInt(),
-      moodIntensity: (json['moodIntensity'] as num).toInt(),
-      gratitude:
-          (json['gratitude'] as List<dynamic>).map((e) => e as String).toList(),
-      promptAnswers: Map<String, String>.from(json['promptAnswers'] as Map),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: json['updatedAt'] == null
+      mood: (json['mood'] as num?)?.toInt() ?? 5,
+      moodIntensity: (json['mood_intensity'] as num?)?.toInt() ?? 5,
+      gratitude: (json['gratitude'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
+      promptAnswers: (json['prompt_answers'] as Map<String, dynamic>?)?.map(
+            (k, e) => MapEntry(k, e as String),
+          ) ??
+          {},
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: json['updated_at'] == null
           ? null
-          : DateTime.parse(json['updatedAt'] as String),
-      aiMetadata: json['aiMetadata'] as Map<String, dynamic>?,
+          : DateTime.parse(json['updated_at'] as String),
+      aiMetadata: json['ai_metadata'] as Map<String, dynamic>?,
     );
 
 Map<String, dynamic> _$EntryToJson(Entry instance) => <String, dynamic>{
       'id': instance.id,
-      'userId': instance.userId,
+      'user_id': instance.userId,
       'content': instance.content,
       'title': instance.title,
       'summary': instance.summary,
       'mood': instance.mood,
-      'moodIntensity': instance.moodIntensity,
+      'mood_intensity': instance.moodIntensity,
       'gratitude': instance.gratitude,
-      'promptAnswers': instance.promptAnswers,
-      'createdAt': instance.createdAt.toIso8601String(),
-      'updatedAt': instance.updatedAt?.toIso8601String(),
-      'aiMetadata': instance.aiMetadata,
+      'prompt_answers': instance.promptAnswers,
+      'created_at': instance.createdAt.toIso8601String(),
+      'updated_at': instance.updatedAt?.toIso8601String(),
+      'ai_metadata': instance.aiMetadata,
     };

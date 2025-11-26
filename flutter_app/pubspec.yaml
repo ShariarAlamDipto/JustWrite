@@ -44,6 +44,9 @@ dependencies:
   # UUID Generation
   uuid: ^4.0.0
 
+  # Deep Linking (version compatible with supabase_flutter)
+  app_links: ^3.5.1
+
   # Icons & UI
   cupertino_icons: ^1.0.2
 

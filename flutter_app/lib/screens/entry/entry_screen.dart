@@ -7,7 +7,7 @@ import 'package:justwrite_mobile/services/llm_service.dart';
 import 'package:justwrite_mobile/widgets/mood_slider.dart';
 import 'package:justwrite_mobile/widgets/prompt_card.dart';
 
-const SCIENCE_BACKED_PROMPTS = [
+const scienceBackedPrompts = [
   {
     'id': 'planning-1',
     'category': 'Morning / Planning',
@@ -83,7 +83,7 @@ const SCIENCE_BACKED_PROMPTS = [
 ];
 
 class EntryScreen extends StatefulWidget {
-  const EntryScreen({Key? key}) : super(key: key);
+  const EntryScreen({super.key});
 
   @override
   State<EntryScreen> createState() => _EntryScreenState();
@@ -100,8 +100,8 @@ class _EntryScreenState extends State<EntryScreen> {
 
   int _mood = 5;
   int _moodIntensity = 5;
-  Set<String> _selectedPrompts = {};
-  Map<String, String> _promptAnswers = {};
+  final Set<String> _selectedPrompts = {};
+  final Map<String, String> _promptAnswers = {};
   bool _isAnalyzing = false;
   String? _summary;
   List<Map<String, dynamic>> _extractedTasks = [];
@@ -146,6 +146,7 @@ class _EntryScreenState extends State<EntryScreen> {
         _summary = summary as String;
       });
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
@@ -181,6 +182,7 @@ class _EntryScreenState extends State<EntryScreen> {
 
       // Save extracted tasks if any
       if (_extractedTasks.isNotEmpty) {
+        if (!mounted) return;
         final taskProvider = context.read<TaskProvider>();
         for (var taskData in _extractedTasks) {
           await taskProvider.createTask(
@@ -195,7 +197,9 @@ class _EntryScreenState extends State<EntryScreen> {
       // Reset form
       _titleController.clear();
       _contentController.clear();
-      _gratitudeControllers.forEach((c) => c.clear());
+      for (final c in _gratitudeControllers) {
+        c.clear();
+      }
       setState(() {
         _mood = 5;
         _moodIntensity = 5;
@@ -205,10 +209,12 @@ class _EntryScreenState extends State<EntryScreen> {
         _extractedTasks.clear();
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✓ Entry saved!')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
@@ -236,9 +242,9 @@ class _EntryScreenState extends State<EntryScreen> {
             // Title
             TextField(
               controller: _titleController,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'Title (optional)',
-                prefixIcon: const Icon(Icons.label),
+                prefixIcon: Icon(Icons.label),
               ),
             ),
             const SizedBox(height: 16),
@@ -270,9 +276,9 @@ class _EntryScreenState extends State<EntryScreen> {
             TextField(
               controller: _contentController,
               maxLines: 8,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'Write freely here...',
-                prefixIcon: const Icon(Icons.edit),
+                prefixIcon: Icon(Icons.edit),
               ),
             ),
             const SizedBox(height: 24),
@@ -301,7 +307,7 @@ class _EntryScreenState extends State<EntryScreen> {
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 8),
-            ...SCIENCE_BACKED_PROMPTS.map((prompt) => PromptCard(
+            ...scienceBackedPrompts.map((prompt) => PromptCard(
               prompt: prompt,
               isSelected: _selectedPrompts.contains(prompt['id']),
               answer: _promptAnswers[prompt['id']],

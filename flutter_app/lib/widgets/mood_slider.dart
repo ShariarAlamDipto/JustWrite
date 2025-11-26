@@ -6,11 +6,11 @@ class MoodSlider extends StatefulWidget {
   final Function(int mood, int intensity) onChanged;
 
   const MoodSlider({
-    Key? key,
+    super.key,
     this.initialMood = 5,
     this.initialIntensity = 5,
     required this.onChanged,
-  }) : super(key: key);
+  });
 
   @override
   State<MoodSlider> createState() => _MoodSliderState();
@@ -78,7 +78,7 @@ class _MoodSliderState extends State<MoodSlider> {
             activeTrackColor: const Color(0xFF00ffd5),
             inactiveTrackColor: const Color(0xFF1a1f3a),
             thumbColor: const Color(0xFF00ffd5),
-            overlayColor: const Color(0xFF00ffd5).withOpacity(0.3),
+            overlayColor: const Color(0xFF00ffd5).withValues(alpha: 0.3),
             trackHeight: 4,
             thumbShape: const RoundSliderThumbShape(
               elevation: 4,

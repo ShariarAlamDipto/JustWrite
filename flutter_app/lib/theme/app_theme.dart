@@ -19,24 +19,24 @@ class AppTheme {
         backgroundColor: bgColor,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
           color: fgColor,
           fontSize: 24,
           fontWeight: FontWeight.bold,
         ),
       ),
       textTheme: const TextTheme(
-        displayLarge: const TextStyle(
+        displayLarge: TextStyle(
           color: fgColor,
           fontSize: 32,
           fontWeight: FontWeight.bold,
         ),
-        displayMedium: const TextStyle(
+        displayMedium: TextStyle(
           color: fgColor,
           fontSize: 24,
           fontWeight: FontWeight.bold,
         ),
-        displaySmall: const TextStyle(
+        displaySmall: TextStyle(
           color: fgColor,
           fontSize: 18,
           fontWeight: FontWeight.bold,
@@ -61,7 +61,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Color(0xFF1a1f3a),
+        fillColor: const Color(0xFF1a1f3a),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: accentCyan, width: 1.5),
@@ -91,7 +91,7 @@ class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        color: Color(0xFF1a1f3a),
+        color: const Color(0xFF1a1f3a),
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),

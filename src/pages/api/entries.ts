@@ -1,23 +1,43 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createEntry, listEntries, getEntryById } from '../../lib/storage';
 import { withAuth } from '../../lib/withAuth';
+import { sanitizeInput, validateContentLength, isValidUUID, checkRateLimit } from '../../lib/security';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
+    // SECURITY: Rate limiting
+    const rateLimit = checkRateLimit(userId, 100, 60000);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+    }
+    res.setHeader('X-RateLimit-Remaining', rateLimit.remaining.toString());
+    
     if (req.method === 'GET') {
-      // TODO: Filter entries by userId when storage layer supports it
-      const entries = await listEntries();
+      // SECURITY: Filter entries by authenticated user only
+      const entries = await listEntries(userId);
       return res.status(200).json({ entries });
     }
 
     if (req.method === 'POST') {
       const { content, source = 'text', created_at } = req.body;
-      if (!content || content.trim().length === 0) {
+      
+      // SECURITY: Input validation
+      if (!content || typeof content !== 'string') {
         return res.status(400).json({ error: 'content required' });
       }
+      
+      const sanitizedContent = sanitizeInput(content);
+      if (!validateContentLength(sanitizedContent)) {
+        return res.status(400).json({ error: 'Content must be between 1 and 50000 characters' });
+      }
 
-      // TODO: Pass userId to storage layer
-      const entry = await createEntry({ content, source, created_at });
+      // SECURITY: Pass userId to associate entry with authenticated user
+      const entry = await createEntry({ 
+        content: sanitizedContent, 
+        source: sanitizeInput(source).slice(0, 50), 
+        created_at,
+        user_id: userId 
+      });
       return res.status(201).json({ entry });
     }
 

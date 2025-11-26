@@ -25,17 +25,15 @@ class SupabaseService {
     }
   }
 
+  // SECURITY: Get current user ID for queries
+  String? get _userId => supabase.auth.currentUser?.id;
+
   // Auth Methods
   Future<void> sendMagicLink(String email) async {
-    print('📧 Sending magic link to: $email');
-    print('🔗 Redirect URL: $_redirectUrl');
-    
     await supabase.auth.signInWithOtp(
       email: email,
       emailRedirectTo: _redirectUrl,
     );
-    
-    print('✅ Magic link sent successfully');
   }
 
   Future<void> verifyOtp(String email, String token) async {
@@ -53,11 +51,15 @@ class SupabaseService {
   User? get currentUser => supabase.auth.currentUser;
   String? get token => supabase.auth.currentSession?.accessToken;
 
-  // Entry Methods
+  // Entry Methods - OPTIMIZED: Filter by user_id for additional security
   Future<List<Entry>> getEntries() async {
+    final userId = _userId;
+    if (userId == null) return [];
+    
     final response = await supabase
         .from('entries')
         .select()
+        .eq('user_id', userId)
         .order('created_at', ascending: false);
 
     return (response as List)
@@ -67,8 +69,15 @@ class SupabaseService {
 
   Future<Entry?> getEntryById(String entryId) async {
     try {
-      final response =
-          await supabase.from('entries').select().eq('id', entryId).single();
+      final userId = _userId;
+      if (userId == null) return null;
+      
+      final response = await supabase
+          .from('entries')
+          .select()
+          .eq('id', entryId)
+          .eq('user_id', userId)
+          .single();
 
       return Entry.fromJson(response as Map<String, dynamic>);
     } catch (e) {
@@ -87,18 +96,36 @@ class SupabaseService {
   }
 
   Future<void> updateEntry(Entry entry) async {
-    await supabase.from('entries').update(entry.toJson()).eq('id', entry.id);
+    final userId = _userId;
+    if (userId == null) throw Exception('Not authenticated');
+    
+    await supabase
+        .from('entries')
+        .update(entry.toJson())
+        .eq('id', entry.id)
+        .eq('user_id', userId);
   }
 
   Future<void> deleteEntry(String entryId) async {
-    await supabase.from('entries').delete().eq('id', entryId);
+    final userId = _userId;
+    if (userId == null) throw Exception('Not authenticated');
+    
+    await supabase
+        .from('entries')
+        .delete()
+        .eq('id', entryId)
+        .eq('user_id', userId);
   }
 
-  // Task Methods
+  // Task Methods - OPTIMIZED: Filter by user_id
   Future<List<Task>> getTasks() async {
+    final userId = _userId;
+    if (userId == null) return [];
+    
     final response = await supabase
         .from('tasks')
         .select()
+        .eq('user_id', userId)
         .order('created_at', ascending: false);
 
     return (response as List)
@@ -117,18 +144,36 @@ class SupabaseService {
   }
 
   Future<void> updateTask(Task task) async {
-    await supabase.from('tasks').update(task.toJson()).eq('id', task.id);
+    final userId = _userId;
+    if (userId == null) throw Exception('Not authenticated');
+    
+    await supabase
+        .from('tasks')
+        .update(task.toJson())
+        .eq('id', task.id)
+        .eq('user_id', userId);
   }
 
   Future<void> deleteTask(String taskId) async {
-    await supabase.from('tasks').delete().eq('id', taskId);
+    final userId = _userId;
+    if (userId == null) throw Exception('Not authenticated');
+    
+    await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId)
+        .eq('user_id', userId);
   }
 
   Future<List<Task>> getTasksByEntry(String entryId) async {
+    final userId = _userId;
+    if (userId == null) return [];
+    
     final response = await supabase
         .from('tasks')
         .select()
         .eq('entry_id', entryId)
+        .eq('user_id', userId)
         .order('created_at', ascending: false);
 
     return (response as List)

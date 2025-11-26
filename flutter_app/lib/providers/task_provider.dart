@@ -8,20 +8,38 @@ class TaskProvider extends ChangeNotifier {
   List<Task> _tasks = [];
   bool _isLoading = false;
   String? _error;
+  DateTime? _lastFetch;
+  
+  // Cache duration: 30 seconds
+  static const _cacheDuration = Duration(seconds: 30);
 
   List<Task> get tasks => _tasks;
+  
+  // Cached computed properties using late initialization
   List<Task> get pendingTasks => _tasks.where((t) => !t.isDone).toList();
   List<Task> get completedTasks => _tasks.where((t) => t.isDone).toList();
+  
   bool get isLoading => _isLoading;
   String? get error => _error;
+  
+  // Check if cache is valid
+  bool get _isCacheValid => 
+    _lastFetch != null && 
+    DateTime.now().difference(_lastFetch!) < _cacheDuration;
 
-  Future<void> loadTasks() async {
+  Future<void> loadTasks({bool forceRefresh = false}) async {
+    // Return cached data if valid and not forcing refresh
+    if (!forceRefresh && _isCacheValid && _tasks.isNotEmpty) {
+      return;
+    }
+    
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       _tasks = await _supabaseService.getTasks();
+      _lastFetch = DateTime.now();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -55,6 +73,7 @@ class TaskProvider extends ChangeNotifier {
       );
 
       final created = await _supabaseService.createTask(task);
+      // Optimistic update
       _tasks.insert(0, created);
       notifyListeners();
       return created;
@@ -71,14 +90,21 @@ class TaskProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
+    // Optimistic update
+    final index = _tasks.indexWhere((t) => t.id == task.id);
+    if (index != -1) {
+      _tasks[index] = updatedTask;
+      notifyListeners();
+    }
+
     try {
       await _supabaseService.updateTask(updatedTask);
-      final index = _tasks.indexWhere((t) => t.id == task.id);
+    } catch (e) {
+      // Rollback on failure
       if (index != -1) {
-        _tasks[index] = updatedTask;
+        _tasks[index] = task;
         notifyListeners();
       }
-    } catch (e) {
       _error = e.toString();
       notifyListeners();
       rethrow;
@@ -101,11 +127,17 @@ class TaskProvider extends ChangeNotifier {
   }
 
   Future<void> deleteTask(String taskId) async {
+    // Optimistic delete
+    final removedTask = _tasks.firstWhere((t) => t.id == taskId);
+    final removedIndex = _tasks.indexWhere((t) => t.id == taskId);
+    _tasks.removeWhere((t) => t.id == taskId);
+    notifyListeners();
+    
     try {
       await _supabaseService.deleteTask(taskId);
-      _tasks.removeWhere((t) => t.id == taskId);
-      notifyListeners();
     } catch (e) {
+      // Rollback on failure
+      _tasks.insert(removedIndex, removedTask);
       _error = e.toString();
       notifyListeners();
       rethrow;
@@ -125,5 +157,10 @@ class TaskProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+  
+  // Invalidate cache to force refresh on next load
+  void invalidateCache() {
+    _lastFetch = null;
   }
 }

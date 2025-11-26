@@ -2,19 +2,36 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'entry.g.dart';
 
-@JsonSerializable()
+@JsonSerializable(fieldRename: FieldRename.snake)
 class Entry {
   final String id;
+  
+  @JsonKey(name: 'user_id')
   final String userId;
+  
   final String content;
   final String? title;
   final String? summary;
+  
+  @JsonKey(defaultValue: 5)
   final int mood;
+  
+  @JsonKey(name: 'mood_intensity', defaultValue: 5)
   final int moodIntensity;
+  
+  @JsonKey(defaultValue: [])
   final List<String> gratitude;
+  
+  @JsonKey(name: 'prompt_answers', defaultValue: {})
   final Map<String, String> promptAnswers;
+  
+  @JsonKey(name: 'created_at')
   final DateTime createdAt;
+  
+  @JsonKey(name: 'updated_at')
   final DateTime? updatedAt;
+  
+  @JsonKey(name: 'ai_metadata')
   final Map<String, dynamic>? aiMetadata;
 
   Entry({

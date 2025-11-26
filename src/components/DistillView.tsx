@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, memo, useCallback } from 'react';
 
 type Task = { id: string; title: string; description?: string; priority?: string };
 
-export default function DistillView({ open, onClose, entry, summary, tasks, onSave }: any) {
+const DistillView = memo(function DistillView({ open, onClose, entry, summary, tasks, onSave }: any) {
   const [saving, setSaving] = useState(false);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    await onSave?.(tasks);
+    setSaving(false);
+  }, [onSave, tasks]);
 
   if (!open) return null;
 
   const initialBits = entry.content.slice(0, 120) + (entry.content.length > 120 ? '…' : '');
-
-  const handleSave = async () => {
-    setSaving(true);
-    await onSave?.(tasks);
-    setSaving(false);
-  };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -66,7 +66,7 @@ export default function DistillView({ open, onClose, entry, summary, tasks, onSa
       </div>
     </div>
   );
-}
+});
 
 const styles: Record<string, React.CSSProperties> = {
   card: {
@@ -194,3 +194,5 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.2s',
   },
 };
+
+export default DistillView;

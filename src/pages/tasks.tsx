@@ -1,6 +1,52 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
+
+// Memoized task item component
+interface TaskItemProps {
+  task: any;
+  toggleLoading: string | null;
+  deleteLoading: string | null;
+  onToggle: (task: any) => void;
+  onDelete: (id: string) => void;
+  isDone?: boolean;
+}
+
+const TaskItem = memo(({ task, toggleLoading, deleteLoading, onToggle, onDelete, isDone }: TaskItemProps) => (
+  <div style={{ ...styles.taskItem, opacity: isDone ? 0.6 : 1 }}>
+    <div style={styles.taskContent}>
+      <div style={{ ...styles.taskTitle, textDecoration: isDone ? 'line-through' : 'none' }}>
+        {task.title}
+      </div>
+      {!isDone && task.description && <div style={styles.taskDesc}>{task.description}</div>}
+      {!isDone && (
+        <div style={styles.taskMeta}>
+          Priority: <span style={styles.priority}>{task.priority || 'medium'}</span>
+        </div>
+      )}
+    </div>
+    <div style={styles.taskButtons}>
+      <button
+        onClick={() => onToggle(task)}
+        disabled={toggleLoading === task.id}
+        style={isDone ? { ...styles.toggleBtn, background: '#2ecc71' } : styles.toggleBtn}
+        aria-label={isDone ? 'Mark undone' : 'Mark done'}
+      >
+        {toggleLoading === task.id ? '…' : isDone ? '↩' : '✓'}
+      </button>
+      <button
+        onClick={() => onDelete(task.id)}
+        disabled={deleteLoading === task.id}
+        style={styles.deleteBtn}
+        aria-label="Delete"
+      >
+        {deleteLoading === task.id ? '…' : '✕'}
+      </button>
+    </div>
+  </div>
+));
+
+TaskItem.displayName = 'TaskItem';
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<any[]>([]);
@@ -9,15 +55,12 @@ export default function TasksPage() {
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const { user, loading: authLoading, token } = useAuth();
 
-  useEffect(() => {
-    if (user && token) fetchTasks();
-  }, [user, token]);
-
-  async function fetchTasks() {
+  const fetchTasks = useCallback(async () => {
+    if (!token) return;
     setLoading(true);
     try {
       const res = await fetch('/api/tasks', {
-        headers: { 'Authorization': `Bearer ${token || ''}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         const json = await res.json();
@@ -27,48 +70,90 @@ export default function TasksPage() {
       console.error('Failed to fetch tasks:', err);
     }
     setLoading(false);
-  }
+  }, [token]);
 
-  async function toggleDone(t: any) {
+  useEffect(() => {
+    if (user && token) fetchTasks();
+  }, [user, token, fetchTasks]);
+
+  const toggleDone = useCallback(async (t: any) => {
+    if (!token) return;
     setToggleLoading(t.id);
+    
+    // Optimistic update
+    const newStatus = t.status === 'done' ? 'todo' : 'done';
+    setTasks(prev => prev.map(task => 
+      task.id === t.id ? { ...task, status: newStatus } : task
+    ));
+    
     try {
-      const newStatus = t.status === 'done' ? 'todo' : 'done';
       const res = await fetch(`/api/tasks/${t.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token || ''}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ status: newStatus })
       });
-      if (res.ok) {
-        // Update local state immediately
+      if (!res.ok) {
+        // Rollback on failure
         setTasks(prev => prev.map(task => 
-          task.id === t.id ? { ...task, status: newStatus } : task
+          task.id === t.id ? { ...task, status: t.status } : task
         ));
       }
     } catch (err) {
+      // Rollback on error
+      setTasks(prev => prev.map(task => 
+        task.id === t.id ? { ...task, status: t.status } : task
+      ));
       console.error('Failed to toggle task:', err);
     }
     setToggleLoading(null);
-  }
+  }, [token]);
 
-  async function deleteTask(id: string) {
+  const deleteTask = useCallback(async (id: string) => {
     if (!confirm('Delete this task?')) return;
+    if (!token) return;
+    
     setDeleteLoading(id);
+    
+    // Optimistic delete - store for rollback
+    const taskToDelete = tasks.find(t => t.id === id);
+    const taskIndex = tasks.findIndex(t => t.id === id);
+    setTasks(prev => prev.filter(t => t.id !== id));
+    
     try {
       const res = await fetch(`/api/tasks/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token || ''}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) {
-        setTasks(prev => prev.filter(t => t.id !== id));
+      if (!res.ok && taskToDelete) {
+        // Rollback on failure
+        setTasks(prev => {
+          const newTasks = [...prev];
+          newTasks.splice(taskIndex, 0, taskToDelete);
+          return newTasks;
+        });
       }
     } catch (err) {
+      // Rollback on error
+      if (taskToDelete) {
+        setTasks(prev => {
+          const newTasks = [...prev];
+          newTasks.splice(taskIndex, 0, taskToDelete);
+          return newTasks;
+        });
+      }
       console.error('Failed to delete task:', err);
     }
     setDeleteLoading(null);
-  }
+  }, [token, tasks]);
+
+  // Memoized filtered tasks
+  const { todoTasks, doneTasks } = useMemo(() => ({
+    todoTasks: tasks.filter(t => t.status !== 'done'),
+    doneTasks: tasks.filter(t => t.status === 'done')
+  }), [tasks]);
 
   if (authLoading) {
     return (
@@ -91,9 +176,6 @@ export default function TasksPage() {
       </>
     );
   }
-
-  const todoTasks = tasks.filter(t => t.status !== 'done');
-  const doneTasks = tasks.filter(t => t.status === 'done');
 
   return (
     <>
@@ -126,33 +208,14 @@ export default function TasksPage() {
                 <div style={styles.sectionLabel}>ACTIVE</div>
                 <div style={styles.taskGroup}>
                   {todoTasks.map(t => (
-                    <div key={t.id} style={styles.taskItem}>
-                      <div style={styles.taskContent}>
-                        <div style={styles.taskTitle}>{t.title}</div>
-                        {t.description && <div style={styles.taskDesc}>{t.description}</div>}
-                        <div style={styles.taskMeta}>
-                          Priority: <span style={styles.priority}>{t.priority || 'medium'}</span>
-                        </div>
-                      </div>
-                      <div style={styles.taskButtons}>
-                        <button
-                          onClick={() => toggleDone(t)}
-                          disabled={toggleLoading === t.id}
-                          style={styles.toggleBtn}
-                          aria-label="Mark done"
-                        >
-                          {toggleLoading === t.id ? '…' : '✓'}
-                        </button>
-                        <button
-                          onClick={() => deleteTask(t.id)}
-                          disabled={deleteLoading === t.id}
-                          style={styles.deleteBtn}
-                          aria-label="Delete"
-                        >
-                          {deleteLoading === t.id ? '…' : '✕'}
-                        </button>
-                      </div>
-                    </div>
+                    <TaskItem
+                      key={t.id}
+                      task={t}
+                      toggleLoading={toggleLoading}
+                      deleteLoading={deleteLoading}
+                      onToggle={toggleDone}
+                      onDelete={deleteTask}
+                    />
                   ))}
                 </div>
               </div>
@@ -164,31 +227,15 @@ export default function TasksPage() {
                 <div style={styles.sectionLabel}>COMPLETED</div>
                 <div style={styles.taskGroup}>
                   {doneTasks.map(t => (
-                    <div key={t.id} style={{ ...styles.taskItem, opacity: 0.6 }}>
-                      <div style={styles.taskContent}>
-                        <div style={{ ...styles.taskTitle, textDecoration: 'line-through' }}>
-                          {t.title}
-                        </div>
-                      </div>
-                      <div style={styles.taskButtons}>
-                        <button
-                          onClick={() => toggleDone(t)}
-                          disabled={toggleLoading === t.id}
-                          style={{ ...styles.toggleBtn, background: '#2ecc71' }}
-                          aria-label="Mark undone"
-                        >
-                          ↩
-                        </button>
-                        <button
-                          onClick={() => deleteTask(t.id)}
-                          disabled={deleteLoading === t.id}
-                          style={styles.deleteBtn}
-                          aria-label="Delete"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
+                    <TaskItem
+                      key={t.id}
+                      task={t}
+                      toggleLoading={toggleLoading}
+                      deleteLoading={deleteLoading}
+                      onToggle={toggleDone}
+                      onDelete={deleteTask}
+                      isDone
+                    />
                   ))}
                 </div>
               </div>

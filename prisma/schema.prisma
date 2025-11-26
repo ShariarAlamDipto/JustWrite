@@ -13,31 +13,53 @@ model User {
   name      String?
   entries   Entry[]
   tasks     Task[]
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("users")
 }
 
 model Entry {
-  id         String   @id @default(uuid())
-  user       User?    @relation(fields: [userId], references: [id])
-  userId     String?
-  content    String
-  summary    String?
-  aiMetadata Json?
-  source     String   @default("text")
-  createdAt  DateTime @default(now())
-  tasks      Task[]
+  id            String   @id @default(uuid())
+  user          User?    @relation(fields: [userId], references: [id])
+  userId        String?  @map("user_id")
+  content       String
+  title         String?
+  summary       String?
+  mood          Int?     @default(5)
+  moodIntensity Int?     @default(5) @map("mood_intensity")
+  gratitude     Json?    @default("[]")
+  promptAnswers Json?    @default("{}") @map("prompt_answers")
+  aiMetadata    Json?    @map("ai_metadata")
+  source        String   @default("text")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime? @updatedAt @map("updated_at")
+  tasks         Task[]
+
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("entries")
 }
 
 model Task {
-  id         String   @id @default(uuid())
-  user       User?    @relation(fields: [userId], references: [id])
-  userId     String?
-  entry      Entry?   @relation(fields: [entryId], references: [id])
-  entryId    String?
-  title      String
+  id          String    @id @default(uuid())
+  user        User?     @relation(fields: [userId], references: [id])
+  userId      String?   @map("user_id")
+  entry       Entry?    @relation(fields: [entryId], references: [id])
+  entryId     String?   @map("entry_id")
+  title       String
   description String?
-  priority   String   @default("medium")
-  status     String   @default("todo")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  priority    String    @default("medium")
+  status      String    @default("todo")
+  ifThenPlan  String?   @map("if_then_plan")
+  dueDate     DateTime? @map("due_date")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([entryId])
+  @@index([status])
+  @@index([userId, status])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("tasks")
 }

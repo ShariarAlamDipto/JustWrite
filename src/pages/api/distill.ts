@@ -1,5 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getEntryById, updateEntrySummary, createTasksBulk } from '../../lib/storage';
+import { withAuth } from '../../lib/withAuth';
+import { sanitizeInput, validateContentLength, isValidUUID, checkRateLimit } from '../../lib/security';
 import { randomUUID } from 'crypto';
 
 function extractTasksFromText(text: string) {
@@ -10,34 +12,51 @@ function extractTasksFromText(text: string) {
   for (const line of lines) {
     for (const v of verbs) {
       if (line.startsWith(v) || line.startsWith(v.toLowerCase())) {
-        tasks.push({ id: randomUUID(), title: line, description: '', priority: 'medium', source_hint: 'heuristic' });
+        tasks.push({ id: randomUUID(), title: line.slice(0, 200), description: '', priority: 'medium', source_hint: 'heuristic' });
         break;
       }
     }
   }
-  return tasks;
+  return tasks.slice(0, 10); // SECURITY: Limit tasks
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return res.status(405).end('Method Not Allowed');
-  }
+  // SECURITY: Wrap with authentication
+  return withAuth(req, res, async (req, res, userId) => {
+    if (req.method !== 'POST') {
+      res.setHeader('Allow', 'POST');
+      return res.status(405).end('Method Not Allowed');
+    }
 
-  const { entryId, customText } = req.body;
-  
-  // Support either entryId (from existing entry) or customText (from new entry form)
-  let contentToSummarize = '';
-  
-  if (customText) {
-    contentToSummarize = customText;
-  } else if (entryId) {
-    const entry = await getEntryById(entryId as string);
-    if (!entry) return res.status(404).json({ error: 'entry not found' });
-    contentToSummarize = entry.content;
-  } else {
-    return res.status(400).json({ error: 'entryId or customText required' });
-  }
+    // SECURITY: Rate limiting for AI endpoints (more restrictive)
+    const rateLimit = checkRateLimit(userId + ':distill', 20, 60000);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({ error: 'Too many requests. Please wait before analyzing more entries.' });
+    }
+
+    const { entryId, customText } = req.body;
+    
+    // Support either entryId (from existing entry) or customText (from new entry form)
+    let contentToSummarize = '';
+    
+    if (customText) {
+      // SECURITY: Sanitize and validate custom text
+      contentToSummarize = sanitizeInput(customText);
+      if (!validateContentLength(contentToSummarize, 50000)) {
+        return res.status(400).json({ error: 'Content must be between 1 and 50000 characters' });
+      }
+    } else if (entryId) {
+      // SECURITY: Validate entryId format
+      if (entryId !== 'temp' && !isValidUUID(entryId)) {
+        return res.status(400).json({ error: 'Invalid entry ID format' });
+      }
+      // SECURITY: Pass userId to verify ownership
+      const entry = await getEntryById(entryId as string, userId);
+      if (!entry) return res.status(404).json({ error: 'Entry not found or access denied' });
+      contentToSummarize = entry.content;
+    } else {
+      return res.status(400).json({ error: 'entryId or customText required' });
+    }
 
   // Provider priority: GEMINI (if GEMINI_API_KEY) -> GROQ (if GROQ_API_URL+GROQ_API_KEY) -> OpenAI (OPENAI_API_KEY) -> fallback heuristic
   const geminiKey = process.env.GEMINI_API_KEY;
@@ -165,16 +184,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const provider = geminiKey ? 'gemini' : (groqUrl && groqKey ? 'groq' : (openaiKey ? 'openai' : 'mock'));
       const modelName = provider === 'gemini' ? 'gemini-1.5-flash' : (provider === 'openai' ? 'gpt-3.5-turbo' : (provider === 'groq' ? 'groq-inference' : 'heuristic'));
       const ai_metadata = { provider, model: modelName, extracted_at: new Date().toISOString(), prompt_version: 'distill_v2' };
-      await updateEntrySummary(entryId, summary, ai_metadata);
-      const created = await createTasksBulk(tasks.map(t => ({ title: t.title || t, description: t.description || '', priority: t.priority || 'medium', status: 'todo' })), entryId);
+      // SECURITY: Pass userId to verify ownership
+      await updateEntrySummary(entryId, summary, ai_metadata, userId);
+      // OPTIMIZED: Use bulk insert with userId
+      const created = await createTasksBulk(
+        tasks.map(t => ({ 
+          title: (t.title || t).slice(0, 500), 
+          description: (t.description || '').slice(0, 5000), 
+          priority: t.priority || 'medium', 
+          status: 'todo'
+        })), 
+        entryId,
+        userId
+      );
       return res.status(200).json({ summary, tasks: created });
     } catch (err) {
-      console.error('distill persist error:', err);
-      // Fall through to just return results without persisting
+      // SECURITY: Don't expose internal errors
       return res.status(200).json({ summary, tasks });
     }
   } else {
     // customText mode or temp mode: just return summary and tasks without saving
     return res.status(200).json({ summary, tasks });
   }
+  });
 }

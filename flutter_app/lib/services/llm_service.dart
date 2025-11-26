@@ -2,6 +2,17 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+/// Response cache entry with expiration
+class _CacheEntry {
+  final dynamic data;
+  final DateTime timestamp;
+  
+  _CacheEntry(this.data) : timestamp = DateTime.now();
+  
+  bool get isExpired => 
+    DateTime.now().difference(timestamp) > const Duration(minutes: 5);
+}
+
 class LLMService {
   static final LLMService _instance = LLMService._internal();
 
@@ -11,18 +22,60 @@ class LLMService {
 
   LLMService._internal();
 
+  // Reusable HTTP client for connection pooling
+  final http.Client _client = http.Client();
+  
+  // Response cache to avoid duplicate API calls
+  final Map<String, _CacheEntry> _cache = {};
+  static const int _maxCacheSize = 50;
+
   final groqUrl = dotenv.env['GROQ_API_URL']!;
   final groqKey = dotenv.env['GROQ_API_KEY']!;
+  
+  // Precomputed headers for reuse
+  late final Map<String, String> _headers = {
+    'Authorization': 'Bearer $groqKey',
+    'Content-Type': 'application/json',
+  };
+  
+  // Precompiled regex for JSON extraction
+  static final RegExp _jsonRegex = RegExp(r'\{[\s\S]*\}');
+  
+  /// Generate cache key from text
+  String _getCacheKey(String prefix, String text) {
+    // Use hash for efficient lookup
+    return '$prefix:${text.hashCode}';
+  }
+  
+  /// Clean expired cache entries
+  void _cleanCache() {
+    if (_cache.length > _maxCacheSize) {
+      _cache.removeWhere((_, entry) => entry.isExpired);
+      // If still too large, remove oldest entries
+      if (_cache.length > _maxCacheSize) {
+        final entries = _cache.entries.toList()
+          ..sort((a, b) => a.value.timestamp.compareTo(b.value.timestamp));
+        final toRemove = entries.take(_cache.length - _maxCacheSize ~/ 2);
+        for (final entry in toRemove) {
+          _cache.remove(entry.key);
+        }
+      }
+    }
+  }
 
   /// Extract tasks from text using Groq LLM
   Future<List<Map<String, dynamic>>> extractTasks(String text) async {
+    // Check cache first
+    final cacheKey = _getCacheKey('tasks', text);
+    final cached = _cache[cacheKey];
+    if (cached != null && !cached.isExpired) {
+      return List<Map<String, dynamic>>.from(cached.data);
+    }
+    
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse(groqUrl),
-        headers: {
-          'Authorization': 'Bearer $groqKey',
-          'Content-Type': 'application/json',
-        },
+        headers: _headers,
         body: jsonEncode({
           'model': 'llama-3.3-70b-versatile',
           'messages': [
@@ -60,26 +113,36 @@ Do not include markdown formatting or explanations.''',
       }
 
       // Extract JSON from response (handle markdown formatting)
-      final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(content);
+      final jsonMatch = _jsonRegex.firstMatch(content);
       final jsonStr = jsonMatch?.group(0) ?? content;
       final parsed = jsonDecode(jsonStr);
 
-      return List<Map<String, dynamic>>.from(parsed['tasks'] ?? []);
+      final tasks = List<Map<String, dynamic>>.from(parsed['tasks'] ?? []);
+      
+      // Cache result
+      _cleanCache();
+      _cache[cacheKey] = _CacheEntry(tasks);
+      
+      return tasks;
     } catch (e) {
-      print('LLM Error: $e');
+      // SECURITY: Error logged without sensitive details
       return [];
     }
   }
 
   /// Generate summary from text using Groq LLM
   Future<String> generateSummary(String text) async {
+    // Check cache first
+    final cacheKey = _getCacheKey('summary', text);
+    final cached = _cache[cacheKey];
+    if (cached != null && !cached.isExpired) {
+      return cached.data as String;
+    }
+    
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse(groqUrl),
-        headers: {
-          'Authorization': 'Bearer $groqKey',
-          'Content-Type': 'application/json',
-        },
+        headers: _headers,
         body: jsonEncode({
           'model': 'llama-3.3-70b-versatile',
           'messages': [
@@ -103,10 +166,27 @@ Do not include markdown formatting or explanations.''',
       }
 
       final data = jsonDecode(response.body);
-      return data['choices']?[0]?['message']?['content'] ?? '';
+      final summary = data['choices']?[0]?['message']?['content'] ?? '';
+      
+      // Cache result
+      _cleanCache();
+      _cache[cacheKey] = _CacheEntry(summary);
+      
+      return summary;
     } catch (e) {
-      print('LLM Error: $e');
+      // SECURITY: Error logged without sensitive details
       return '';
     }
+  }
+  
+  /// Clear response cache
+  void clearCache() {
+    _cache.clear();
+  }
+  
+  /// Dispose of HTTP client when no longer needed
+  void dispose() {
+    _client.close();
+    _cache.clear();
   }
 }

@@ -8,13 +8,13 @@ class PromptCard extends StatefulWidget {
   final Function(String) onAnswerChange;
 
   const PromptCard({
-    Key? key,
+    super.key,
     required this.prompt,
     required this.isSelected,
     this.answer,
     required this.onToggle,
     required this.onAnswerChange,
-  }) : super(key: key);
+  });
 
   @override
   State<PromptCard> createState() => _PromptCardState();
@@ -131,11 +131,11 @@ class _PromptCardState extends State<PromptCard> {
                   onChanged: (value) {
                     widget.onAnswerChange(value);
                   },
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: 'Your answer...',
                     isDense: true,
                     contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   ),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),

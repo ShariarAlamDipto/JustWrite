@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:justwrite_mobile/providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -58,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
             _otpController.text,
           );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
@@ -94,9 +95,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 enabled: !_showOtpInput,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   hintText: 'Enter your email',
-                  prefixIcon: const Icon(Icons.email),
+                  prefixIcon: Icon(Icons.email),
                 ),
               ),
               const SizedBox(height: 16),
@@ -107,9 +108,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _otpController,
                   keyboardType: TextInputType.number,
                   maxLength: 6,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: 'Enter OTP from email',
-                    prefixIcon: const Icon(Icons.security),
+                    prefixIcon: Icon(Icons.security),
                   ),
                 ),
                 const SizedBox(height: 16),

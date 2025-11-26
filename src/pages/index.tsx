@@ -1,7 +1,88 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import DistillView from '../components/DistillView';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
+
+// Memoized entry card component for better list performance
+const EntryCard = memo(function EntryCard({ 
+  entry, 
+  onDistill, 
+  onView, 
+  isDistilling 
+}: { 
+  entry: any; 
+  onDistill: (id: string) => void; 
+  onView: (entry: any) => void; 
+  isDistilling: boolean;
+}) {
+  return (
+    <div style={cardStyles.entryCard}>
+      <div style={cardStyles.entryTime}>
+        {new Date(entry.created_at).toLocaleDateString()} {new Date(entry.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+      </div>
+      <div style={cardStyles.entryPreview}>
+        {entry.content.slice(0, 150) + (entry.content.length > 150 ? '…' : '')}
+      </div>
+      <div style={cardStyles.entryActions}>
+        <button
+          onClick={() => onDistill(entry.id)}
+          disabled={isDistilling}
+          style={{
+            ...cardStyles.btnSmall,
+            background: isDistilling ? 'var(--muted)' : 'var(--accent)',
+            color: 'var(--bg)',
+          }}
+        >
+          {isDistilling ? '…' : 'DISTILL'}
+        </button>
+        {entry.summary && (
+          <button onClick={() => onView(entry)} style={cardStyles.btnSmall}>
+            VIEW
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// Card styles extracted for reuse
+const cardStyles: Record<string, React.CSSProperties> = {
+  entryCard: {
+    background: 'var(--bg)',
+    border: '2px solid var(--muted)',
+    padding: '0.75rem',
+    transition: 'all 0.2s',
+  },
+  entryTime: {
+    fontSize: '0.55rem',
+    color: 'var(--muted)',
+    marginBottom: '0.5rem',
+  },
+  entryPreview: {
+    fontSize: '0.65rem',
+    lineHeight: 1.6,
+    color: 'var(--fg)',
+    marginBottom: '0.75rem',
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-word' as const,
+  },
+  entryActions: {
+    display: 'flex',
+    gap: '0.5rem',
+    flexWrap: 'wrap' as const,
+  },
+  btnSmall: {
+    background: 'transparent',
+    color: 'var(--accent)',
+    border: '2px solid var(--accent)',
+    padding: '0.6rem 0.85rem',
+    fontFamily: '"Press Start 2P", monospace',
+    fontSize: '0.5rem',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    minHeight: '40px',
+  },
+};
 
 export default function Home() {
   const { user, loading: authLoading, token } = useAuth();
@@ -17,7 +98,8 @@ export default function Home() {
     if (user && token) fetchEntries();
   }, [user, token]);
 
-  async function fetchEntries() {
+  // Memoized fetch function
+  const fetchEntries = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/entries', {
@@ -31,9 +113,10 @@ export default function Home() {
       console.error('Failed to fetch entries:', err);
     }
     setLoading(false);
-  }
+  }, [token]);
 
-  async function createEntry() {
+  // Memoized create function
+  const createEntry = useCallback(async () => {
     if (!content.trim()) return;
     setSaving(true);
     try {
@@ -48,7 +131,7 @@ export default function Home() {
       if (res.ok) {
         const json = await res.json();
         setContent('');
-        // Add new entry to the top of the list
+        // Add new entry to the top of the list (optimistic update)
         setEntries(prev => [json.entry, ...prev]);
       } else {
         const err = await res.json();
@@ -60,40 +143,48 @@ export default function Home() {
       alert('Failed to save entry. Please try again.');
     }
     setSaving(false);
-  }
+  }, [content, token]);
 
-  async function distill(entryId: string) {
+  // Optimized distill - fetch tasks and entry in parallel
+  const distill = useCallback(async (entryId: string) => {
     setDistillLoading(entryId);
     try {
-      const res = await fetch('/api/distill', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token || ''}`
-        },
-        body: JSON.stringify({ entryId })
-      });
-      if (res.ok) {
-        const json = await res.json();
-
-        // Fetch tasks for this entry
-        const tRes = await fetch('/api/tasks', {
+      // Run distill and fetch tasks in parallel for speed
+      const [distillRes, tasksRes] = await Promise.all([
+        fetch('/api/distill', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify({ entryId })
+        }),
+        fetch('/api/tasks', {
           headers: { 'Authorization': `Bearer ${token || ''}` }
-        });
-        const tJson = await tRes.json();
+        })
+      ]);
+
+      if (distillRes.ok) {
+        const json = await distillRes.json();
+        const tJson = await tasksRes.json();
         const entryTasks = (tJson.tasks || []).filter((t: any) => t.entry_id === entryId);
-
-        const dbRes = await fetch('/api/entries', {
-          headers: { 'Authorization': `Bearer ${token || ''}` }
+        
+        // Use local entry data instead of refetching
+        const entry = entries.find((e: any) => e.id === entryId);
+        
+        setDistillData({ 
+          entry: { ...entry, summary: json.summary }, 
+          summary: json.summary, 
+          tasks: json.tasks || entryTasks 
         });
-        const dbJson = await dbRes.json();
-        const entry = (dbJson.entries || []).find((e: any) => e.id === entryId);
-
-        setDistillData({ entry, summary: json.summary, tasks: entryTasks });
         setDistillOpen(true);
-        await fetchEntries();
+        
+        // Update entry in local state with summary (optimistic update)
+        setEntries(prev => prev.map(e => 
+          e.id === entryId ? { ...e, summary: json.summary } : e
+        ));
       } else {
-        const err = await res.json();
+        const err = await distillRes.json();
         alert(`Distill failed: ${err.error}`);
       }
     } catch (err) {
@@ -101,9 +192,20 @@ export default function Home() {
       alert('Failed to distill entry. Please try again.');
     }
     setDistillLoading(null);
-  }
+  }, [token, entries]);
 
-  async function addToTodo(tasks: any[]) {
+  // Memoized view handler
+  const handleView = useCallback((entry: any) => {
+    setDistillData({ entry, summary: entry.summary, tasks: [] });
+    setDistillOpen(true);
+  }, []);
+
+  // Memoized close handler
+  const handleClose = useCallback(() => {
+    setDistillOpen(false);
+  }, []);
+
+  const addToTodo = useCallback(async (tasks: any[]) => {
     try {
       await Promise.all(
         tasks.map((t: any) =>
@@ -122,7 +224,7 @@ export default function Home() {
     } catch (err) {
       console.error('Failed to add tasks:', err);
     }
-  }
+  }, [token]);
 
   if (authLoading) {
     return (
@@ -197,38 +299,13 @@ export default function Home() {
           ) : (
             <div style={styles.entryList}>
               {entries.map(e => (
-                <div key={e.id} style={styles.entryCard}>
-                  <div style={styles.entryTime}>
-                    {new Date(e.created_at).toLocaleDateString()} {new Date(e.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </div>
-                  <div style={styles.entryPreview}>
-                    {e.content.slice(0, 150) + (e.content.length > 150 ? '…' : '')}
-                  </div>
-                  <div style={styles.entryActions}>
-                    <button
-                      onClick={() => distill(e.id)}
-                      disabled={distillLoading === e.id}
-                      style={{
-                        ...styles.btnSmall,
-                        background: distillLoading === e.id ? 'var(--muted)' : 'var(--accent)',
-                        color: 'var(--bg)',
-                      }}
-                    >
-                      {distillLoading === e.id ? '…' : 'DISTILL'}
-                    </button>
-                    {e.summary && (
-                      <button
-                        onClick={() => {
-                          setDistillData({ entry: e, summary: e.summary, tasks: [] });
-                          setDistillOpen(true);
-                        }}
-                        style={styles.btnSmall}
-                      >
-                        VIEW
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <EntryCard
+                  key={e.id}
+                  entry={e}
+                  onDistill={distill}
+                  onView={handleView}
+                  isDistilling={distillLoading === e.id}
+                />
               ))}
             </div>
           )}
@@ -237,11 +314,11 @@ export default function Home() {
 
       <DistillView
         open={distillOpen}
-        onClose={() => setDistillOpen(false)}
+        onClose={handleClose}
         entry={distillData?.entry || { content: '', created_at: new Date().toISOString() }}
         summary={distillData?.summary}
         tasks={distillData?.tasks || []}
-        onSave={(tasks: any[]) => addToTodo(tasks)}
+        onSave={addToTodo}
       />
     </>
   );

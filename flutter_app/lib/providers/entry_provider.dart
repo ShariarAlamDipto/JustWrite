@@ -8,18 +8,33 @@ class EntryProvider extends ChangeNotifier {
   List<Entry> _entries = [];
   bool _isLoading = false;
   String? _error;
+  DateTime? _lastFetch;
+  
+  // Cache duration: 30 seconds
+  static const _cacheDuration = Duration(seconds: 30);
 
   List<Entry> get entries => _entries;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> loadEntries() async {
+  // Check if cache is valid
+  bool get _isCacheValid => 
+    _lastFetch != null && 
+    DateTime.now().difference(_lastFetch!) < _cacheDuration;
+
+  Future<void> loadEntries({bool forceRefresh = false}) async {
+    // Return cached data if valid and not forcing refresh
+    if (!forceRefresh && _isCacheValid && _entries.isNotEmpty) {
+      return;
+    }
+    
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       _entries = await _supabaseService.getEntries();
+      _lastFetch = DateTime.now();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -52,6 +67,7 @@ class EntryProvider extends ChangeNotifier {
       );
 
       final created = await _supabaseService.createEntry(entry);
+      // Optimistic update: add to local cache immediately
       _entries.insert(0, created);
       notifyListeners();
       return created;
@@ -78,11 +94,17 @@ class EntryProvider extends ChangeNotifier {
   }
 
   Future<void> deleteEntry(String entryId) async {
+    // Optimistic delete: remove from local cache first
+    final removedEntry = _entries.firstWhere((e) => e.id == entryId);
+    final removedIndex = _entries.indexWhere((e) => e.id == entryId);
+    _entries.removeWhere((e) => e.id == entryId);
+    notifyListeners();
+    
     try {
       await _supabaseService.deleteEntry(entryId);
-      _entries.removeWhere((e) => e.id == entryId);
-      notifyListeners();
     } catch (e) {
+      // Rollback on failure
+      _entries.insert(removedIndex, removedEntry);
       _error = e.toString();
       notifyListeners();
       rethrow;
@@ -92,5 +114,10 @@ class EntryProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+  
+  // Invalidate cache to force refresh on next load
+  void invalidateCache() {
+    _lastFetch = null;
   }
 }

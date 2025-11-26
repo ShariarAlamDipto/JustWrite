@@ -4,7 +4,7 @@ import 'package:justwrite_mobile/providers/task_provider.dart';
 import 'package:justwrite_mobile/models/task.dart';
 
 class TasksScreen extends StatelessWidget {
-  const TasksScreen({Key? key}) : super(key: key);
+  const TasksScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

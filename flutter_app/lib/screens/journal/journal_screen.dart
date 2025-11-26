@@ -5,7 +5,7 @@ import 'package:justwrite_mobile/providers/entry_provider.dart';
 import 'package:justwrite_mobile/models/entry.dart';
 
 class JournalScreen extends StatelessWidget {
-  const JournalScreen({Key? key}) : super(key: key);
+  const JournalScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
