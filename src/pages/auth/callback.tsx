@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 export default function AuthCallback() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState('Processing login...');
 
   useEffect(() => {
     if (!supabase) {
@@ -14,42 +15,54 @@ export default function AuthCallback() {
 
     const handleAuthCallback = async () => {
       try {
-        // Get the session from the URL hash (Supabase auto-parses this)
+        // Check if there's a hash fragment with tokens (from magic link)
+        const hash = window.location.hash;
+        
+        if (hash && hash.includes('access_token')) {
+          setStatus('Verifying token...');
+          
+          // Let Supabase handle the hash automatically
+          // It will detect and parse the tokens from the URL
+          const { data, error: hashError } = await supabase.auth.getSession();
+          
+          if (hashError) {
+            throw hashError;
+          }
+          
+          if (data.session) {
+            setStatus('Success! Redirecting...');
+            // Clear the hash from URL for cleaner look
+            window.history.replaceState(null, '', window.location.pathname);
+            router.push('/');
+            return;
+          }
+        }
+
+        // If no hash, check existing session
+        setStatus('Checking session...');
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
-          console.error('Session error:', sessionError);
-          setError(sessionError.message);
-          setTimeout(() => router.push('/auth/login?error=auth_failed'), 2000);
-          return;
+          throw sessionError;
         }
 
         if (session) {
-          // Session is established, redirect to home
+          setStatus('Already signed in! Redirecting...');
           router.push('/');
         } else {
-          // No session found, check if we just received the token in the hash
-          // Wait a moment for Supabase to process the hash
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          const { data: { session: newSession }, error: retryError } = await supabase.auth.getSession();
-          
-          if (retryError || !newSession) {
-            console.error('Failed to establish session:', retryError);
-            setError('Failed to sign in. Please try again.');
-            setTimeout(() => router.push('/auth/login?error=auth_failed'), 2000);
-          } else {
-            router.push('/');
-          }
+          // No session, redirect to login
+          setStatus('No session found. Redirecting to login...');
+          setTimeout(() => router.push('/auth/login'), 1500);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Auth callback error:', err);
-        setError('An error occurred during sign in.');
+        setError(err.message || 'An error occurred during sign in.');
         setTimeout(() => router.push('/auth/login?error=auth_failed'), 2000);
       }
     };
 
-    handleAuthCallback();
+    // Small delay to ensure Supabase client is ready
+    setTimeout(handleAuthCallback, 100);
   }, [router]);
 
   return (
@@ -60,7 +73,10 @@ export default function AuthCallback() {
           <p style={styles.text}>Redirecting to login...</p>
         </>
       ) : (
-        <p style={styles.text}>Signing you in...</p>
+        <>
+          <div style={styles.spinner}></div>
+          <p style={styles.text}>{status}</p>
+        </>
       )}
     </div>
   );
@@ -74,16 +90,27 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100vh',
     background: 'var(--bg)',
     flexDirection: 'column',
-    gap: '1rem',
+    gap: '1.5rem',
+    padding: '1rem',
   },
   text: {
-    color: 'var(--fg)',
+    color: 'var(--accent)',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '1rem',
+    fontSize: '0.7rem',
+    textAlign: 'center',
   },
   error: {
     color: '#ff3bff',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.75rem',
+    fontSize: '0.65rem',
+    textAlign: 'center',
+  },
+  spinner: {
+    width: '40px',
+    height: '40px',
+    border: '4px solid var(--muted)',
+    borderTop: '4px solid var(--accent)',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
   },
 };
