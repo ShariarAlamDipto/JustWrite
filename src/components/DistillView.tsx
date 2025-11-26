@@ -13,66 +13,91 @@ const DistillView = memo(function DistillView({ open, onClose, entry, summary, t
 
   if (!open) return null;
 
-  const initialBits = entry.content.slice(0, 120) + (entry.content.length > 120 ? '…' : '');
+  const previewText = entry.content.slice(0, 100) + (entry.content.length > 100 ? '…' : '');
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={styles.card}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={styles.modal}>
         {/* Header */}
-        <div style={styles.header}>
+        <header style={styles.header}>
           <div>
-            <div style={styles.timestamp}>DISTILL COMPLETE</div>
-            <div style={styles.dateTime}>{new Date(entry.created_at).toLocaleString()}</div>
+            <h2 style={styles.title}>Distill Complete</h2>
+            <p style={styles.date}>
+              {new Date(entry.created_at).toLocaleDateString([], { 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </p>
           </div>
-          <button onClick={onClose} style={styles.closeBtn}>✕</button>
-        </div>
+          <button onClick={onClose} style={styles.closeBtn} aria-label="Close">
+            ×
+          </button>
+        </header>
 
-        {/* Entry Preview */}
-        <div style={styles.section}>
-          <div style={styles.entryPreview}>{initialBits}</div>
-        </div>
+        {/* Original Entry */}
+        <section style={styles.section}>
+          <p style={styles.preview}>{previewText}</p>
+        </section>
 
         {/* AI Summary */}
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>AI SUMMARY</div>
-          <div style={styles.summaryText}>{summary || 'No summary available.'}</div>
-        </div>
+        <section style={styles.section}>
+          <h3 style={styles.sectionTitle}>Summary</h3>
+          <p style={styles.summaryText}>{summary || 'No summary available.'}</p>
+        </section>
 
         {/* Extracted Tasks */}
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>TASKS ({tasks?.length || 0})</div>
+        <section style={styles.section}>
+          <h3 style={styles.sectionTitle}>
+            Tasks <span style={styles.badge}>{tasks?.length || 0}</span>
+          </h3>
+          
           {(!tasks || tasks.length === 0) ? (
-            <div style={styles.noTasks}>No tasks extracted.</div>
+            <p style={styles.noTasks}>No tasks extracted</p>
           ) : (
-            <div style={styles.tasksList}>
+            <div style={styles.taskList}>
               {tasks.map((t: Task) => (
                 <div key={t.id} style={styles.taskItem}>
-                  <div style={styles.taskTitle}>{t.title}</div>
-                  {t.description && <div style={styles.taskDesc}>{t.description}</div>}
-                  <div style={styles.taskMeta}>Priority: {t.priority || 'medium'}</div>
+                  <div style={styles.taskDot} />
+                  <div style={styles.taskContent}>
+                    <span style={styles.taskTitle}>{t.title}</span>
+                    {t.description && (
+                      <p style={styles.taskDesc}>{t.description}</p>
+                    )}
+                    <span style={styles.taskPriority}>{t.priority || 'medium'}</span>
+                  </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Action Buttons */}
-        <div style={styles.actions}>
-          <button onClick={handleSave} disabled={saving} style={styles.btnPrimary}>
-            {saving ? 'Saving…' : 'ADD TO TO‑DO'}
+        {/* Actions */}
+        <footer style={styles.footer}>
+          <button 
+            onClick={handleSave} 
+            disabled={saving || !tasks?.length} 
+            style={{
+              ...styles.addBtn,
+              opacity: saving || !tasks?.length ? 0.4 : 1,
+            }}
+          >
+            {saving ? 'Adding…' : 'Add to tasks'}
           </button>
-          <button onClick={onClose} style={styles.btnSecondary}>CANCEL</button>
-        </div>
+          <button onClick={onClose} style={styles.cancelBtn}>
+            Cancel
+          </button>
+        </footer>
       </div>
     </div>
   );
 });
 
 const styles: Record<string, React.CSSProperties> = {
-  card: {
-    maxHeight: '90vh',
+  modal: {
+    maxHeight: '85vh',
     overflowY: 'auto',
-    animation: 'slideUp 0.3s ease-out',
   },
   header: {
     display: 'flex',
@@ -80,118 +105,165 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'flex-start',
     marginBottom: '1.5rem',
     paddingBottom: '1rem',
-    borderBottom: '2px solid var(--accent)',
+    borderBottom: '1px solid var(--border)',
   },
-  timestamp: {
-    fontSize: '0.65rem',
-    fontWeight: 700,
+  title: {
+    fontSize: '11px',
+    fontWeight: 400,
+    margin: 0,
     color: 'var(--accent)',
-    letterSpacing: '0.1em',
+    letterSpacing: '0.08em',
   },
-  dateTime: {
-    fontSize: '0.65rem',
+  date: {
+    fontSize: '8px',
     color: 'var(--muted)',
-    marginTop: '0.25rem',
+    margin: '0.375rem 0 0',
   },
   closeBtn: {
     background: 'transparent',
-    color: 'var(--accent)',
-    border: '2px solid var(--accent)',
-    padding: '0.5rem',
-    fontSize: '1rem',
+    color: 'var(--fg-dim)',
+    border: '1px solid var(--border)',
+    width: '28px',
+    height: '28px',
+    fontSize: '18px',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '4px',
+    padding: 0,
+    transition: 'all 0.15s ease',
   },
   section: {
     marginBottom: '1.5rem',
   },
-  entryPreview: {
-    fontSize: '0.8rem',
+  preview: {
+    fontSize: '11px',
     lineHeight: 1.6,
-    color: 'var(--fg)',
-    padding: '1rem',
+    color: 'var(--fg-dim)',
+    margin: 0,
+    padding: '0.875rem',
     background: 'var(--bg)',
-    border: '2px solid var(--muted)',
-    whiteSpace: 'pre-wrap',
-    wordWrap: 'break-word',
-    fontFamily: 'monospace',
+    borderRadius: '4px',
+    border: '1px solid var(--border)',
+    fontFamily: "'SF Mono', 'Fira Code', monospace",
   },
   sectionTitle: {
-    fontSize: '0.7rem',
-    fontWeight: 700,
-    color: 'var(--accent)',
+    fontSize: '8px',
+    fontWeight: 400,
+    margin: '0 0 0.75rem',
+    color: 'var(--fg-dim)',
     letterSpacing: '0.1em',
-    marginBottom: '0.75rem',
+    textTransform: 'uppercase',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  badge: {
+    fontSize: '8px',
+    color: 'var(--accent)',
+    background: 'var(--accent-glow)',
+    padding: '0.15rem 0.4rem',
+    borderRadius: '8px',
   },
   summaryText: {
-    fontSize: '0.75rem',
+    fontSize: '10px',
     lineHeight: 1.7,
     color: 'var(--fg)',
+    margin: 0,
+    padding: '0.875rem',
     background: 'var(--bg)',
-    padding: '1rem',
-    border: '1px solid var(--muted)',
+    borderRadius: '4px',
+    border: '1px solid var(--border)',
   },
-  tasksList: {
+  taskList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.75rem',
+    gap: '0.625rem',
   },
   taskItem: {
-    padding: '0.75rem',
-    background: 'var(--bg)',
-    border: '2px solid var(--accent)',
-    boxShadow: '0 0 10px rgba(0, 255, 213, 0.2)',
-  },
-  taskTitle: {
-    fontSize: '0.7rem',
-    fontWeight: 700,
-    color: 'var(--accent)',
-  },
-  taskDesc: {
-    fontSize: '0.65rem',
-    color: 'var(--fg)',
-    marginTop: '0.5rem',
-    lineHeight: 1.5,
-  },
-  taskMeta: {
-    fontSize: '0.6rem',
-    color: 'var(--muted)',
-    marginTop: '0.5rem',
-  },
-  noTasks: {
-    fontSize: '0.7rem',
-    color: 'var(--muted)',
-    padding: '1rem',
-    textAlign: 'center',
-  },
-  actions: {
     display: 'flex',
     gap: '0.75rem',
-    marginTop: '1.5rem',
-    paddingTop: '1rem',
-    borderTop: '2px solid var(--muted)',
+    alignItems: 'flex-start',
+    padding: '0.75rem',
+    background: 'var(--bg)',
+    border: '1px solid var(--accent)',
+    borderRadius: '4px',
   },
-  btnPrimary: {
+  taskDot: {
+    width: '8px',
+    height: '8px',
+    minWidth: '8px',
+    borderRadius: '50%',
+    background: 'var(--accent)',
+    marginTop: '4px',
+  },
+  taskContent: {
     flex: 1,
+    minWidth: 0,
+  },
+  taskTitle: {
+    fontSize: '10px',
+    color: 'var(--fg)',
+    display: 'block',
+    lineHeight: 1.4,
+  },
+  taskDesc: {
+    fontSize: '9px',
+    color: 'var(--muted)',
+    margin: '0.375rem 0 0',
+    lineHeight: 1.5,
+  },
+  taskPriority: {
+    fontSize: '7px',
+    color: 'var(--accent)',
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
+    marginTop: '0.5rem',
+    display: 'inline-block',
+  },
+  noTasks: {
+    fontSize: '9px',
+    color: 'var(--muted)',
+    textAlign: 'center',
+    padding: '1.5rem',
+    border: '1px dashed var(--border)',
+    borderRadius: '4px',
+    margin: 0,
+  },
+  footer: {
+    display: 'flex',
+    gap: '0.5rem',
+    marginTop: '0.5rem',
+    paddingTop: '1rem',
+    borderTop: '1px solid var(--border)',
+  },
+  addBtn: {
+    flex: 2,
     background: 'var(--accent)',
     color: 'var(--bg)',
     border: 'none',
+    borderRadius: '4px',
     padding: '0.75rem',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.6rem',
+    fontSize: '8px',
+    fontWeight: 700,
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: 'all 0.15s ease',
+    letterSpacing: '0.05em',
   },
-  btnSecondary: {
+  cancelBtn: {
     flex: 1,
     background: 'transparent',
-    color: 'var(--accent)',
-    border: '2px solid var(--accent)',
+    color: 'var(--fg-dim)',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
     padding: '0.75rem',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.6rem',
+    fontSize: '8px',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: 'all 0.15s ease',
+    letterSpacing: '0.05em',
   },
 };
 

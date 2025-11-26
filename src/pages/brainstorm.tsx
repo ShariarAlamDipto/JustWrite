@@ -29,21 +29,18 @@ export default function BrainstormPage() {
           id: `task-${Date.now()}-${i}`
         }));
         setGeneratedTasks(tasksWithIds);
-        // Auto-select all tasks
         setSelectedTasks(new Set(tasksWithIds.map((t: any) => t.id)));
       } else {
         const err = await res.json();
-        console.error('Failed to generate tasks:', err.error);
         alert(`Error: ${err.error}`);
       }
     } catch (err) {
-      console.error('Failed to generate tasks:', err);
+      console.error('Failed:', err);
     }
     setLoading(false);
   };
 
-  const toggleTask = (id: string, e: React.MouseEvent | React.ChangeEvent) => {
-    e.stopPropagation();
+  const toggleTask = (id: string) => {
     const newSelected = new Set(selectedTasks);
     if (newSelected.has(id)) {
       newSelected.delete(id);
@@ -88,18 +85,16 @@ export default function BrainstormPage() {
         )
       );
       
-      const allSuccess = results.every(r => r.ok);
-      if (allSuccess) {
+      if (results.every(r => r.ok)) {
         setSelectedTasks(new Set());
         setGeneratedTasks([]);
         setFreeText('');
-        alert(`✓ Added ${tasksToAdd.length} task(s) to your to-do list!`);
+        alert(`✓ Added ${tasksToAdd.length} task(s)!`);
       } else {
-        alert('Some tasks failed to add. Please try again.');
+        alert('Some tasks failed. Try again.');
       }
     } catch (err) {
-      console.error('Failed to add tasks:', err);
-      alert('Failed to add tasks. Please try again.');
+      alert('Failed to add tasks.');
     }
     setAddingTasks(false);
   };
@@ -108,9 +103,9 @@ export default function BrainstormPage() {
     return (
       <>
         <Nav />
-        <div style={styles.container}>
-          <p style={styles.loading}>Loading...</p>
-        </div>
+        <main style={styles.main}>
+          <p style={styles.loading}>Loading…</p>
+        </main>
       </>
     );
   }
@@ -119,9 +114,9 @@ export default function BrainstormPage() {
     return (
       <>
         <Nav />
-        <div style={styles.container}>
-          <p style={styles.error}>Please sign in to use Brainstorm.</p>
-        </div>
+        <main style={styles.main}>
+          <p style={styles.authMsg}>Sign in to brainstorm</p>
+        </main>
       </>
     );
   }
@@ -129,80 +124,76 @@ export default function BrainstormPage() {
   return (
     <>
       <Nav />
-      <div style={styles.container}>
-        <div style={styles.section}>
-          <h1 style={styles.title}>BRAINSTORM</h1>
-          <p style={styles.subtitle}>Turn your thoughts into tasks</p>
-        </div>
+      <main style={styles.main}>
+        {/* Header */}
+        <header style={styles.header}>
+          <h1 style={styles.title}>Brainstorm</h1>
+          <p style={styles.subtitle}>Dump ideas → Get tasks</p>
+        </header>
 
-        {/* Free-form Input */}
-        <div style={styles.section}>
-          <label style={styles.label}>YOUR THOUGHTS</label>
+        {/* Input */}
+        <section style={styles.section}>
           <textarea
             value={freeText}
             onChange={e => setFreeText(e.target.value)}
-            placeholder="Write anything... ideas, todos, notes, reminders..."
-            rows={6}
+            placeholder="Write anything… ideas, todos, notes…"
             style={styles.textarea}
           />
           <button
             onClick={handleGenerate}
             disabled={loading || !freeText.trim()}
             style={{
-              ...styles.btnPrimary,
-              opacity: loading || !freeText.trim() ? 0.5 : 1,
+              ...styles.generateBtn,
+              opacity: loading || !freeText.trim() ? 0.4 : 1,
             }}
           >
-            {loading ? 'ANALYZING…' : 'GENERATE TASKS'}
+            {loading ? 'Analyzing…' : 'Extract tasks'}
           </button>
-        </div>
+        </section>
 
         {/* Generated Tasks */}
         {generatedTasks.length > 0 && (
-          <div style={styles.section}>
-            <label style={styles.label}>
-              EXTRACTED TASKS ({generatedTasks.length})
-            </label>
-            <p style={styles.hint}>Tap to select/deselect. Use ✕ to remove a task.</p>
+          <section style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <h2 style={styles.sectionTitle}>Extracted</h2>
+              <span style={styles.count}>{selectedTasks.size}/{generatedTasks.length}</span>
+            </div>
             
             <div style={styles.taskList}>
               {generatedTasks.map(task => (
                 <div
                   key={task.id}
+                  onClick={() => toggleTask(task.id)}
                   style={{
                     ...styles.taskItem,
-                    background: selectedTasks.has(task.id)
-                      ? 'rgba(0, 255, 213, 0.15)'
-                      : 'transparent',
-                    borderColor: selectedTasks.has(task.id)
-                      ? 'var(--accent)'
-                      : 'var(--muted)',
+                    borderColor: selectedTasks.has(task.id) ? 'var(--accent)' : 'var(--border)',
+                    background: selectedTasks.has(task.id) ? 'var(--accent-glow)' : 'var(--bg-elevated)',
                   }}
-                  onClick={(e) => toggleTask(task.id, e)}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedTasks.has(task.id)}
-                    onChange={(e) => toggleTask(task.id, e)}
-                    style={styles.checkbox}
-                  />
-                  <div style={styles.taskContent}>
-                    <div style={styles.taskTitle}>{task.title}</div>
-                    {task.description && (
-                      <div style={styles.taskDesc}>{task.description}</div>
-                    )}
-                    <div style={styles.taskPriority}>
-                      Priority: <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
-                        {task.priority || 'medium'}
-                      </span>
-                    </div>
+                  <div style={{
+                    ...styles.checkbox,
+                    background: selectedTasks.has(task.id) ? 'var(--accent)' : 'transparent',
+                    borderColor: selectedTasks.has(task.id) ? 'var(--accent)' : 'var(--border)',
+                  }}>
+                    {selectedTasks.has(task.id) && '✓'}
                   </div>
+                  
+                  <div style={styles.taskContent}>
+                    <span style={styles.taskTitle}>{task.title}</span>
+                    {task.description && (
+                      <p style={styles.taskDesc}>{task.description}</p>
+                    )}
+                    <span style={styles.taskPriority}>
+                      {task.priority || 'medium'}
+                    </span>
+                  </div>
+                  
                   <button
                     onClick={(e) => deleteTask(task.id, e)}
                     style={styles.deleteBtn}
-                    aria-label="Delete task"
+                    aria-label="Remove"
                   >
-                    ✕
+                    ×
                   </button>
                 </div>
               ))}
@@ -213,198 +204,246 @@ export default function BrainstormPage() {
                 onClick={handleAddSelected}
                 disabled={selectedTasks.size === 0 || addingTasks}
                 style={{
-                  ...styles.btnPrimary,
-                  flex: 2,
-                  opacity: selectedTasks.size === 0 || addingTasks ? 0.5 : 1,
+                  ...styles.addBtn,
+                  opacity: selectedTasks.size === 0 || addingTasks ? 0.4 : 1,
                 }}
               >
-                {addingTasks ? 'ADDING...' : `ADD (${selectedTasks.size}) TO LIST`}
+                {addingTasks ? 'Adding…' : `Add ${selectedTasks.size} task${selectedTasks.size !== 1 ? 's' : ''}`}
               </button>
               <button
                 onClick={() => {
                   setGeneratedTasks([]);
                   setSelectedTasks(new Set());
                 }}
-                style={styles.btnSecondary}
+                style={styles.clearBtn}
               >
-                CLEAR
+                Clear
               </button>
             </div>
-          </div>
+          </section>
         )}
 
         {/* Tips */}
-        <div style={styles.section}>
-          <label style={styles.label}>TIPS</label>
-          <ul style={styles.tipsList}>
-            <li>Use action words: fix, create, review, update</li>
-            <li>One task per line for best results</li>
-            <li>Add "urgent" to mark as high priority</li>
-          </ul>
-        </div>
-      </div>
+        {generatedTasks.length === 0 && (
+          <section style={styles.tips}>
+            <p style={styles.tipTitle}>Tips</p>
+            <ul style={styles.tipList}>
+              <li>Use action words: fix, create, update</li>
+              <li>One idea per line works best</li>
+              <li>Add "urgent" for high priority</li>
+            </ul>
+          </section>
+        )}
+      </main>
     </>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    maxWidth: 760,
+  main: {
+    maxWidth: '600px',
     margin: '0 auto',
-    padding: '0 12px 2rem',
+    padding: '1.5rem 1rem 3rem',
   },
-  section: {
-    marginBottom: '1.5rem',
+  header: {
+    marginBottom: '2rem',
   },
   title: {
-    fontSize: '1rem',
-    margin: '0 0 0.5rem',
+    fontSize: '14px',
+    fontWeight: 400,
+    margin: 0,
     color: 'var(--accent)',
-    textShadow: '0 0 10px rgba(0, 255, 213, 0.3)',
     letterSpacing: '0.1em',
   },
   subtitle: {
-    fontSize: '0.6rem',
+    fontSize: '9px',
     color: 'var(--muted)',
-    margin: 0,
+    margin: '0.5rem 0 0',
     letterSpacing: '0.05em',
   },
-  label: {
-    display: 'block',
-    fontSize: '0.6rem',
-    fontWeight: 700,
-    color: 'var(--accent)',
-    letterSpacing: '0.1em',
-    marginBottom: '0.5rem',
+  section: {
+    marginBottom: '2rem',
   },
-  hint: {
-    fontSize: '0.55rem',
-    color: 'var(--muted)',
-    marginBottom: '0.75rem',
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '1rem',
+  },
+  sectionTitle: {
+    fontSize: '9px',
+    fontWeight: 400,
+    margin: 0,
+    color: 'var(--fg-dim)',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+  },
+  count: {
+    fontSize: '9px',
+    color: 'var(--accent)',
+    background: 'var(--accent-glow)',
+    padding: '0.2rem 0.5rem',
+    borderRadius: '10px',
   },
   textarea: {
     width: '100%',
-    minHeight: '150px',
+    minHeight: '180px',
     background: 'var(--bg)',
     color: 'var(--fg)',
-    border: '2px solid var(--muted)',
-    padding: '0.75rem',
-    fontFamily: 'monospace',
-    fontSize: '16px',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    padding: '1rem',
+    fontFamily: "'SF Mono', 'Fira Code', monospace",
+    fontSize: '14px',
     lineHeight: 1.6,
     resize: 'vertical',
-    boxSizing: 'border-box' as const,
   },
-  btnPrimary: {
+  generateBtn: {
     width: '100%',
     background: 'var(--accent)',
     color: 'var(--bg)',
     border: 'none',
-    padding: '0.85rem',
+    borderRadius: '4px',
+    padding: '0.875rem',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.55rem',
-    cursor: 'pointer',
+    fontSize: '9px',
     fontWeight: 700,
-    transition: 'all 0.2s',
-    marginTop: '0.75rem',
-    minHeight: '48px',
-  },
-  btnSecondary: {
-    flex: 1,
-    background: 'transparent',
-    color: 'var(--accent)',
-    border: '2px solid var(--accent)',
-    padding: '0.85rem',
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.55rem',
     cursor: 'pointer',
-    transition: 'all 0.2s',
-    minHeight: '48px',
+    marginTop: '0.75rem',
+    transition: 'all 0.15s ease',
+    letterSpacing: '0.08em',
   },
   taskList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.6rem',
+    gap: '0.5rem',
   },
   taskItem: {
     display: 'flex',
-    gap: '0.75rem',
     alignItems: 'flex-start',
-    background: 'var(--bg)',
-    border: '2px solid var(--muted)',
-    padding: '0.75rem',
+    gap: '0.75rem',
+    padding: '0.875rem 1rem',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
     cursor: 'pointer',
-    transition: 'all 0.2s',
-    position: 'relative' as const,
+    transition: 'all 0.15s ease',
   },
   checkbox: {
-    width: '22px',
-    height: '22px',
-    minWidth: '22px',
+    width: '18px',
+    height: '18px',
+    minWidth: '18px',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '10px',
+    color: 'var(--bg)',
     marginTop: '2px',
-    cursor: 'pointer',
-    accentColor: 'var(--accent)',
+    transition: 'all 0.15s ease',
   },
   taskContent: {
     flex: 1,
     minWidth: 0,
   },
   taskTitle: {
-    fontSize: '0.7rem',
-    fontWeight: 700,
+    fontSize: '10px',
     color: 'var(--fg)',
-    marginBottom: '0.4rem',
-    wordBreak: 'break-word' as const,
+    display: 'block',
+    lineHeight: 1.4,
+    wordBreak: 'break-word',
   },
   taskDesc: {
-    fontSize: '0.6rem',
+    fontSize: '9px',
     color: 'var(--muted)',
-    marginBottom: '0.4rem',
+    margin: '0.375rem 0 0',
     lineHeight: 1.5,
-    wordBreak: 'break-word' as const,
+    wordBreak: 'break-word',
   },
   taskPriority: {
-    fontSize: '0.55rem',
-    color: 'var(--muted)',
+    fontSize: '7px',
+    color: 'var(--accent)',
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
+    marginTop: '0.5rem',
+    display: 'inline-block',
   },
   deleteBtn: {
-    background: 'rgba(255, 59, 255, 0.2)',
-    color: '#ff3bff',
-    border: '1px solid #ff3bff',
-    width: '36px',
-    height: '36px',
-    minWidth: '36px',
-    fontSize: '1rem',
+    background: 'transparent',
+    color: 'var(--muted)',
+    border: 'none',
+    width: '24px',
+    height: '24px',
+    fontSize: '16px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.2s',
+    borderRadius: '4px',
     padding: 0,
+    transition: 'color 0.15s ease',
   },
   actions: {
     display: 'flex',
-    gap: '0.6rem',
+    gap: '0.5rem',
     marginTop: '1rem',
-    flexWrap: 'wrap' as const,
   },
-  tipsList: {
-    fontSize: '0.6rem',
+  addBtn: {
+    flex: 2,
+    background: 'var(--accent)',
+    color: 'var(--bg)',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '0.875rem',
+    fontFamily: '"Press Start 2P", monospace',
+    fontSize: '8px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    letterSpacing: '0.05em',
+  },
+  clearBtn: {
+    flex: 1,
+    background: 'transparent',
+    color: 'var(--fg-dim)',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    padding: '0.875rem',
+    fontFamily: '"Press Start 2P", monospace',
+    fontSize: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    letterSpacing: '0.05em',
+  },
+  tips: {
+    padding: '1.25rem',
+    border: '1px dashed var(--border)',
+    borderRadius: '4px',
+  },
+  tipTitle: {
+    fontSize: '8px',
+    color: 'var(--fg-dim)',
+    margin: '0 0 0.75rem',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+  },
+  tipList: {
+    fontSize: '9px',
     color: 'var(--muted)',
-    lineHeight: 1.8,
-    paddingLeft: '1.25rem',
+    lineHeight: 2,
     margin: 0,
+    paddingLeft: '1rem',
   },
   loading: {
-    fontSize: '0.7rem',
-    color: 'var(--fg)',
+    fontSize: '9px',
+    color: 'var(--muted)',
     textAlign: 'center',
-    padding: '2rem',
+    padding: '3rem 1rem',
   },
-  error: {
-    fontSize: '0.7rem',
-    color: '#ff3bff',
+  authMsg: {
+    fontSize: '10px',
+    color: 'var(--accent-2)',
     textAlign: 'center',
-    padding: '2rem',
+    padding: '3rem 1rem',
   },
 };

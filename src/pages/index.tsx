@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import DistillView from '../components/DistillView';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
 
-// Memoized entry card component for better list performance
+// Memoized entry card — minimal, clean design
 const EntryCard = memo(function EntryCard({ 
   entry, 
   onDistill, 
@@ -15,29 +15,35 @@ const EntryCard = memo(function EntryCard({
   onView: (entry: any) => void; 
   isDistilling: boolean;
 }) {
+  const date = new Date(entry.created_at);
+  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  
   return (
-    <div style={cardStyles.entryCard}>
-      <div style={cardStyles.entryTime}>
-        {new Date(entry.created_at).toLocaleDateString()} {new Date(entry.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+    <div style={cardStyles.card}>
+      <div style={cardStyles.meta}>
+        <span style={cardStyles.date}>{dateStr}</span>
+        <span style={cardStyles.time}>{timeStr}</span>
+        {entry.summary && <span style={cardStyles.badge}>✓</span>}
       </div>
-      <div style={cardStyles.entryPreview}>
-        {entry.content.slice(0, 150) + (entry.content.length > 150 ? '…' : '')}
-      </div>
-      <div style={cardStyles.entryActions}>
+      <p style={cardStyles.preview}>
+        {entry.content.slice(0, 120)}{entry.content.length > 120 ? '…' : ''}
+      </p>
+      <div style={cardStyles.actions}>
         <button
           onClick={() => onDistill(entry.id)}
           disabled={isDistilling}
           style={{
-            ...cardStyles.btnSmall,
-            background: isDistilling ? 'var(--muted)' : 'var(--accent)',
-            color: 'var(--bg)',
+            ...cardStyles.btn,
+            ...cardStyles.btnPrimary,
+            opacity: isDistilling ? 0.5 : 1,
           }}
         >
-          {isDistilling ? '…' : 'DISTILL'}
+          {isDistilling ? '•••' : 'Distill'}
         </button>
         {entry.summary && (
-          <button onClick={() => onView(entry)} style={cardStyles.btnSmall}>
-            VIEW
+          <button onClick={() => onView(entry)} style={cardStyles.btn}>
+            View
           </button>
         )}
       </div>
@@ -45,42 +51,59 @@ const EntryCard = memo(function EntryCard({
   );
 });
 
-// Card styles extracted for reuse
 const cardStyles: Record<string, React.CSSProperties> = {
-  entryCard: {
-    background: 'var(--bg)',
-    border: '2px solid var(--muted)',
-    padding: '0.75rem',
-    transition: 'all 0.2s',
+  card: {
+    background: 'var(--bg-elevated)',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    padding: '1rem',
+    transition: 'border-color 0.15s ease',
   },
-  entryTime: {
-    fontSize: '0.55rem',
-    color: 'var(--muted)',
-    marginBottom: '0.5rem',
-  },
-  entryPreview: {
-    fontSize: '0.65rem',
-    lineHeight: 1.6,
-    color: 'var(--fg)',
+  meta: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
     marginBottom: '0.75rem',
-    whiteSpace: 'pre-wrap' as const,
-    wordBreak: 'break-word' as const,
+    fontSize: '8px',
   },
-  entryActions: {
+  date: {
+    color: 'var(--accent)',
+    letterSpacing: '0.05em',
+  },
+  time: {
+    color: 'var(--muted)',
+  },
+  badge: {
+    color: 'var(--success)',
+    marginLeft: 'auto',
+  },
+  preview: {
+    fontSize: '11px',
+    lineHeight: 1.7,
+    color: 'var(--fg-dim)',
+    margin: '0 0 1rem',
+    fontFamily: "'SF Mono', 'Fira Code', monospace",
+  },
+  actions: {
     display: 'flex',
     gap: '0.5rem',
-    flexWrap: 'wrap' as const,
   },
-  btnSmall: {
+  btn: {
     background: 'transparent',
-    color: 'var(--accent)',
-    border: '2px solid var(--accent)',
-    padding: '0.6rem 0.85rem',
+    color: 'var(--fg-dim)',
+    border: '1px solid var(--border)',
+    padding: '0.5rem 0.75rem',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.5rem',
+    fontSize: '7px',
     cursor: 'pointer',
-    transition: 'all 0.2s',
-    minHeight: '40px',
+    borderRadius: '2px',
+    transition: 'all 0.15s ease',
+    letterSpacing: '0.05em',
+  },
+  btnPrimary: {
+    background: 'var(--accent)',
+    color: 'var(--bg)',
+    border: 'none',
   },
 };
 
@@ -98,7 +121,6 @@ export default function Home() {
     if (user && token) fetchEntries();
   }, [user, token]);
 
-  // Memoized fetch function
   const fetchEntries = useCallback(async () => {
     setLoading(true);
     try {
@@ -115,7 +137,6 @@ export default function Home() {
     setLoading(false);
   }, [token]);
 
-  // Memoized create function
   const createEntry = useCallback(async () => {
     if (!content.trim()) return;
     setSaving(true);
@@ -131,25 +152,20 @@ export default function Home() {
       if (res.ok) {
         const json = await res.json();
         setContent('');
-        // Add new entry to the top of the list (optimistic update)
         setEntries(prev => [json.entry, ...prev]);
       } else {
         const err = await res.json();
-        console.error('Failed to create entry:', err.error);
-        alert(`Error saving entry: ${err.error}`);
+        alert(`Error: ${err.error}`);
       }
     } catch (err) {
-      console.error('Failed to create entry:', err);
-      alert('Failed to save entry. Please try again.');
+      alert('Failed to save. Try again.');
     }
     setSaving(false);
   }, [content, token]);
 
-  // Optimized distill - fetch tasks and entry in parallel
   const distill = useCallback(async (entryId: string) => {
     setDistillLoading(entryId);
     try {
-      // Run distill and fetch tasks in parallel for speed
       const [distillRes, tasksRes] = await Promise.all([
         fetch('/api/distill', {
           method: 'POST',
@@ -168,8 +184,6 @@ export default function Home() {
         const json = await distillRes.json();
         const tJson = await tasksRes.json();
         const entryTasks = (tJson.tasks || []).filter((t: any) => t.entry_id === entryId);
-        
-        // Use local entry data instead of refetching
         const entry = entries.find((e: any) => e.id === entryId);
         
         setDistillData({ 
@@ -178,29 +192,24 @@ export default function Home() {
           tasks: json.tasks || entryTasks 
         });
         setDistillOpen(true);
-        
-        // Update entry in local state with summary (optimistic update)
         setEntries(prev => prev.map(e => 
           e.id === entryId ? { ...e, summary: json.summary } : e
         ));
       } else {
         const err = await distillRes.json();
-        alert(`Distill failed: ${err.error}`);
+        alert(`Failed: ${err.error}`);
       }
     } catch (err) {
-      console.error('Failed to distill:', err);
-      alert('Failed to distill entry. Please try again.');
+      alert('Failed to distill. Try again.');
     }
     setDistillLoading(null);
   }, [token, entries]);
 
-  // Memoized view handler
   const handleView = useCallback((entry: any) => {
     setDistillData({ entry, summary: entry.summary, tasks: [] });
     setDistillOpen(true);
   }, []);
 
-  // Memoized close handler
   const handleClose = useCallback(() => {
     setDistillOpen(false);
   }, []);
@@ -220,38 +229,47 @@ export default function Home() {
         )
       );
       setDistillOpen(false);
-      setTimeout(() => window.location.href = '/tasks', 500);
+      setTimeout(() => window.location.href = '/tasks', 300);
     } catch (err) {
       console.error('Failed to add tasks:', err);
     }
   }, [token]);
 
+  // Loading state
   if (authLoading) {
     return (
       <>
         <Nav />
-        <div style={styles.container}>
-          <p style={styles.loading}>Loading...</p>
-        </div>
+        <main style={styles.main}>
+          <p style={styles.loading}>Loading…</p>
+        </main>
       </>
     );
   }
 
+  // Not signed in
   if (!user) {
     return (
       <>
         <Nav />
-        <div style={styles.container}>
-          <div style={styles.welcomeBox}>
-            <h1 style={styles.welcomeTitle}>JUSTWRITE</h1>
-            <p style={styles.welcomeText}>
-              Convert thoughts into actionable tasks.
+        <main style={styles.main}>
+          <div style={styles.hero}>
+            <h1 style={styles.heroTitle}>JustWrite</h1>
+            <p style={styles.heroSubtitle}>
+              Turn your thoughts into action
             </p>
-            <a href="/auth/login" style={styles.signInBtn}>
-              SIGN IN TO START
+            <div style={styles.heroFeatures}>
+              <span>📝 Journal</span>
+              <span>→</span>
+              <span>🤖 AI Distill</span>
+              <span>→</span>
+              <span>✓ Tasks</span>
+            </div>
+            <a href="/auth/login" style={styles.heroBtn}>
+              Get started
             </a>
           </div>
-        </div>
+        </main>
       </>
     );
   }
@@ -259,43 +277,47 @@ export default function Home() {
   return (
     <>
       <Nav />
-      <div style={styles.container}>
-        <div style={styles.section}>
-          <h1 style={styles.title}>JUSTWRITE</h1>
-          <p style={styles.subtitle}>Convert thoughts into actionable tasks</p>
-        </div>
+      <main style={styles.main}>
+        {/* Header */}
+        <header style={styles.header}>
+          <h1 style={styles.title}>Journal</h1>
+          <p style={styles.subtitle}>Write freely. Distill into tasks.</p>
+        </header>
 
-        {/* Entry Editor */}
-        <div style={styles.section}>
-          <label style={styles.label}>NEW ENTRY</label>
+        {/* Editor */}
+        <section style={styles.section}>
           <textarea
             value={content}
             onChange={e => setContent(e.target.value)}
-            placeholder="Write your thoughts here…"
-            rows={5}
+            placeholder="What's on your mind?"
             style={styles.textarea}
           />
           <button
             onClick={createEntry}
             disabled={saving || !content.trim()}
             style={{
-              ...styles.btnPrimary,
-              opacity: saving || !content.trim() ? 0.5 : 1,
+              ...styles.saveBtn,
+              opacity: saving || !content.trim() ? 0.4 : 1,
             }}
           >
-            {saving ? 'SAVING…' : 'SAVE ENTRY'}
+            {saving ? 'Saving…' : 'Save'}
           </button>
-        </div>
+        </section>
 
-        {/* Recent Entries */}
-        <div style={styles.section}>
-          <label style={styles.label}>
-            RECENT ENTRIES {loading ? '' : `(${entries.length})`}
-          </label>
+        {/* Entries */}
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>Entries</h2>
+            {!loading && <span style={styles.count}>{entries.length}</span>}
+          </div>
+          
           {loading ? (
-            <p style={styles.loadingSmall}>Loading entries...</p>
+            <p style={styles.emptyText}>Loading…</p>
           ) : entries.length === 0 ? (
-            <p style={styles.empty}>No entries yet. Start writing!</p>
+            <div style={styles.empty}>
+              <p style={styles.emptyText}>No entries yet</p>
+              <p style={styles.emptyHint}>Start writing above ↑</p>
+            </div>
           ) : (
             <div style={styles.entryList}>
               {entries.map(e => (
@@ -309,8 +331,8 @@ export default function Home() {
               ))}
             </div>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
 
       <DistillView
         open={distillOpen}
@@ -325,144 +347,144 @@ export default function Home() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    maxWidth: 760,
+  main: {
+    maxWidth: '600px',
     margin: '0 auto',
-    padding: '0 12px 2rem',
+    padding: '1.5rem 1rem 3rem',
   },
-  section: {
-    marginBottom: '1.5rem',
+  header: {
+    marginBottom: '2rem',
   },
   title: {
-    fontSize: '1rem',
-    margin: '0 0 0.5rem',
+    fontSize: '14px',
+    fontWeight: 400,
+    margin: 0,
     color: 'var(--accent)',
-    textShadow: '0 0 10px rgba(0, 255, 213, 0.3)',
     letterSpacing: '0.1em',
   },
   subtitle: {
-    fontSize: '0.6rem',
+    fontSize: '9px',
     color: 'var(--muted)',
-    margin: 0,
+    margin: '0.5rem 0 0',
     letterSpacing: '0.05em',
   },
-  label: {
-    display: 'block',
-    fontSize: '0.6rem',
-    fontWeight: 700,
-    color: 'var(--accent)',
+  section: {
+    marginBottom: '2rem',
+  },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    marginBottom: '1rem',
+  },
+  sectionTitle: {
+    fontSize: '9px',
+    fontWeight: 400,
+    margin: 0,
+    color: 'var(--fg-dim)',
     letterSpacing: '0.1em',
-    marginBottom: '0.5rem',
+    textTransform: 'uppercase',
+  },
+  count: {
+    fontSize: '9px',
+    color: 'var(--accent)',
+    background: 'var(--accent-glow)',
+    padding: '0.2rem 0.5rem',
+    borderRadius: '10px',
   },
   textarea: {
     width: '100%',
-    minHeight: '120px',
+    minHeight: '160px',
     background: 'var(--bg)',
     color: 'var(--fg)',
-    border: '2px solid var(--muted)',
-    padding: '0.75rem',
-    fontFamily: 'monospace',
-    fontSize: '16px',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    padding: '1rem',
+    fontFamily: "'SF Mono', 'Fira Code', monospace",
+    fontSize: '14px',
     lineHeight: 1.6,
     resize: 'vertical',
-    boxSizing: 'border-box' as const,
   },
-  btnPrimary: {
+  saveBtn: {
     width: '100%',
     background: 'var(--accent)',
     color: 'var(--bg)',
     border: 'none',
-    padding: '0.85rem',
+    borderRadius: '4px',
+    padding: '0.875rem',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.55rem',
-    cursor: 'pointer',
+    fontSize: '9px',
     fontWeight: 700,
-    transition: 'all 0.2s',
-    marginTop: '0.75rem',
-    minHeight: '48px',
-  },
-  btnSmall: {
-    background: 'transparent',
-    color: 'var(--accent)',
-    border: '2px solid var(--accent)',
-    padding: '0.6rem 0.85rem',
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.5rem',
     cursor: 'pointer',
-    transition: 'all 0.2s',
-    minHeight: '40px',
+    marginTop: '0.75rem',
+    transition: 'all 0.15s ease',
+    letterSpacing: '0.08em',
   },
   entryList: {
     display: 'flex',
     flexDirection: 'column',
     gap: '0.75rem',
   },
-  entryCard: {
-    background: 'var(--bg)',
-    border: '2px solid var(--muted)',
-    padding: '0.75rem',
-    transition: 'all 0.2s',
-  },
-  entryTime: {
-    fontSize: '0.55rem',
-    color: 'var(--muted)',
-    marginBottom: '0.5rem',
-  },
-  entryPreview: {
-    fontSize: '0.65rem',
-    lineHeight: 1.6,
-    color: 'var(--fg)',
-    marginBottom: '0.75rem',
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-word',
-  },
-  entryActions: {
-    display: 'flex',
-    gap: '0.5rem',
-    flexWrap: 'wrap' as const,
-  },
   empty: {
-    fontSize: '0.65rem',
-    color: 'var(--muted)',
     textAlign: 'center',
-    padding: '2rem 1rem',
+    padding: '2.5rem 1rem',
+    border: '1px dashed var(--border)',
+    borderRadius: '4px',
+  },
+  emptyText: {
+    fontSize: '9px',
+    color: 'var(--muted)',
+    margin: 0,
+  },
+  emptyHint: {
+    fontSize: '8px',
+    color: 'var(--muted)',
+    margin: '0.5rem 0 0',
+    opacity: 0.7,
   },
   loading: {
-    fontSize: '0.7rem',
-    color: 'var(--fg)',
-    textAlign: 'center',
-    padding: '2rem',
-  },
-  loadingSmall: {
-    fontSize: '0.6rem',
+    fontSize: '9px',
     color: 'var(--muted)',
-    textAlign: 'center',
-    padding: '1rem',
-  },
-  welcomeBox: {
     textAlign: 'center',
     padding: '3rem 1rem',
-    border: '2px solid var(--accent)',
+  },
+  // Hero (unauthenticated)
+  hero: {
+    textAlign: 'center',
+    padding: '3rem 1rem',
     marginTop: '2rem',
   },
-  welcomeTitle: {
-    fontSize: '1.2rem',
+  heroTitle: {
+    fontSize: '18px',
     color: 'var(--accent)',
-    marginBottom: '1rem',
+    margin: '0 0 0.75rem',
+    letterSpacing: '0.15em',
   },
-  welcomeText: {
-    fontSize: '0.65rem',
+  heroSubtitle: {
+    fontSize: '10px',
+    color: 'var(--fg-dim)',
+    margin: '0 0 1.5rem',
+    letterSpacing: '0.05em',
+  },
+  heroFeatures: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '0.75rem',
+    fontSize: '9px',
     color: 'var(--muted)',
-    marginBottom: '1.5rem',
+    marginBottom: '2rem',
+    flexWrap: 'wrap',
   },
-  signInBtn: {
+  heroBtn: {
     display: 'inline-block',
     background: 'var(--accent)',
     color: 'var(--bg)',
-    padding: '0.85rem 1.5rem',
+    padding: '0.875rem 1.5rem',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.55rem',
+    fontSize: '9px',
     textDecoration: 'none',
-    fontWeight: 700,
+    borderRadius: '4px',
+    letterSpacing: '0.08em',
+    transition: 'all 0.15s ease',
   },
 };

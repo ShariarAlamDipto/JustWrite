@@ -1,12 +1,17 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/lib/useAuth';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function Nav() {
   const router = useRouter();
   const { user, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleLogout = async () => {
     await signOut();
@@ -15,184 +20,255 @@ export function Nav() {
 
   const isActive = (path: string) => router.pathname === path;
 
+  // Close menu on route change
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [router.pathname]);
+
   return (
     <nav style={styles.nav}>
-      <div style={styles.header}>
+      <div style={styles.inner}>
+        {/* Logo */}
         <Link href="/" style={styles.logo}>
-          JW
+          <span style={styles.logoIcon}>▶</span>
+          <span>JW</span>
         </Link>
+
+        {/* Desktop Nav */}
+        <div style={styles.desktopNav}>
+          <Link 
+            href="/" 
+            style={{...styles.navLink, ...(isActive('/') ? styles.navLinkActive : {})}}
+          >
+            Journal
+          </Link>
+          <Link 
+            href="/tasks" 
+            style={{...styles.navLink, ...(isActive('/tasks') ? styles.navLinkActive : {})}}
+          >
+            Tasks
+          </Link>
+          <Link 
+            href="/brainstorm" 
+            style={{...styles.navLink, ...(isActive('/brainstorm') ? styles.navLinkActive : {})}}
+          >
+            Ideas
+          </Link>
+        </div>
+
+        {/* User / Auth */}
+        <div style={styles.rightSection}>
+          {user ? (
+            <div style={styles.userArea}>
+              <span style={styles.userName}>{user.email?.split('@')[0]}</span>
+              <button onClick={handleLogout} style={styles.logoutBtn} aria-label="Sign out">
+                ×
+              </button>
+            </div>
+          ) : mounted && (
+            <Link href="/auth/login" style={styles.signInLink}>
+              Sign in
+            </Link>
+          )}
+        </div>
+
+        {/* Mobile Menu Button */}
         <button 
           style={styles.menuBtn} 
           onClick={() => setMenuOpen(!menuOpen)}
           aria-label="Toggle menu"
+          aria-expanded={menuOpen}
         >
-          {menuOpen ? '✕' : '☰'}
+          <span style={{
+            ...styles.menuIcon,
+            transform: menuOpen ? 'rotate(45deg)' : 'none',
+          }}>
+            {menuOpen ? '+' : '≡'}
+          </span>
         </button>
       </div>
-      
-      <div style={{
-        ...styles.links,
-        ...(menuOpen ? styles.linksOpen : {}),
-      }}>
-        <Link 
-          href="/" 
-          style={{...styles.link, ...(isActive('/') ? styles.activeLink : {})}}
-          onClick={() => setMenuOpen(false)}
-        >
-          📝 Journal
-        </Link>
-        <Link 
-          href="/tasks" 
-          style={{...styles.link, ...(isActive('/tasks') ? styles.activeLink : {})}}
-          onClick={() => setMenuOpen(false)}
-        >
-          ✓ Tasks
-        </Link>
-        <Link 
-          href="/brainstorm" 
-          style={{...styles.link, ...(isActive('/brainstorm') ? styles.activeLink : {})}}
-          onClick={() => setMenuOpen(false)}
-        >
-          💡 Brainstorm
-        </Link>
-        
-        <div style={styles.userSection}>
+
+      {/* Mobile Menu */}
+      {menuOpen && (
+        <div style={styles.mobileMenu}>
+          <Link href="/" style={{...styles.mobileLink, ...(isActive('/') ? styles.mobileLinkActive : {})}}>
+            Journal
+          </Link>
+          <Link href="/tasks" style={{...styles.mobileLink, ...(isActive('/tasks') ? styles.mobileLinkActive : {})}}>
+            Tasks
+          </Link>
+          <Link href="/brainstorm" style={{...styles.mobileLink, ...(isActive('/brainstorm') ? styles.mobileLinkActive : {})}}>
+            Ideas
+          </Link>
+          <div style={styles.mobileDivider} />
           {user ? (
-            <>
-              <span style={styles.userEmail}>{user.email?.split('@')[0] || 'User'}</span>
-              <button onClick={handleLogout} style={styles.logoutBtn}>
-                Logout
-              </button>
-            </>
+            <button onClick={handleLogout} style={styles.mobileLogout}>
+              Sign out
+            </button>
           ) : (
-            <Link href="/auth/login" style={styles.link} onClick={() => setMenuOpen(false)}>
-              Sign In
+            <Link href="/auth/login" style={styles.mobileLink}>
+              Sign in
             </Link>
           )}
         </div>
-      </div>
+      )}
     </nav>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
   nav: {
-    background: 'var(--card)',
-    border: '2px solid var(--accent)',
-    padding: '0.5rem',
-    marginBottom: '0.75rem',
+    background: 'var(--bg-elevated)',
+    borderBottom: '1px solid var(--border)',
     fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.55rem',
-    color: 'var(--fg)',
+    fontSize: '8px',
+    position: 'sticky',
+    top: 0,
+    zIndex: 100,
   },
-  header: {
+  inner: {
+    maxWidth: '720px',
+    margin: '0 auto',
+    padding: '0 1rem',
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    height: '56px',
   },
   logo: {
-    color: 'var(--accent)',
-    fontSize: '0.8rem',
-    fontWeight: 700,
-    textDecoration: 'none',
-    padding: '0.5rem',
-  },
-  menuBtn: {
-    display: 'block',
-    background: 'transparent',
-    border: '2px solid var(--accent)',
-    color: 'var(--accent)',
-    padding: '0.5rem 0.75rem',
-    fontSize: '1rem',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-  },
-  links: {
-    display: 'none',
-    flexDirection: 'column' as const,
-    gap: '0.5rem',
-    paddingTop: '0.75rem',
-    marginTop: '0.5rem',
-    borderTop: '1px solid var(--muted)',
-  },
-  linksOpen: {
     display: 'flex',
-  },
-  link: {
-    color: 'var(--accent)',
-    textDecoration: 'none',
-    padding: '0.75rem',
-    border: '1px solid transparent',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    display: 'block',
-    textAlign: 'center' as const,
-  },
-  activeLink: {
-    background: 'rgba(0, 255, 213, 0.1)',
-    borderColor: 'var(--accent)',
-  },
-  userSection: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '0.5rem',
     alignItems: 'center',
-    paddingTop: '0.5rem',
-    borderTop: '1px solid var(--muted)',
-    marginTop: '0.5rem',
+    gap: '0.5rem',
+    color: 'var(--accent)',
+    textDecoration: 'none',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '0.1em',
   },
-  userEmail: {
+  logoIcon: {
+    fontSize: '8px',
+    opacity: 0.7,
+  },
+  desktopNav: {
+    display: 'none',
+    gap: '0.25rem',
+  },
+  navLink: {
+    color: 'var(--fg-dim)',
+    textDecoration: 'none',
+    padding: '0.5rem 0.75rem',
+    borderRadius: '4px',
+    transition: 'all 0.15s ease',
+    letterSpacing: '0.05em',
+  },
+  navLinkActive: {
+    color: 'var(--accent)',
+    background: 'var(--accent-glow)',
+  },
+  rightSection: {
+    display: 'none',
+    alignItems: 'center',
+    gap: '0.75rem',
+  },
+  userArea: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  userName: {
     color: 'var(--muted)',
-    fontSize: '0.5rem',
+    fontSize: '7px',
+    maxWidth: '80px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   logoutBtn: {
-    background: '#ff3bff',
-    color: 'var(--bg)',
-    border: 'none',
-    padding: '0.6rem 1rem',
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.5rem',
+    background: 'transparent',
+    color: 'var(--accent-2)',
+    border: '1px solid var(--accent-2)',
+    width: '24px',
+    height: '24px',
+    fontSize: '14px',
     cursor: 'pointer',
-    transition: 'all 0.2s',
-    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '4px',
+    padding: 0,
+    transition: 'all 0.15s ease',
+  },
+  signInLink: {
+    color: 'var(--accent)',
+    textDecoration: 'none',
+    padding: '0.5rem 0.75rem',
+    border: '1px solid var(--accent)',
+    borderRadius: '4px',
+    transition: 'all 0.15s ease',
+  },
+  menuBtn: {
+    display: 'flex',
+    background: 'transparent',
+    border: '1px solid var(--border)',
+    color: 'var(--fg-dim)',
+    width: '36px',
+    height: '36px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    borderRadius: '4px',
+    transition: 'all 0.15s ease',
+  },
+  menuIcon: {
+    fontSize: '16px',
+    lineHeight: 1,
+    transition: 'transform 0.2s ease',
+  },
+  mobileMenu: {
+    display: 'flex',
+    flexDirection: 'column',
+    padding: '0.5rem 1rem 1rem',
+    borderTop: '1px solid var(--border)',
+    animation: 'slideUp 0.2s ease-out',
+  },
+  mobileLink: {
+    color: 'var(--fg-dim)',
+    textDecoration: 'none',
+    padding: '0.875rem 0.5rem',
+    borderBottom: '1px solid var(--border)',
+    transition: 'color 0.15s ease',
+  },
+  mobileLinkActive: {
+    color: 'var(--accent)',
+  },
+  mobileDivider: {
+    height: '1px',
+    margin: '0.5rem 0',
+  },
+  mobileLogout: {
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--accent-2)',
+    padding: '0.875rem 0.5rem',
+    fontFamily: '"Press Start 2P", monospace',
+    fontSize: '8px',
+    cursor: 'pointer',
+    textAlign: 'left',
   },
 };
 
-// Add desktop styles via CSS-in-JS media query workaround
+// Desktop responsive styles
 if (typeof window !== 'undefined') {
   const style = document.createElement('style');
   style.textContent = `
-    @media (min-width: 768px) {
-      nav > div:first-child button { display: none !important; }
-      nav > div:last-child { 
-        display: flex !important; 
-        flex-direction: row !important; 
-        align-items: center !important;
-        border-top: none !important;
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-        justify-content: center;
-        gap: 0.5rem !important;
-      }
-      nav > div:last-child > div {
-        flex-direction: row !important;
-        border-top: none !important;
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-        margin-left: auto;
-      }
-      nav > div:last-child > div button {
-        width: auto !important;
-      }
-      nav { 
-        display: flex !important;
-        justify-content: space-between;
-        align-items: center;
-      }
+    @media (min-width: 640px) {
+      nav > div > div:nth-child(2) { display: flex !important; }
+      nav > div > div:nth-child(3) { display: flex !important; }
+      nav > div > button:last-child { display: none !important; }
     }
   `;
-  if (!document.getElementById('nav-responsive-styles')) {
-    style.id = 'nav-responsive-styles';
+  if (!document.getElementById('nav-responsive-v2')) {
+    style.id = 'nav-responsive-v2';
     document.head.appendChild(style);
   }
 }
