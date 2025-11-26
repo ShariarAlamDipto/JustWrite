@@ -54,7 +54,7 @@ class _PromptCardState extends State<PromptCard> {
                   onChanged: (value) {
                     widget.onToggle(value ?? false);
                   },
-                  fillColor: MaterialStateProperty.all(const Color(0xFF00ffd5)),
+                  fillColor: WidgetStateProperty.all(const Color(0xFF00ffd5)),
                   checkColor: const Color(0xFF0a0e27),
                 ),
                 Expanded(

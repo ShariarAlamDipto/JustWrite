@@ -127,7 +127,7 @@ class _TaskCard extends StatelessWidget {
           leading: Checkbox(
             value: task.isDone,
             onChanged: (_) => taskProvider.toggleTaskStatus(task),
-            fillColor: MaterialStateProperty.all(const Color(0xFF00ffd5)),
+            fillColor: WidgetStateProperty.all(const Color(0xFF00ffd5)),
             checkColor: const Color(0xFF0a0e27),
           ),
           title: Text(
