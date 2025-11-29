@@ -1,6 +1,7 @@
 import React from 'react';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
+import { Analytics } from '@vercel/analytics/next';
 import '../styles/globals.css';
 import { AuthProvider } from '@/lib/useAuth';
 import { ThemeProvider } from '@/lib/ThemeContext';
@@ -31,6 +32,7 @@ export default function App({ Component, pageProps }: AppProps) {
           <Component {...pageProps} />
         </AuthProvider>
       </ThemeProvider>
+      <Analytics />
     </>
   );
 }
