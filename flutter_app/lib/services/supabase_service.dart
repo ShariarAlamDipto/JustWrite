@@ -1,7 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:justwrite_mobile/models/entry.dart';
 import 'package:justwrite_mobile/models/task.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -13,6 +15,10 @@ class SupabaseService {
   SupabaseService._internal();
 
   final supabase = Supabase.instance.client;
+  
+  // Google Sign-In configuration
+  // Web Client ID from Google Cloud Console (OAuth 2.0 Web Client)
+  static const String _webClientId = '186814791712-hnk7rsqoqt9gjd7v41cnab01tq55nhsr.apps.googleusercontent.com';
 
   // Get the appropriate redirect URL for the platform
   String get _redirectUrl {
@@ -28,24 +34,103 @@ class SupabaseService {
   // SECURITY: Get current user ID for queries
   String? get _userId => supabase.auth.currentUser?.id;
 
-  // Auth Methods
-  Future<void> sendMagicLink(String email) async {
-    await supabase.auth.signInWithOtp(
-      email: email,
-      emailRedirectTo: _redirectUrl,
+  // Google Sign-In
+  Future<AuthResponse> signInWithGoogle() async {
+    debugPrint('[Auth] Starting Google Sign-In...');
+    
+    final GoogleSignIn googleSignIn = GoogleSignIn(
+      serverClientId: _webClientId,
     );
+    
+    // Sign out first to ensure account picker shows
+    await googleSignIn.signOut();
+    
+    final googleUser = await googleSignIn.signIn();
+    if (googleUser == null) {
+      debugPrint('[Auth] Google Sign-In cancelled by user');
+      throw Exception('Google Sign-In was cancelled');
+    }
+    
+    debugPrint('[Auth] Google user: ${googleUser.email}');
+    
+    final googleAuth = await googleUser.authentication;
+    final idToken = googleAuth.idToken;
+    final accessToken = googleAuth.accessToken;
+    
+    if (idToken == null) {
+      debugPrint('[Auth] No ID token received from Google');
+      throw Exception('No ID token received from Google');
+    }
+    
+    debugPrint('[Auth] Got Google tokens, signing into Supabase...');
+    
+    // Sign in to Supabase with Google tokens
+    final response = await supabase.auth.signInWithIdToken(
+      provider: Provider.google,
+      idToken: idToken,
+      accessToken: accessToken,
+    );
+    
+    debugPrint('[Auth] Supabase sign-in successful: ${response.user?.email}');
+    return response;
+  }
+
+  // Auth Methods - Magic Link (backup)
+  Future<void> sendMagicLink(String email) async {
+    try {
+      debugPrint('[SupabaseService] ========== SEND MAGIC LINK ==========');
+      debugPrint('[SupabaseService] Email: $email');
+      debugPrint('[SupabaseService] Redirect URL: $_redirectUrl');
+      debugPrint('[SupabaseService] Supabase client initialized: ${supabase != null}');
+      
+      debugPrint('[SupabaseService] Calling signInWithOtp...');
+      await supabase.auth.signInWithOtp(
+        email: email,
+        emailRedirectTo: _redirectUrl,
+      );
+      
+      debugPrint('[SupabaseService] signInWithOtp completed!');
+      debugPrint('[SupabaseService] OTP sent successfully to $email');
+      debugPrint('[SupabaseService] ========== END SEND MAGIC LINK ==========');
+    } catch (e, stackTrace) {
+      debugPrint('[SupabaseService] ERROR sending OTP!');
+      debugPrint('[SupabaseService] Exception: $e');
+      debugPrint('[SupabaseService] Type: ${e.runtimeType}');
+      debugPrint('[SupabaseService] Stack: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<void> verifyOtp(String email, String token) async {
-    await supabase.auth.verifyOTP(
-      email: email,
-      token: token,
-      type: OtpType.email,
-    );
+    try {
+      debugPrint('[Auth] Verifying OTP for: $email');
+      
+      await supabase.auth.verifyOTP(
+        email: email,
+        token: token,
+        type: OtpType.email,
+      );
+      
+      debugPrint('[Auth] OTP verified successfully');
+      debugPrint('[Auth] Current user: ${supabase.auth.currentUser?.email}');
+    } catch (e) {
+      debugPrint('[Auth] Error verifying OTP: $e');
+      rethrow;
+    }
   }
 
   Future<void> signOut() async {
-    await supabase.auth.signOut();
+    try {
+      // Sign out from Google too
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+      
+      await supabase.auth.signOut();
+      debugPrint('[Auth] Signed out successfully');
+    } catch (e) {
+      debugPrint('[Auth] Error signing out: $e');
+      rethrow;
+    }
   }
 
   User? get currentUser => supabase.auth.currentUser;
@@ -86,13 +171,25 @@ class SupabaseService {
   }
 
   Future<Entry> createEntry(Entry entry) async {
-    final response = await supabase
-        .from('entries')
-        .insert(entry.toJson())
-        .select()
-        .single();
+    debugPrint('[SupabaseService] ===== CREATE ENTRY =====');
+    debugPrint('[SupabaseService] Entry to insert: ${entry.toJson()}');
+    
+    try {
+      final response = await supabase
+          .from('entries')
+          .insert(entry.toJson())
+          .select()
+          .single();
 
-    return Entry.fromJson(response as Map<String, dynamic>);
+      debugPrint('[SupabaseService] Response: $response');
+      final created = Entry.fromJson(response as Map<String, dynamic>);
+      debugPrint('[SupabaseService] Entry created: ${created.id}');
+      return created;
+    } catch (e, stackTrace) {
+      debugPrint('[SupabaseService] ERROR creating entry: $e');
+      debugPrint('[SupabaseService] Stack: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<void> updateEntry(Entry entry) async {

@@ -3,83 +3,23 @@ import 'package:provider/provider.dart';
 import 'package:justwrite_mobile/providers/auth_provider.dart';
 import 'package:justwrite_mobile/providers/entry_provider.dart';
 import 'package:justwrite_mobile/providers/task_provider.dart';
+import 'package:justwrite_mobile/providers/theme_provider.dart';
 import 'package:justwrite_mobile/services/llm_service.dart';
 import 'package:justwrite_mobile/widgets/mood_slider.dart';
 import 'package:justwrite_mobile/widgets/prompt_card.dart';
+import 'package:justwrite_mobile/theme/app_theme.dart';
 
-const scienceBackedPrompts = [
-  {
-    'id': 'planning-1',
-    'category': 'Morning / Planning',
-    'question': 'What are the top 3 outcomes I want from today?',
-    'rationale': 'Forces prioritization; primes goal-directed behavior',
-    'icon': '🎯',
-  },
-  {
-    'id': 'planning-2',
-    'category': 'Morning / Planning',
-    'question': 'If I get interrupted, what will I do to still make progress?',
-    'rationale': 'Implementation intentions dramatically increase follow-through',
-    'icon': '📋',
-  },
-  {
-    'id': 'gratitude-1',
-    'category': 'Gratitude / Positive Affect',
-    'question': 'List three things you\'re grateful for today — small or big.',
-    'rationale': 'Short daily gratitude boosts positive affect and wellbeing',
-    'icon': '🙏',
-  },
-  {
-    'id': 'gratitude-2',
-    'category': 'Gratitude / Positive Affect',
-    'question': 'What went well yesterday?',
-    'rationale': 'Reinforces learning from small wins and increases optimism',
-    'icon': '✨',
-  },
-  {
-    'id': 'cbt-1',
-    'category': 'Emotional Processing / CBT',
-    'question':
-        'What situation caused the strongest emotion today? Describe what happened, the thought you had, and the emotion\'s intensity (0–10).',
-    'rationale': 'Structured recording helps identify automatic thoughts and reduce impact',
-    'icon': '💭',
-  },
-  {
-    'id': 'cbt-2',
-    'category': 'Emotional Processing / CBT',
-    'question': 'Now list one realistic alternative thought or interpretation.',
-    'rationale': 'Reappraisal decreases emotional intensity and improves regulation',
-    'icon': '🔄',
-  },
-  {
-    'id': 'reflection-1',
-    'category': 'Reflection & Learning',
-    'question': 'What\'s one lesson I learned recently that I want to keep in mind?',
-    'rationale': 'Promotes metacognition and consolidates learning from experience',
-    'icon': '📖',
-  },
-  {
-    'id': 'reflection-2',
-    'category': 'Reflection & Learning',
-    'question':
-        'What\'s the one thing I can do in the next 24 hours that would make tomorrow noticeably better?',
-    'rationale': 'Keeps journal→action funnel tight; easy candidates for tasks',
-    'icon': '🚀',
-  },
-  {
-    'id': 'expressive-1',
-    'category': 'Expressive / Stress',
-    'question': 'If you could say one honest thing right now, what is it? (Write for 10 minutes.)',
-    'rationale': 'Uncensored writing has therapeutic and mental health benefits',
-    'icon': '💬',
-  },
-  {
-    'id': 'closure-1',
-    'category': 'Micro-planning / Closure',
-    'question': 'Pick 1 task from today\'s extracted tasks and write its next step (one sentence).',
-    'rationale': 'Breaking tasks into immediate next steps reduces friction',
-    'icon': '✅',
-  },
+const _prompts = [
+  {'id': 'planning-1', 'category': 'Planning', 'question': 'What are your top 3 goals for today?', 'rationale': 'Primes goal-directed behavior'},
+  {'id': 'planning-2', 'category': 'Planning', 'question': 'If interrupted, how will you still make progress?', 'rationale': 'Implementation intentions increase follow-through'},
+  {'id': 'gratitude-1', 'category': 'Gratitude', 'question': 'List three things you\'re grateful for today.', 'rationale': 'Boosts positive affect and wellbeing'},
+  {'id': 'gratitude-2', 'category': 'Gratitude', 'question': 'What went well yesterday?', 'rationale': 'Reinforces learning from small wins'},
+  {'id': 'cbt-1', 'category': 'Emotional', 'question': 'What caused the strongest emotion today? Rate 0-10.', 'rationale': 'Helps identify automatic thoughts'},
+  {'id': 'cbt-2', 'category': 'Emotional', 'question': 'List one alternative thought or interpretation.', 'rationale': 'Reappraisal decreases emotional intensity'},
+  {'id': 'reflection-1', 'category': 'Reflection', 'question': 'What\'s one lesson you learned recently?', 'rationale': 'Promotes metacognition'},
+  {'id': 'reflection-2', 'category': 'Reflection', 'question': 'What can you do in 24 hours to improve tomorrow?', 'rationale': 'Keeps journal-to-action tight'},
+  {'id': 'expressive-1', 'category': 'Expressive', 'question': 'What honest thing would you say right now?', 'rationale': 'Uncensored writing has therapeutic benefits'},
+  {'id': 'closure-1', 'category': 'Action', 'question': 'Pick 1 task and write its immediate next step.', 'rationale': 'Breaking tasks reduces friction'},
 ];
 
 class EntryScreen extends StatefulWidget {
@@ -89,29 +29,29 @@ class EntryScreen extends StatefulWidget {
   State<EntryScreen> createState() => _EntryScreenState();
 }
 
-class _EntryScreenState extends State<EntryScreen> {
+class _EntryScreenState extends State<EntryScreen> with AutomaticKeepAliveClientMixin {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
-  final _gratitudeControllers = [
-    TextEditingController(),
-    TextEditingController(),
-    TextEditingController(),
-  ];
+  final _gratitudeControllers = [TextEditingController(), TextEditingController(), TextEditingController()];
 
   int _mood = 5;
   int _moodIntensity = 5;
   final Set<String> _selectedPrompts = {};
   final Map<String, String> _promptAnswers = {};
   bool _isAnalyzing = false;
+  bool _isSaving = false;
   String? _summary;
   List<Map<String, dynamic>> _extractedTasks = [];
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void dispose() {
     _titleController.dispose();
     _contentController.dispose();
-    for (var controller in _gratitudeControllers) {
-      controller.dispose();
+    for (var c in _gratitudeControllers) {
+      c.dispose();
     }
     super.dispose();
   }
@@ -127,18 +67,16 @@ class _EntryScreenState extends State<EntryScreen> {
     setState(() => _isAnalyzing = true);
 
     try {
-      final combinedText = [
+      final text = [
         _titleController.text,
         _contentController.text,
         ..._promptAnswers.entries.map((e) => '${e.key}: ${e.value}'),
       ].where((s) => s.isNotEmpty).join('\n\n');
 
-      final llmService = LLMService();
-
-      // Extract tasks and generate summary in parallel
+      final llm = LLMService();
       final [tasks, summary] = await Future.wait([
-        llmService.extractTasks(combinedText),
-        llmService.generateSummary(combinedText),
+        llm.extractTasks(text),
+        llm.generateSummary(text),
       ]);
 
       setState(() {
@@ -147,9 +85,7 @@ class _EntryScreenState extends State<EntryScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       setState(() => _isAnalyzing = false);
     }
@@ -163,41 +99,65 @@ class _EntryScreenState extends State<EntryScreen> {
       return;
     }
 
+    setState(() => _isSaving = true);
+    debugPrint('[EntryScreen] ===== SAVING ENTRY =====');
+
     try {
-      final authProvider = context.read<AuthProvider>();
-      final entryProvider = context.read<EntryProvider>();
+      final auth = context.read<AuthProvider>();
+      final entries = context.read<EntryProvider>();
+      final tasks = context.read<TaskProvider>();
 
-      await entryProvider.createEntry(
-        userId: authProvider.user!.id,
-        content: _contentController.text,
-        title: _titleController.text.isEmpty ? null : _titleController.text,
-        mood: _mood,
-        moodIntensity: _moodIntensity,
-        gratitude: _gratitudeControllers
-            .map((c) => c.text)
-            .where((s) => s.isNotEmpty)
-            .toList(),
-        promptAnswers: _promptAnswers,
-      );
+      debugPrint('[EntryScreen] User ID: ${auth.user?.id}');
+      debugPrint('[EntryScreen] Content: ${_contentController.text}');
+      debugPrint('[EntryScreen] Title: ${_titleController.text}');
+      debugPrint('[EntryScreen] Mood: $_mood, Intensity: $_moodIntensity');
+      debugPrint('[EntryScreen] Gratitude: ${_gratitudeControllers.map((c) => c.text).toList()}');
+      debugPrint('[EntryScreen] Prompt answers: $_promptAnswers');
+      debugPrint('[EntryScreen] Summary: $_summary');
+      debugPrint('[EntryScreen] Extracted tasks: $_extractedTasks');
 
-      // Save extracted tasks if any
-      if (_extractedTasks.isNotEmpty) {
-        if (!mounted) return;
-        final taskProvider = context.read<TaskProvider>();
-        for (var taskData in _extractedTasks) {
-          await taskProvider.createTask(
-            userId: authProvider.user!.id,
-            title: taskData['title'] ?? '',
-            description: taskData['description'] ?? '',
-            priority: taskData['priority'] ?? 'medium',
-          );
-        }
+      // Build AI metadata if we have analysis results
+      Map<String, dynamic>? aiMetadata;
+      if (_summary != null || _extractedTasks.isNotEmpty) {
+        aiMetadata = {
+          if (_extractedTasks.isNotEmpty) 'extracted_tasks': _extractedTasks,
+          if (_extractedTasks.isNotEmpty) 'task_count': _extractedTasks.length,
+          'processed_at': DateTime.now().toIso8601String(),
+        };
+        debugPrint('[EntryScreen] AI Metadata: $aiMetadata');
       }
 
-      // Reset form
+      // Create entry with compression (handled by provider)
+      final createdEntry = await entries.createEntry(
+        userId: auth.user!.id,
+        content: _contentController.text,
+        title: _titleController.text.isEmpty ? null : _titleController.text,
+        summary: _summary,
+        mood: _mood,
+        moodIntensity: _moodIntensity,
+        gratitude: _gratitudeControllers.map((c) => c.text).where((s) => s.isNotEmpty).toList(),
+        promptAnswers: _promptAnswers,
+        aiMetadata: aiMetadata,
+        source: 'text', // Journal entry
+      );
+      
+      debugPrint('[EntryScreen] Entry created: ${createdEntry.id}');
+
+      // Save extracted tasks
+      for (var t in _extractedTasks) {
+        debugPrint('[EntryScreen] Saving task: ${t['title']}');
+        await tasks.createTask(
+          userId: auth.user!.id,
+          title: t['title'] ?? '',
+          description: t['description'] ?? '',
+          priority: t['priority'] ?? 'medium',
+        );
+      }
+
+      // Clear form
       _titleController.clear();
       _contentController.clear();
-      for (final c in _gratitudeControllers) {
+      for (var c in _gratitudeControllers) {
         c.clear();
       }
       setState(() {
@@ -210,246 +170,223 @@ class _EntryScreenState extends State<EntryScreen> {
       });
 
       if (!mounted) return;
+      debugPrint('[EntryScreen] ===== ENTRY SAVED =====');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✓ Entry saved!')),
+        SnackBar(
+          content: Text(_extractedTasks.isNotEmpty 
+              ? 'Entry saved with ${_extractedTasks.length} tasks'
+              : 'Entry saved'),
+        ),
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[EntryScreen] ERROR saving entry: $e');
+      debugPrint('[EntryScreen] Stack: $stackTrace');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e')));
+    } finally {
+      setState(() => _isSaving = false);
+    }
+  }
+
+  Color _getPriorityColor(String p) {
+    switch (p.toLowerCase()) {
+      case 'high': return const Color(0xFFdc2626);
+      case 'medium': return AppTheme.navy;
+      default: return AppTheme.grey;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'NEW ENTRY',
-              style: Theme.of(context).textTheme.displaySmall,
-            ),
-            Text(
-              DateTime.now().toString().split(' ')[0],
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 24),
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final textColor = isDark ? Colors.white : Colors.black;
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Text('New Entry', style: Theme.of(context).textTheme.displaySmall),
+          Text(
+            DateTime.now().toString().split(' ')[0],
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 24),
 
-            // Title
+          // Title
+          TextField(
+            controller: _titleController,
+            style: TextStyle(color: textColor),
+            decoration: InputDecoration(
+              hintText: 'Title (optional)',
+              hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
+              prefixIcon: const Icon(Icons.title, size: 20),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Mood
+          Text('MOOD', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 12),
+          MoodSlider(
+            initialMood: _mood,
+            initialIntensity: _moodIntensity,
+            onChanged: (m, i) => setState(() {
+              _mood = m;
+              _moodIntensity = i;
+            }),
+          ),
+          const SizedBox(height: 24),
+
+          // Content
+          Text('YOUR THOUGHTS', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _contentController,
+            maxLines: 6,
+            style: TextStyle(color: textColor),
+            decoration: InputDecoration(
+              hintText: 'Write freely...',
+              hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Gratitude
+          Text('GRATITUDE', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 12),
+          for (var i = 0; i < 3; i++) ...[
             TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                hintText: 'Title (optional)',
-                prefixIcon: Icon(Icons.label),
+              controller: _gratitudeControllers[i],
+              style: TextStyle(color: textColor),
+              decoration: InputDecoration(
+                hintText: 'Thing ${i + 1}',
+                hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
               ),
-            ),
-            const SizedBox(height: 16),
-
-            // Mood
-            Text(
-              'MOOD',
-              style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 8),
-            MoodSlider(
-              initialMood: _mood,
-              initialIntensity: _moodIntensity,
-              onChanged: (mood, intensity) {
-                setState(() {
-                  _mood = mood;
-                  _moodIntensity = intensity;
-                });
-              },
-            ),
-            const SizedBox(height: 24),
+          ],
+          const SizedBox(height: 16),
 
-            // Content
-            Text(
-              'YOUR THOUGHTS',
-              style: Theme.of(context).textTheme.labelLarge,
+          // Prompts (collapsed by default)
+          ExpansionTile(
+            title: Text('GUIDED PROMPTS', style: Theme.of(context).textTheme.labelLarge),
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(top: 8),
+            children: _prompts.map((p) => PromptCard(
+              prompt: p,
+              isSelected: _selectedPrompts.contains(p['id']),
+              answer: _promptAnswers[p['id']],
+              onToggle: (s) => setState(() {
+                if (s) {
+                  _selectedPrompts.add(p['id'] as String);
+                } else {
+                  _selectedPrompts.remove(p['id']);
+                  _promptAnswers.remove(p['id']);
+                }
+              }),
+              onAnswerChange: (a) => setState(() => _promptAnswers[p['id'] as String] = a),
+            )).toList(),
+          ),
+          const SizedBox(height: 24),
+
+          // AI Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isAnalyzing ? null : _analyzeWithAI,
+              child: _isAnalyzing
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('EXTRACT TASKS'),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _contentController,
-              maxLines: 8,
-              decoration: const InputDecoration(
-                hintText: 'Write freely here...',
-                prefixIcon: Icon(Icons.edit),
+          ),
+          const SizedBox(height: 16),
+
+          // Summary
+          if (_summary != null)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark 
+                    ? AppTheme.darkCard 
+                    : AppTheme.greyLight.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SUMMARY', style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  Text(_summary!, style: Theme.of(context).textTheme.bodyMedium),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
+          const SizedBox(height: 12),
 
-            // Gratitude
-            Text(
-              'GRATITUDE (3 things)',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 8),
-            ...[0, 1, 2].map((i) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: TextField(
-                controller: _gratitudeControllers[i],
-                maxLines: 2,
-                decoration: InputDecoration(
-                  hintText: 'Thing ${i + 1}',
+          // Tasks
+          if (_extractedTasks.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: isDark ? AppTheme.navyLight : AppTheme.navy,
                 ),
+                borderRadius: BorderRadius.circular(12),
               ),
-            )),
-            const SizedBox(height: 24),
-
-            // Prompts
-            Text(
-              'GUIDED PROMPTS',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 8),
-            ...scienceBackedPrompts.map((prompt) => PromptCard(
-              prompt: prompt,
-              isSelected: _selectedPrompts.contains(prompt['id']),
-              answer: _promptAnswers[prompt['id']],
-              onToggle: (selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedPrompts.add(prompt['id'] as String);
-                  } else {
-                    _selectedPrompts.remove(prompt['id']);
-                    _promptAnswers.remove(prompt['id']);
-                  }
-                });
-              },
-              onAnswerChange: (answer) {
-                setState(() {
-                  _promptAnswers[prompt['id'] as String] = answer;
-                });
-              },
-            )),
-            const SizedBox(height: 24),
-
-            // AI Analysis Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isAnalyzing ? null : _analyzeWithAI,
-                child: _isAnalyzing
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Color(0xFF0a0e27)),
-                        ),
-                      )
-                    : const Text('✨ ANALYZE WITH AI'),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // AI Summary
-            if (_summary != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1a1f3a),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF00ffd5)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '📊 AI SUMMARY',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _summary!,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 16),
-
-            // Extracted Tasks
-            if (_extractedTasks.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1a1f3a),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF00ffd5)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '✓ EXTRACTED TO-DOS (${_extractedTasks.length})',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    ..._extractedTasks.map((task) => Padding(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('EXTRACTED TASKS (${_extractedTasks.length})', style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 12),
+                  for (var t in _extractedTasks)
+                    Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: _getPriorityColor(task['priority']),
+                              color: _getPriorityColor(t['priority']).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              task['priority'].toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF0a0e27),
-                              ),
+                              (t['priority'] ?? 'medium').toUpperCase(),
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _getPriorityColor(t['priority'])),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              task['title'],
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
+                          Expanded(child: Text(t['title'] ?? '', style: Theme.of(context).textTheme.bodyMedium)),
                         ],
                       ),
-                    )),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 24),
-
-            // Save Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _saveEntry,
-                child: const Text('💾 SAVE ENTRY'),
+                    ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-          ],
-        ),
+          const SizedBox(height: 24),
+
+          // Save
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isSaving ? null : _saveEntry,
+              child: _isSaving
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('SAVE ENTRY'),
+            ),
+          ),
+          const SizedBox(height: 32),
+        ],
       ),
     );
-  }
-
-  Color _getPriorityColor(String priority) {
-    switch (priority.toLowerCase()) {
-      case 'high':
-        return const Color(0xFFff0033);
-      case 'medium':
-        return const Color(0xFF00ffd5);
-      default:
-        return const Color(0xFF7a7a7a);
-    }
   }
 }

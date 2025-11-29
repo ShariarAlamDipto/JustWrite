@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:justwrite_mobile/theme/app_theme.dart';
 
 class MoodSlider extends StatefulWidget {
   final int initialMood;
@@ -20,7 +21,9 @@ class _MoodSliderState extends State<MoodSlider> {
   late int selectedMood;
   late int selectedIntensity;
 
-  final moodEmojis = ['😢', '😞', '😟', '😕', '😐', '🙂', '😊', '😄', '😃', '🌟'];
+  // Simple text labels instead of emojis
+  static const _moodLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+  static const _moodDescriptions = ['Very Low', 'Low', 'Below Average', 'Slightly Low', 'Neutral', 'Slightly High', 'Above Average', 'Good', 'Great', 'Excellent'];
 
   @override
   void initState() {
@@ -34,62 +37,92 @@ class _MoodSliderState extends State<MoodSlider> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Emoji Buttons
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: List.generate(10, (index) {
-            final isSelected = selectedMood == index;
-            return GestureDetector(
-              onTap: () {
-                setState(() => selectedMood = index);
-                widget.onChanged(index, selectedIntensity);
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF00ffd5)
-                      : const Color(0xFF1a1f3a),
-                  border: Border.all(
-                    color: const Color(0xFF00ffd5),
-                    width: isSelected ? 2 : 1,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  moodEmojis[index],
-                  style: const TextStyle(fontSize: 24),
-                ),
+        // Current mood display
+        Row(
+          children: [
+            Text(
+              'Current: ',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            Text(
+              _moodDescriptions[selectedMood.clamp(0, 9)],
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: AppTheme.navy,
               ),
-            );
-          }),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        
+        // Mood selector - horizontal scroll with numbers
+        SizedBox(
+          height: 48,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: 10,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final isSelected = selectedMood == index;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => selectedMood = index);
+                  widget.onChanged(index, selectedIntensity);
+                },
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppTheme.navy : AppTheme.greyLight.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(8),
+                    border: isSelected ? null : Border.all(color: AppTheme.greyLight),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _moodLabels[index],
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Times New Roman',
+                      color: isSelected ? Colors.white : AppTheme.black,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
         const SizedBox(height: 20),
 
-        // Intensity Slider
-        Text(
-          'Intensity: $selectedIntensity/10',
-          style: Theme.of(context).textTheme.bodyMedium,
+        // Intensity
+        Row(
+          children: [
+            Text(
+              'Intensity',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const Spacer(),
+            Text(
+              '$selectedIntensity/10',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: AppTheme.navy,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         SliderTheme(
-          data: SliderThemeData(
-            activeTrackColor: const Color(0xFF00ffd5),
-            inactiveTrackColor: const Color(0xFF1a1f3a),
-            thumbColor: const Color(0xFF00ffd5),
-            overlayColor: const Color(0xFF00ffd5).withValues(alpha: 0.3),
+          data: SliderTheme.of(context).copyWith(
             trackHeight: 4,
-            thumbShape: const RoundSliderThumbShape(
-              elevation: 4,
-              enabledThumbRadius: 8,
-            ),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
           ),
           child: Slider(
             value: selectedIntensity.toDouble(),
-            min: 0,
+            min: 1,
             max: 10,
-            divisions: 10,
+            divisions: 9,
             onChanged: (value) {
               setState(() => selectedIntensity = value.toInt());
               widget.onChanged(selectedMood, value.toInt());

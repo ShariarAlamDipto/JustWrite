@@ -4,12 +4,20 @@ import { useAuth } from '../lib/useAuth';
 
 // Priority indicator colors
 const priorityColors: Record<string, string> = {
-  high: '#f87171',
-  medium: 'var(--accent)',
-  low: 'var(--muted)',
+  urgent: 'var(--priority-urgent)',
+  high: 'var(--priority-high)',
+  medium: 'var(--priority-medium)',
+  low: 'var(--priority-low)',
 };
 
-// Memoized task item — clean, minimal
+const priorityLabels: Record<string, string> = {
+  urgent: 'Urgent',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+};
+
+// Memoized task item — clean, minimal with larger boundaries
 interface TaskItemProps {
   task: any;
   toggleLoading: string | null;
@@ -22,7 +30,7 @@ interface TaskItemProps {
 const TaskItem = memo(({ task, toggleLoading, deleteLoading, onToggle, onDelete, isDone }: TaskItemProps) => (
   <div style={{ 
     ...taskStyles.item, 
-    opacity: isDone ? 0.5 : 1,
+    opacity: isDone ? 0.6 : 1,
     borderLeftColor: isDone ? 'var(--border)' : priorityColors[task.priority] || priorityColors.medium,
   }}>
     <button
@@ -39,15 +47,29 @@ const TaskItem = memo(({ task, toggleLoading, deleteLoading, onToggle, onDelete,
     </button>
     
     <div style={taskStyles.content}>
-      <span style={{ 
-        ...taskStyles.title, 
-        textDecoration: isDone ? 'line-through' : 'none',
-        color: isDone ? 'var(--muted)' : 'var(--fg)',
-      }}>
-        {task.title}
-      </span>
+      <div style={taskStyles.titleRow}>
+        <span style={{ 
+          ...taskStyles.title, 
+          textDecoration: isDone ? 'line-through' : 'none',
+          color: isDone ? 'var(--muted)' : 'var(--fg)',
+        }}>
+          {task.title}
+        </span>
+        {!isDone && task.priority && (
+          <span style={{
+            ...taskStyles.priorityBadge,
+            color: priorityColors[task.priority] || priorityColors.medium,
+            borderColor: priorityColors[task.priority] || priorityColors.medium,
+          }}>
+            {priorityLabels[task.priority] || task.priority}
+          </span>
+        )}
+      </div>
       {!isDone && task.description && (
         <p style={taskStyles.desc}>{task.description}</p>
+      )}
+      {task.due && (
+        <p style={taskStyles.due}>Due: {new Date(task.due).toLocaleDateString()}</p>
       )}
     </div>
 
@@ -68,21 +90,21 @@ const taskStyles: Record<string, React.CSSProperties> = {
   item: {
     display: 'flex',
     alignItems: 'flex-start',
-    gap: '0.75rem',
-    padding: '0.875rem 1rem',
-    background: 'var(--bg-elevated)',
+    gap: '0.875rem',
+    padding: '1rem 1.25rem',
+    background: 'var(--bg-card)',
     borderLeft: '3px solid var(--accent)',
-    borderRadius: '0 4px 4px 0',
+    borderRadius: 'var(--radius-md)',
     transition: 'all 0.15s ease',
   },
   checkbox: {
     width: '20px',
     height: '20px',
     minWidth: '20px',
-    border: '1px solid var(--border)',
+    border: '2px solid var(--border)',
     borderRadius: '4px',
     background: 'transparent',
-    color: 'var(--bg)',
+    color: '#ffffff',
     fontSize: '12px',
     cursor: 'pointer',
     display: 'flex',
@@ -96,32 +118,169 @@ const taskStyles: Record<string, React.CSSProperties> = {
     flex: 1,
     minWidth: 0,
   },
+  titleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    flexWrap: 'wrap',
+  },
   title: {
-    fontSize: '10px',
-    lineHeight: 1.5,
+    fontSize: '15px',
+    fontWeight: 500,
+    lineHeight: 1.4,
     wordBreak: 'break-word',
   },
+  priorityBadge: {
+    fontSize: '10px',
+    padding: '1px 6px',
+    borderRadius: '3px',
+    border: '1px solid',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+  },
   desc: {
-    fontSize: '9px',
-    color: 'var(--muted)',
+    fontSize: '13px',
+    color: 'var(--fg-dim)',
     margin: '0.375rem 0 0',
     lineHeight: 1.5,
     wordBreak: 'break-word',
+  },
+  due: {
+    fontSize: '11px',
+    color: 'var(--muted)',
+    margin: '0.375rem 0 0',
   },
   deleteBtn: {
     background: 'transparent',
     color: 'var(--muted)',
     border: 'none',
-    width: '24px',
-    height: '24px',
-    fontSize: '16px',
+    width: '28px',
+    height: '28px',
+    fontSize: '18px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: '4px',
     padding: 0,
-    transition: 'color 0.15s ease',
+    transition: 'all 0.15s ease',
+  },
+};
+
+// Add Task Modal
+interface AddTaskModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onAdd: (task: { title: string; description: string; priority: string }) => void;
+  loading: boolean;
+}
+
+const AddTaskModal = ({ isOpen, onClose, onAdd, loading }: AddTaskModalProps) => {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState('medium');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    onAdd({ title: title.trim(), description: description.trim(), priority });
+    setTitle('');
+    setDescription('');
+    setPriority('medium');
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+        <div className="modal-header">
+          <h2 className="modal-title">Add New Task</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={modalStyles.label}>Title *</label>
+            <input
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="What needs to be done?"
+              style={{ marginTop: '0.5rem' }}
+              autoFocus
+              required
+            />
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={modalStyles.label}>Description</label>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="Add more details (optional)"
+              style={{ marginTop: '0.5rem', minHeight: '100px' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={modalStyles.label}>Priority</label>
+            <div style={modalStyles.priorityGrid}>
+              {['low', 'medium', 'high', 'urgent'].map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPriority(p)}
+                  style={{
+                    ...modalStyles.priorityBtn,
+                    borderColor: priority === p ? priorityColors[p] : 'var(--border)',
+                    background: priority === p ? `${priorityColors[p]}20` : 'transparent',
+                    color: priority === p ? priorityColors[p] : 'var(--fg-dim)',
+                  }}
+                >
+                  {priorityLabels[p]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={loading || !title.trim()}>
+              {loading ? 'Adding...' : 'Add Task'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const modalStyles: Record<string, React.CSSProperties> = {
+  label: {
+    fontSize: '14px',
+    fontWeight: 500,
+    color: 'var(--fg)',
+    display: 'block',
+  },
+  priorityGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '0.5rem',
+    marginTop: '0.5rem',
+  },
+  priorityBtn: {
+    padding: '0.5rem',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-md)',
+    background: 'transparent',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: 500,
+    transition: 'all 0.15s ease',
+    fontFamily: 'inherit',
   },
 };
 
@@ -130,6 +289,8 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(false);
   const [toggleLoading, setToggleLoading] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
   const { user, loading: authLoading, token } = useAuth();
 
   const fetchTasks = useCallback(async () => {
@@ -152,6 +313,32 @@ export default function TasksPage() {
   useEffect(() => {
     if (user && token) fetchTasks();
   }, [user, token, fetchTasks]);
+
+  const addTask = useCallback(async (taskData: { title: string; description: string; priority: string }) => {
+    if (!token) return;
+    setAddLoading(true);
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...taskData,
+          status: 'todo'
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setTasks(prev => [json.task, ...prev]);
+        setShowAddModal(false);
+      }
+    } catch (err) {
+      console.error('Failed to add task:', err);
+    }
+    setAddLoading(false);
+  }, [token]);
 
   const toggleDone = useCallback(async (t: any) => {
     if (!token) return;
@@ -252,7 +439,7 @@ export default function TasksPage() {
         <header style={styles.header}>
           <div>
             <h1 style={styles.title}>Tasks</h1>
-            <p style={styles.subtitle}>Stay on track</p>
+            <p style={styles.subtitle}>Stay organized and productive</p>
           </div>
           <div style={styles.stats}>
             <div style={styles.stat}>
@@ -267,11 +454,23 @@ export default function TasksPage() {
         </header>
 
         {loading ? (
-          <p style={styles.loading}>Loading…</p>
+          <div style={styles.loadingContainer}>
+            <div className="spinner" />
+            <p style={styles.loading}>Loading tasks...</p>
+          </div>
         ) : tasks.length === 0 ? (
           <div style={styles.empty}>
             <p style={styles.emptyTitle}>No tasks yet</p>
-            <p style={styles.emptyHint}>Write a journal entry and distill it,<br/>or brainstorm some ideas</p>
+            <p style={styles.emptyHint}>
+              Add a task or distill from journal entries
+            </p>
+            <button 
+              className="btn btn-primary" 
+              style={{ marginTop: '1.25rem' }}
+              onClick={() => setShowAddModal(true)}
+            >
+              Add Task
+            </button>
           </div>
         ) : (
           <div style={styles.sections}>
@@ -315,6 +514,25 @@ export default function TasksPage() {
             )}
           </div>
         )}
+
+        {/* Floating Action Button */}
+        {tasks.length > 0 && (
+          <button 
+            className="fab" 
+            onClick={() => setShowAddModal(true)}
+            aria-label="Add new task"
+          >
+            +
+          </button>
+        )}
+
+        {/* Add Task Modal */}
+        <AddTaskModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onAdd={addTask}
+          loading={addLoading}
+        />
       </main>
     </>
   );
@@ -322,9 +540,9 @@ export default function TasksPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   main: {
-    maxWidth: '600px',
+    maxWidth: '680px',
     margin: '0 auto',
-    padding: '1.5rem 1rem 3rem',
+    padding: '2.5rem 1rem 5rem',
   },
   header: {
     display: 'flex',
@@ -333,17 +551,16 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '2rem',
   },
   title: {
-    fontSize: '14px',
-    fontWeight: 400,
+    fontSize: '28px',
+    fontWeight: 700,
     margin: 0,
-    color: 'var(--accent)',
-    letterSpacing: '0.1em',
+    color: 'var(--fg)',
+    letterSpacing: '-0.02em',
   },
   subtitle: {
-    fontSize: '9px',
+    fontSize: '14px',
     color: 'var(--muted)',
-    margin: '0.5rem 0 0',
-    letterSpacing: '0.05em',
+    margin: '0.375rem 0 0',
   },
   stats: {
     display: 'flex',
@@ -354,15 +571,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
   statValue: {
     display: 'block',
-    fontSize: '18px',
-    color: 'var(--accent)',
+    fontSize: '24px',
+    fontWeight: 700,
+    color: 'var(--accent-bright)',
     lineHeight: 1,
   },
   statLabel: {
-    fontSize: '7px',
+    fontSize: '11px',
     color: 'var(--muted)',
-    letterSpacing: '0.05em',
     textTransform: 'uppercase',
+    letterSpacing: '0.04em',
   },
   sections: {
     display: 'flex',
@@ -371,12 +589,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   section: {},
   sectionTitle: {
-    fontSize: '9px',
-    fontWeight: 400,
+    fontSize: '12px',
+    fontWeight: 600,
     margin: '0 0 0.75rem',
-    color: 'var(--fg-dim)',
-    letterSpacing: '0.1em',
+    color: 'var(--muted)',
     textTransform: 'uppercase',
+    letterSpacing: '0.05em',
   },
   taskList: {
     display: 'flex',
@@ -385,32 +603,38 @@ const styles: Record<string, React.CSSProperties> = {
   },
   empty: {
     textAlign: 'center',
-    padding: '3rem 1rem',
+    padding: '3rem 2rem',
+    background: 'var(--bg-card)',
+    borderRadius: 'var(--radius-lg)',
     border: '1px dashed var(--border)',
-    borderRadius: '4px',
   },
   emptyTitle: {
-    fontSize: '10px',
-    color: 'var(--muted)',
-    margin: '0 0 0.5rem',
+    fontSize: '16px',
+    fontWeight: 500,
+    color: 'var(--fg)',
+    margin: '0 0 0.375rem',
   },
   emptyHint: {
-    fontSize: '8px',
+    fontSize: '14px',
     color: 'var(--muted)',
     margin: 0,
-    opacity: 0.7,
-    lineHeight: 1.6,
+  },
+  loadingContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '3rem 2rem',
+    gap: '0.75rem',
   },
   loading: {
-    fontSize: '9px',
+    fontSize: '13px',
     color: 'var(--muted)',
-    textAlign: 'center',
-    padding: '3rem 1rem',
   },
   authMsg: {
-    fontSize: '10px',
-    color: 'var(--accent-2)',
+    fontSize: '15px',
+    color: 'var(--accent-bright)',
     textAlign: 'center',
-    padding: '3rem 1rem',
+    padding: '3rem 2rem',
   },
 };

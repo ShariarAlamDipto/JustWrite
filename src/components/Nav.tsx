@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/lib/useAuth';
+import { useTheme } from '@/lib/ThemeContext';
 import { useState, useEffect } from 'react';
 
 export function Nav() {
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { theme, toggleTheme, isDark } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -30,8 +32,7 @@ export function Nav() {
       <div style={styles.inner}>
         {/* Logo */}
         <Link href="/" style={styles.logo}>
-          <span style={styles.logoIcon}>▶</span>
-          <span>JW</span>
+          <span style={styles.logoText}>JustWrite</span>
         </Link>
 
         {/* Desktop Nav */}
@@ -54,10 +55,26 @@ export function Nav() {
           >
             Ideas
           </Link>
+          <Link 
+            href="/insights" 
+            style={{...styles.navLink, ...(isActive('/insights') ? styles.navLinkActive : {})}}
+          >
+            Insights
+          </Link>
         </div>
 
-        {/* User / Auth */}
+        {/* User / Auth / Theme */}
         <div style={styles.rightSection}>
+          {/* Theme Toggle */}
+          <button 
+            onClick={toggleTheme} 
+            className="theme-toggle"
+            aria-label={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+            title={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+          >
+            {isDark ? '◐' : '◑'}
+          </button>
+
           {user ? (
             <div style={styles.userArea}>
               <span style={styles.userName}>{user.email?.split('@')[0]}</span>
@@ -100,7 +117,13 @@ export function Nav() {
           <Link href="/brainstorm" style={{...styles.mobileLink, ...(isActive('/brainstorm') ? styles.mobileLinkActive : {})}}>
             Ideas
           </Link>
+          <Link href="/insights" style={{...styles.mobileLink, ...(isActive('/insights') ? styles.mobileLinkActive : {})}}>
+            Insights
+          </Link>
           <div style={styles.mobileDivider} />
+          <button onClick={toggleTheme} style={styles.mobileLink}>
+            {isDark ? 'Light Mode' : 'Dark Mode'}
+          </button>
           {user ? (
             <button onClick={handleLogout} style={styles.mobileLogout}>
               Sign out
@@ -120,14 +143,15 @@ const styles: Record<string, React.CSSProperties> = {
   nav: {
     background: 'var(--bg-elevated)',
     borderBottom: '1px solid var(--border)',
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '8px',
+    fontFamily: 'inherit',
+    fontSize: '14px',
     position: 'sticky',
     top: 0,
     zIndex: 100,
+    transition: 'background-color 0.2s ease, border-color 0.2s ease',
   },
   inner: {
-    maxWidth: '720px',
+    maxWidth: '800px',
     margin: '0 auto',
     padding: '0 1rem',
     display: 'flex',
@@ -138,32 +162,31 @@ const styles: Record<string, React.CSSProperties> = {
   logo: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.5rem',
-    color: 'var(--accent)',
+    color: 'var(--fg)',
     textDecoration: 'none',
-    fontSize: '10px',
-    fontWeight: 700,
-    letterSpacing: '0.1em',
   },
-  logoIcon: {
-    fontSize: '8px',
-    opacity: 0.7,
+  logoText: {
+    fontSize: '18px',
+    fontWeight: 700,
+    letterSpacing: '-0.02em',
   },
   desktopNav: {
     display: 'none',
     gap: '0.25rem',
   },
   navLink: {
-    color: 'var(--fg-dim)',
+    color: 'var(--muted)',
     textDecoration: 'none',
-    padding: '0.5rem 0.75rem',
-    borderRadius: '4px',
+    padding: '0.5rem 1rem',
+    borderRadius: 'var(--radius-md)',
     transition: 'all 0.15s ease',
-    letterSpacing: '0.05em',
+    fontWeight: 500,
+    fontSize: '14px',
   },
   navLinkActive: {
-    color: 'var(--accent)',
-    background: 'var(--accent-glow)',
+    color: 'var(--fg)',
+    background: 'var(--bg-card)',
+    fontWeight: 600,
   },
   rightSection: {
     display: 'none',
@@ -176,35 +199,37 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0.5rem',
   },
   userName: {
-    color: 'var(--muted)',
-    fontSize: '7px',
-    maxWidth: '80px',
+    color: 'var(--fg-dim)',
+    fontSize: '13px',
+    maxWidth: '100px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
   logoutBtn: {
     background: 'transparent',
-    color: 'var(--accent-2)',
-    border: '1px solid var(--accent-2)',
-    width: '24px',
-    height: '24px',
-    fontSize: '14px',
+    color: 'var(--muted)',
+    border: '1px solid var(--border)',
+    width: '26px',
+    height: '26px',
+    fontSize: '16px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: '4px',
+    borderRadius: '50%',
     padding: 0,
     transition: 'all 0.15s ease',
   },
   signInLink: {
-    color: 'var(--accent)',
+    color: 'var(--accent-bright)',
     textDecoration: 'none',
-    padding: '0.5rem 0.75rem',
+    padding: '0.375rem 0.75rem',
     border: '1px solid var(--accent)',
-    borderRadius: '4px',
+    borderRadius: 'var(--radius-md)',
     transition: 'all 0.15s ease',
+    fontWeight: 500,
+    fontSize: '13px',
   },
   menuBtn: {
     display: 'flex',
@@ -216,11 +241,11 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
-    borderRadius: '4px',
+    borderRadius: 'var(--radius-md)',
     transition: 'all 0.15s ease',
   },
   menuIcon: {
-    fontSize: '16px',
+    fontSize: '18px',
     lineHeight: 1,
     transition: 'transform 0.2s ease',
   },
@@ -229,7 +254,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     padding: '0.5rem 1rem 1rem',
     borderTop: '1px solid var(--border)',
-    animation: 'slideUp 0.2s ease-out',
+    animation: 'slideUp 0.15s ease-out',
   },
   mobileLink: {
     color: 'var(--fg-dim)',
@@ -237,23 +262,32 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.875rem 0.5rem',
     borderBottom: '1px solid var(--border)',
     transition: 'color 0.15s ease',
+    fontWeight: 500,
+    background: 'transparent',
+    border: 'none',
+    textAlign: 'left',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '15px',
   },
   mobileLinkActive: {
-    color: 'var(--accent)',
+    color: 'var(--fg)',
+    fontWeight: 600,
   },
   mobileDivider: {
     height: '1px',
-    margin: '0.5rem 0',
+    margin: '0.25rem 0',
   },
   mobileLogout: {
     background: 'transparent',
     border: 'none',
-    color: 'var(--accent-2)',
+    color: 'var(--danger)',
     padding: '0.875rem 0.5rem',
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '8px',
+    fontFamily: 'inherit',
+    fontSize: '15px',
     cursor: 'pointer',
     textAlign: 'left',
+    fontWeight: 500,
   },
 };
 

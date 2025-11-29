@@ -9,8 +9,8 @@ class AuthProvider extends ChangeNotifier {
   String? _error;
   DateTime? _lastActivity;
   
-  // SECURITY: Session timeout after 30 minutes of inactivity
-  static const Duration sessionTimeout = Duration(minutes: 30);
+  // Session timeout after 30 days of inactivity (1 month)
+  static const Duration sessionTimeout = Duration(days: 30);
 
   User? get user => _user;
   bool get isLoading => _isLoading;
@@ -56,25 +56,63 @@ class AuthProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> sendMagicLink(String email) async {
-    // SECURITY: Basic email validation before sending
-    if (email.isEmpty || !email.contains('@') || email.length > 254) {
-      _error = 'Invalid email address';
-      notifyListeners();
-      return;
-    }
-    
+  // Google Sign-In
+  Future<void> signInWithGoogle() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await _supabaseService.sendMagicLink(email.trim().toLowerCase());
+      final response = await _supabaseService.signInWithGoogle();
+      _user = response.user;
+      _updateLastActivity();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      // SECURITY: Don't expose detailed error messages
-      _error = 'Failed to send magic link. Please try again.';
+      String errorMessage = 'Google sign-in failed. Please try again.';
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('cancelled') || errorStr.contains('canceled')) {
+        errorMessage = 'Sign-in was cancelled.';
+      } else if (errorStr.contains('network') || errorStr.contains('connection')) {
+        errorMessage = 'Network error. Check your connection.';
+      }
+      _error = errorMessage;
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> sendMagicLink(String email) async {
+    debugPrint('[AuthProvider] sendMagicLink called with: $email');
+    
+    // SECURITY: Basic email validation before sending
+    if (email.isEmpty || !email.contains('@') || email.length > 254) {
+      debugPrint('[AuthProvider] Email validation failed');
+      _error = 'Invalid email address';
+      _isLoading = false;
+      notifyListeners();
+      throw Exception('Invalid email address');
+    }
+    
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    debugPrint('[AuthProvider] Set isLoading=true, calling SupabaseService...');
+
+    try {
+      final cleanEmail = email.trim().toLowerCase();
+      debugPrint('[AuthProvider] Calling supabaseService.sendMagicLink($cleanEmail)');
+      await _supabaseService.sendMagicLink(cleanEmail);
+      debugPrint('[AuthProvider] SupabaseService returned successfully');
+      _isLoading = false;
+      _error = null;
+      notifyListeners();
+      debugPrint('[AuthProvider] Notified listeners, isLoading=false, error=null');
+    } catch (e, stackTrace) {
+      debugPrint('[AuthProvider] EXCEPTION: $e');
+      debugPrint('[AuthProvider] Stack: $stackTrace');
+      _error = 'Failed to send login code. Please check your email and try again.';
       _isLoading = false;
       notifyListeners();
       rethrow;

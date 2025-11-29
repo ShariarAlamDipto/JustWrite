@@ -2,6 +2,14 @@ import React, { useState } from 'react';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
 
+// Priority colors
+const priorityColors: Record<string, string> = {
+  urgent: 'var(--priority-urgent)',
+  high: 'var(--priority-high)',
+  medium: 'var(--priority-medium)',
+  low: 'var(--priority-low)',
+};
+
 export default function BrainstormPage() {
   const { user, loading: authLoading, token } = useAuth();
   const [freeText, setFreeText] = useState('');
@@ -9,6 +17,7 @@ export default function BrainstormPage() {
   const [loading, setLoading] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [addingTasks, setAddingTasks] = useState(false);
+  const [savingIdea, setSavingIdea] = useState(false);
 
   const handleGenerate = async () => {
     if (!freeText.trim()) return;
@@ -38,6 +47,35 @@ export default function BrainstormPage() {
       console.error('Failed:', err);
     }
     setLoading(false);
+  };
+
+  const handleSaveAsIdea = async () => {
+    if (!freeText.trim()) return;
+    setSavingIdea(true);
+    try {
+      const res = await fetch('/api/entries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({ 
+          content: freeText.trim(), 
+          type: 'idea'
+          // Note: no mood field for ideas
+        })
+      });
+      if (res.ok) {
+        setFreeText('');
+        alert('Idea saved to Journal');
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.error}`);
+      }
+    } catch (err) {
+      alert('Failed to save idea.');
+    }
+    setSavingIdea(false);
   };
 
   const toggleTask = (id: string) => {
@@ -89,7 +127,7 @@ export default function BrainstormPage() {
         setSelectedTasks(new Set());
         setGeneratedTasks([]);
         setFreeText('');
-        alert(`✓ Added ${tasksToAdd.length} task(s)!`);
+        alert(`Added ${tasksToAdd.length} task(s)`);
       } else {
         alert('Some tasks failed. Try again.');
       }
@@ -104,7 +142,9 @@ export default function BrainstormPage() {
       <>
         <Nav />
         <main style={styles.main}>
-          <p style={styles.loading}>Loading…</p>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
+            <div className="spinner" />
+          </div>
         </main>
       </>
     );
@@ -115,7 +155,13 @@ export default function BrainstormPage() {
       <>
         <Nav />
         <main style={styles.main}>
-          <p style={styles.authMsg}>Sign in to brainstorm</p>
+          <div style={styles.authCard}>
+            <h2 style={{ marginBottom: '0.5rem' }}>Sign in to brainstorm</h2>
+            <p style={{ color: 'var(--muted)' }}>Create an account to save your ideas</p>
+            <a href="/auth/login" className="btn btn-primary" style={{ marginTop: '1rem' }}>
+              Sign in
+            </a>
+          </div>
         </main>
       </>
     );
@@ -127,36 +173,45 @@ export default function BrainstormPage() {
       <main style={styles.main}>
         {/* Header */}
         <header style={styles.header}>
-          <h1 style={styles.title}>Brainstorm</h1>
-          <p style={styles.subtitle}>Dump ideas → Get tasks</p>
+          <h1 style={styles.title}>Ideas</h1>
+          <p style={styles.subtitle}>Dump your thoughts, extract actionable tasks</p>
         </header>
 
         {/* Input */}
-        <section style={styles.section}>
+        <section style={styles.editorSection}>
           <textarea
             value={freeText}
             onChange={e => setFreeText(e.target.value)}
-            placeholder="Write anything… ideas, todos, notes…"
+            placeholder="Write anything… ideas, todos, notes, random thoughts…"
             style={styles.textarea}
           />
-          <button
-            onClick={handleGenerate}
-            disabled={loading || !freeText.trim()}
-            style={{
-              ...styles.generateBtn,
-              opacity: loading || !freeText.trim() ? 0.4 : 1,
-            }}
-          >
-            {loading ? 'Analyzing…' : 'Extract tasks'}
-          </button>
+          
+          <div style={styles.buttonRow}>
+            <button
+              onClick={handleSaveAsIdea}
+              disabled={savingIdea || !freeText.trim()}
+              className="btn"
+              style={{ flex: 1 }}
+            >
+              {savingIdea ? 'Saving…' : 'Save Idea'}
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={loading || !freeText.trim()}
+              className="btn btn-primary"
+              style={{ flex: 2 }}
+            >
+              {loading ? 'Analyzing…' : 'Extract Tasks'}
+            </button>
+          </div>
         </section>
 
         {/* Generated Tasks */}
         {generatedTasks.length > 0 && (
           <section style={styles.section}>
             <div style={styles.sectionHeader}>
-              <h2 style={styles.sectionTitle}>Extracted</h2>
-              <span style={styles.count}>{selectedTasks.size}/{generatedTasks.length}</span>
+              <h2 style={styles.sectionTitle}>Extracted Tasks</h2>
+              <span style={styles.count}>{selectedTasks.size}/{generatedTasks.length} selected</span>
             </div>
             
             <div style={styles.taskList}>
@@ -167,7 +222,7 @@ export default function BrainstormPage() {
                   style={{
                     ...styles.taskItem,
                     borderColor: selectedTasks.has(task.id) ? 'var(--accent)' : 'var(--border)',
-                    background: selectedTasks.has(task.id) ? 'var(--accent-glow)' : 'var(--bg-elevated)',
+                    background: selectedTasks.has(task.id) ? 'var(--accent-glow)' : 'var(--bg-card)',
                   }}
                 >
                   <div style={{
@@ -183,7 +238,10 @@ export default function BrainstormPage() {
                     {task.description && (
                       <p style={styles.taskDesc}>{task.description}</p>
                     )}
-                    <span style={styles.taskPriority}>
+                    <span style={{
+                      ...styles.taskPriority,
+                      color: priorityColors[task.priority] || priorityColors.medium,
+                    }}>
                       {task.priority || 'medium'}
                     </span>
                   </div>
@@ -203,19 +261,18 @@ export default function BrainstormPage() {
               <button
                 onClick={handleAddSelected}
                 disabled={selectedTasks.size === 0 || addingTasks}
-                style={{
-                  ...styles.addBtn,
-                  opacity: selectedTasks.size === 0 || addingTasks ? 0.4 : 1,
-                }}
+                className="btn btn-primary"
+                style={{ flex: 2 }}
               >
-                {addingTasks ? 'Adding…' : `Add ${selectedTasks.size} task${selectedTasks.size !== 1 ? 's' : ''}`}
+                {addingTasks ? 'Adding…' : `Add ${selectedTasks.size} Task${selectedTasks.size !== 1 ? 's' : ''}`}
               </button>
               <button
                 onClick={() => {
                   setGeneratedTasks([]);
                   setSelectedTasks(new Set());
                 }}
-                style={styles.clearBtn}
+                className="btn"
+                style={{ flex: 1 }}
               >
                 Clear
               </button>
@@ -223,17 +280,7 @@ export default function BrainstormPage() {
           </section>
         )}
 
-        {/* Tips */}
-        {generatedTasks.length === 0 && (
-          <section style={styles.tips}>
-            <p style={styles.tipTitle}>Tips</p>
-            <ul style={styles.tipList}>
-              <li>Use action words: fix, create, update</li>
-              <li>One idea per line works best</li>
-              <li>Add "urgent" for high priority</li>
-            </ul>
-          </section>
-        )}
+        
       </main>
     </>
   );
@@ -241,25 +288,31 @@ export default function BrainstormPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   main: {
-    maxWidth: '600px',
+    maxWidth: '680px',
     margin: '0 auto',
-    padding: '1.5rem 1rem 3rem',
+    padding: '2.5rem 1rem 4rem',
   },
   header: {
     marginBottom: '2rem',
   },
   title: {
-    fontSize: '14px',
-    fontWeight: 400,
+    fontSize: '28px',
+    fontWeight: 700,
     margin: 0,
-    color: 'var(--accent)',
-    letterSpacing: '0.1em',
+    color: 'var(--fg)',
+    letterSpacing: '-0.02em',
   },
   subtitle: {
-    fontSize: '9px',
+    fontSize: '14px',
     color: 'var(--muted)',
-    margin: '0.5rem 0 0',
-    letterSpacing: '0.05em',
+    margin: '0.375rem 0 0',
+  },
+  editorSection: {
+    background: 'var(--bg-card)',
+    padding: '1.25rem',
+    borderRadius: 'var(--radius-lg)',
+    marginBottom: '2rem',
+    border: '1px solid var(--border)',
   },
   section: {
     marginBottom: '2rem',
@@ -268,50 +321,40 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: '1rem',
+    marginBottom: '0.75rem',
   },
   sectionTitle: {
-    fontSize: '9px',
-    fontWeight: 400,
+    fontSize: '12px',
+    fontWeight: 600,
     margin: 0,
-    color: 'var(--fg-dim)',
-    letterSpacing: '0.1em',
+    color: 'var(--muted)',
     textTransform: 'uppercase',
+    letterSpacing: '0.05em',
   },
   count: {
-    fontSize: '9px',
-    color: 'var(--accent)',
+    fontSize: '12px',
+    color: 'var(--accent-bright)',
     background: 'var(--accent-glow)',
-    padding: '0.2rem 0.5rem',
-    borderRadius: '10px',
+    padding: '0.125rem 0.5rem',
+    borderRadius: '12px',
+    fontWeight: 500,
   },
   textarea: {
     width: '100%',
-    minHeight: '180px',
-    background: 'var(--bg)',
+    minHeight: '160px',
+    background: 'var(--input-bg)',
     color: 'var(--fg)',
     border: '1px solid var(--border)',
-    borderRadius: '4px',
+    borderRadius: 'var(--radius-md)',
     padding: '1rem',
-    fontFamily: "'SF Mono', 'Fira Code', monospace",
-    fontSize: '14px',
+    fontSize: '15px',
     lineHeight: 1.6,
     resize: 'vertical',
   },
-  generateBtn: {
-    width: '100%',
-    background: 'var(--accent)',
-    color: 'var(--bg)',
-    border: 'none',
-    borderRadius: '4px',
-    padding: '0.875rem',
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '9px',
-    fontWeight: 700,
-    cursor: 'pointer',
-    marginTop: '0.75rem',
-    transition: 'all 0.15s ease',
-    letterSpacing: '0.08em',
+  buttonRow: {
+    display: 'flex',
+    gap: '0.5rem',
+    marginTop: '1rem',
   },
   taskList: {
     display: 'flex',
@@ -321,24 +364,24 @@ const styles: Record<string, React.CSSProperties> = {
   taskItem: {
     display: 'flex',
     alignItems: 'flex-start',
-    gap: '0.75rem',
-    padding: '0.875rem 1rem',
+    gap: '0.875rem',
+    padding: '1rem',
     border: '1px solid var(--border)',
-    borderRadius: '4px',
+    borderRadius: 'var(--radius-md)',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
   },
   checkbox: {
-    width: '18px',
-    height: '18px',
-    minWidth: '18px',
-    border: '1px solid var(--border)',
+    width: '20px',
+    height: '20px',
+    minWidth: '20px',
+    border: '2px solid var(--border)',
     borderRadius: '4px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '10px',
-    color: 'var(--bg)',
+    fontSize: '12px',
+    color: '#ffffff',
     marginTop: '2px',
     transition: 'all 0.15s ease',
   },
@@ -347,103 +390,71 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
   taskTitle: {
-    fontSize: '10px',
+    fontSize: '15px',
+    fontWeight: 500,
     color: 'var(--fg)',
     display: 'block',
     lineHeight: 1.4,
     wordBreak: 'break-word',
   },
   taskDesc: {
-    fontSize: '9px',
-    color: 'var(--muted)',
+    fontSize: '13px',
+    color: 'var(--fg-dim)',
     margin: '0.375rem 0 0',
     lineHeight: 1.5,
     wordBreak: 'break-word',
   },
   taskPriority: {
-    fontSize: '7px',
-    color: 'var(--accent)',
-    letterSpacing: '0.05em',
+    fontSize: '10px',
+    fontWeight: 600,
     textTransform: 'uppercase',
-    marginTop: '0.5rem',
+    marginTop: '0.375rem',
     display: 'inline-block',
   },
   deleteBtn: {
     background: 'transparent',
     color: 'var(--muted)',
     border: 'none',
-    width: '24px',
-    height: '24px',
-    fontSize: '16px',
+    width: '28px',
+    height: '28px',
+    fontSize: '18px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: '4px',
     padding: 0,
-    transition: 'color 0.15s ease',
+    transition: 'all 0.15s ease',
   },
   actions: {
     display: 'flex',
     gap: '0.5rem',
     marginTop: '1rem',
   },
-  addBtn: {
-    flex: 2,
-    background: 'var(--accent)',
-    color: 'var(--bg)',
-    border: 'none',
-    borderRadius: '4px',
-    padding: '0.875rem',
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '8px',
-    fontWeight: 700,
-    cursor: 'pointer',
-    transition: 'all 0.15s ease',
-    letterSpacing: '0.05em',
-  },
-  clearBtn: {
-    flex: 1,
-    background: 'transparent',
-    color: 'var(--fg-dim)',
-    border: '1px solid var(--border)',
-    borderRadius: '4px',
-    padding: '0.875rem',
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '8px',
-    cursor: 'pointer',
-    transition: 'all 0.15s ease',
-    letterSpacing: '0.05em',
-  },
   tips: {
     padding: '1.25rem',
-    border: '1px dashed var(--border)',
-    borderRadius: '4px',
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-md)',
   },
   tipTitle: {
-    fontSize: '8px',
-    color: 'var(--fg-dim)',
+    fontSize: '14px',
+    fontWeight: 500,
+    color: 'var(--fg)',
     margin: '0 0 0.75rem',
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
   },
   tipList: {
-    fontSize: '9px',
-    color: 'var(--muted)',
-    lineHeight: 2,
+    fontSize: '13px',
+    color: 'var(--fg-dim)',
+    lineHeight: 1.8,
     margin: 0,
-    paddingLeft: '1rem',
+    paddingLeft: '1.25rem',
   },
-  loading: {
-    fontSize: '9px',
-    color: 'var(--muted)',
+  authCard: {
     textAlign: 'center',
-    padding: '3rem 1rem',
-  },
-  authMsg: {
-    fontSize: '10px',
-    color: 'var(--accent-2)',
-    textAlign: 'center',
-    padding: '3rem 1rem',
+    padding: '3rem 2rem',
+    background: 'var(--bg-card)',
+    borderRadius: 'var(--radius-lg)',
+    border: '1px solid var(--border)',
   },
 };

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:justwrite_mobile/theme/app_theme.dart';
 
 class PromptCard extends StatefulWidget {
   final Map<String, dynamic> prompt;
@@ -38,110 +39,108 @@ class _PromptCardState extends State<PromptCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header with checkbox
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Checkbox(
-                  value: widget.isSelected,
-                  onChanged: (value) {
-                    widget.onToggle(value ?? false);
-                  },
-                  fillColor: WidgetStateProperty.all(const Color(0xFF00ffd5)),
-                  checkColor: const Color(0xFF0a0e27),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            widget.prompt['icon'] ?? '✨',
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              widget.prompt['category'] ?? '',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: const Color(0xFF00ffd5),
-                                  ),
-                            ),
-                          ),
-                        ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: widget.isSelected ? AppTheme.navy.withValues(alpha: 0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: widget.isSelected ? AppTheme.navy : AppTheme.greyLight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          InkWell(
+            onTap: () => widget.onToggle(!widget.isSelected),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: widget.isSelected ? AppTheme.navy : Colors.transparent,
+                      border: Border.all(
+                        color: widget.isSelected ? AppTheme.navy : AppTheme.grey,
+                        width: 2,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.prompt['question'] ?? '',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: widget.isSelected
+                        ? const Icon(Icons.check, size: 16, color: Colors.white)
+                        : null,
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.prompt['category'] ?? '',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          widget.prompt['question'] ?? '',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _showRationale ? Icons.info : Icons.info_outline,
+                      size: 18,
+                      color: AppTheme.grey,
+                    ),
+                    onPressed: () => setState(() => _showRationale = !_showRationale),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Rationale
+          if (_showRationale)
+            Container(
+              margin: const EdgeInsets.fromLTRB(48, 0, 12, 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.greyLight.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                widget.prompt['rationale'] ?? '',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontStyle: FontStyle.italic,
                 ),
-                IconButton(
-                  icon: const Icon(Icons.info_outline),
-                  onPressed: () {
-                    setState(() => _showRationale = !_showRationale);
-                  },
-                  iconSize: 18,
-                  constraints: const BoxConstraints(),
-                  padding: const EdgeInsets.all(4),
-                ),
-              ],
+              ),
             ),
 
-            // Rationale
-            if (_showRationale)
-              Padding(
-                padding: const EdgeInsets.only(top: 8, left: 40),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1a1f3a),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    widget.prompt['rationale'] ?? '',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(fontStyle: FontStyle.italic),
-                  ),
+          // Answer
+          if (widget.isSelected)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(48, 0, 12, 12),
+              child: TextField(
+                controller: _answerController,
+                maxLines: 3,
+                onChanged: widget.onAnswerChange,
+                decoration: const InputDecoration(
+                  hintText: 'Your answer...',
+                  isDense: true,
+                  contentPadding: EdgeInsets.all(12),
                 ),
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
-
-            // Answer TextField
-            if (widget.isSelected)
-              Padding(
-                padding: const EdgeInsets.only(top: 12, left: 40),
-                child: TextField(
-                  controller: _answerController,
-                  maxLines: 3,
-                  onChanged: (value) {
-                    widget.onAnswerChange(value);
-                  },
-                  decoration: const InputDecoration(
-                    hintText: 'Your answer...',
-                    isDense: true,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

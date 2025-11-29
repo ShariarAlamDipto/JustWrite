@@ -115,6 +115,54 @@ export async function updateEntrySummary(id: string, summary: string, ai_metadat
   return memoryDb.entries[idx];
 }
 
+// SECURITY: General entry update with ownership verification
+export async function updateEntry(id: string, updates: any, userId?: string) {
+  if (supabase) {
+    let query = supabase
+      .from('entries')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    
+    // SECURITY: Verify ownership
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    const { data, error } = await query.select().single();
+    if (error) throw new Error(error.message);
+    return data;
+  }
+  
+  const idx = memoryDb.entries.findIndex((e: any) => e.id === id && (!userId || e.user_id === userId));
+  if (idx === -1) throw new Error('entry not found or access denied');
+  memoryDb.entries[idx] = { ...memoryDb.entries[idx], ...updates, updated_at: new Date().toISOString() };
+  return memoryDb.entries[idx];
+}
+
+// SECURITY: Delete entry with ownership verification
+export async function deleteEntry(id: string, userId?: string) {
+  if (supabase) {
+    let query = supabase
+      .from('entries')
+      .delete()
+      .eq('id', id);
+    
+    // SECURITY: Verify ownership
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    const { error } = await query;
+    if (error) throw new Error(error.message);
+    return true;
+  }
+  
+  const idx = memoryDb.entries.findIndex((e: any) => e.id === id && (!userId || e.user_id === userId));
+  if (idx === -1) throw new Error('entry not found or access denied');
+  memoryDb.entries.splice(idx, 1);
+  return true;
+}
+
 // SECURITY: Filter tasks by user_id
 export async function listTasks(userId?: string) {
   if (supabase) {

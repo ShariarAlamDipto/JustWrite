@@ -2,6 +2,13 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'entry.g.dart';
 
+/// Entry sources - matches database schema
+class EntrySource {
+  static const String text = 'text';        // Regular journal entry
+  static const String brainstorm = 'brainstorm'; // From brainstorm/ideas
+  static const String voice = 'voice';      // Voice input (future)
+}
+
 @JsonSerializable(fieldRename: FieldRename.snake)
 class Entry {
   final String id;
@@ -33,6 +40,10 @@ class Entry {
   
   @JsonKey(name: 'ai_metadata')
   final Map<String, dynamic>? aiMetadata;
+  
+  /// Source of the entry: 'text', 'brainstorm', 'voice'
+  @JsonKey(defaultValue: 'text')
+  final String source;
 
   Entry({
     required this.id,
@@ -47,6 +58,7 @@ class Entry {
     required this.createdAt,
     this.updatedAt,
     this.aiMetadata,
+    this.source = 'text',
   });
 
   factory Entry.fromJson(Map<String, dynamic> json) => _$EntryFromJson(json);
@@ -65,6 +77,7 @@ class Entry {
     DateTime? createdAt,
     DateTime? updatedAt,
     Map<String, dynamic>? aiMetadata,
+    String? source,
   }) {
     return Entry(
       id: id ?? this.id,
@@ -79,6 +92,13 @@ class Entry {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       aiMetadata: aiMetadata ?? this.aiMetadata,
+      source: source ?? this.source,
     );
   }
+  
+  /// Check if this is a brainstorm session
+  bool get isBrainstorm => source == EntrySource.brainstorm;
+  
+  /// Check if this is a regular journal entry
+  bool get isJournal => source == EntrySource.text;
 }

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:justwrite_mobile/providers/auth_provider.dart';
+import 'package:justwrite_mobile/providers/entry_provider.dart';
 import 'package:justwrite_mobile/providers/task_provider.dart';
+import 'package:justwrite_mobile/providers/theme_provider.dart';
 import 'package:justwrite_mobile/services/llm_service.dart';
+import 'package:justwrite_mobile/theme/app_theme.dart';
+import 'package:justwrite_mobile/models/entry.dart';
 
 class BrainstormScreen extends StatefulWidget {
   const BrainstormScreen({super.key});
@@ -11,20 +15,75 @@ class BrainstormScreen extends StatefulWidget {
   State<BrainstormScreen> createState() => _BrainstormScreenState();
 }
 
-class _BrainstormScreenState extends State<BrainstormScreen> {
-  final _textController = TextEditingController();
+class _BrainstormScreenState extends State<BrainstormScreen> with AutomaticKeepAliveClientMixin {
+  final _controller = TextEditingController();
   bool _isProcessing = false;
-  String? _structuredOutput;
-  List<Map<String, dynamic>> _extractedTasks = [];
+  bool _isSaving = false;
+  bool _isSavingIdea = false;
+  String? _summary;
+  List<Map<String, dynamic>> _tasks = [];
+  String? _originalContent; // Store original content for saving
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void dispose() {
-    _textController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _processWithAI() async {
-    if (_textController.text.trim().isEmpty) {
+  /// Save the current text directly as an Idea without AI processing
+  Future<void> _saveAsIdea() async {
+    if (_controller.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please write something first')),
+      );
+      return;
+    }
+
+    setState(() => _isSavingIdea = true);
+
+    try {
+      final auth = context.read<AuthProvider>();
+      final entryProvider = context.read<EntryProvider>();
+      
+      debugPrint('[Brainstorm] Saving idea...');
+      debugPrint('[Brainstorm] User ID: ${auth.user?.id}');
+      debugPrint('[Brainstorm] Content: ${_controller.text}');
+      
+      // Save directly as brainstorm entry (Idea) - minimal fields only
+      await entryProvider.createEntry(
+        userId: auth.user!.id,
+        content: _controller.text,
+        source: EntrySource.brainstorm,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Idea saved to Journal')),
+      );
+      
+      // Clear form
+      setState(() {
+        _controller.clear();
+        _summary = null;
+        _tasks.clear();
+        _originalContent = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('[Brainstorm] Error saving idea: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving idea: $e')),
+      );
+    } finally {
+      setState(() => _isSavingIdea = false);
+    }
+  }
+
+  Future<void> _process() async {
+    if (_controller.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please write something first')),
       );
@@ -33,344 +92,302 @@ class _BrainstormScreenState extends State<BrainstormScreen> {
 
     setState(() {
       _isProcessing = true;
-      _structuredOutput = null;
-      _extractedTasks = [];
+      _summary = null;
+      _tasks = [];
+      _originalContent = _controller.text; // Store for later saving
     });
 
     try {
-      final llmService = LLMService();
-      
-      // Extract tasks and structure the brainstorm
+      final llm = LLMService();
       final [tasks, summary] = await Future.wait([
-        llmService.extractTasks(_textController.text),
-        llmService.generateSummary(_textController.text),
+        llm.extractTasks(_controller.text),
+        llm.generateSummary(_controller.text),
       ]);
 
       setState(() {
-        _extractedTasks = (tasks as List?)?.cast<Map<String, dynamic>>() ?? [];
-        _structuredOutput = summary as String;
+        _tasks = (tasks as List?)?.cast<Map<String, dynamic>>() ?? [];
+        _summary = summary as String;
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       setState(() => _isProcessing = false);
     }
   }
 
-  Future<void> _saveTask(Map<String, dynamic> taskData) async {
+  Future<void> _saveTask(Map<String, dynamic> t) async {
     try {
-      final authProvider = context.read<AuthProvider>();
-      final taskProvider = context.read<TaskProvider>();
+      final auth = context.read<AuthProvider>();
+      final tasks = context.read<TaskProvider>();
 
-      await taskProvider.createTask(
-        userId: authProvider.user!.id,
-        title: taskData['title'] ?? '',
-        description: taskData['description'] ?? '',
-        priority: taskData['priority'] ?? 'medium',
+      await tasks.createTask(
+        userId: auth.user!.id,
+        title: t['title'] ?? '',
+        description: t['description'] ?? '',
+        priority: t['priority'] ?? 'medium',
       );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✓ Task "${taskData['title']}" saved!')),
+        SnackBar(content: Text('Task "${t['title']}" saved')),
       );
-
-      // Remove from local list
-      setState(() {
-        _extractedTasks.removeWhere((t) => t['title'] == taskData['title']);
-      });
+      setState(() => _tasks.removeWhere((x) => x['title'] == t['title']));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving task: $e')));
     }
   }
 
-  Future<void> _saveAllTasks() async {
-    if (_extractedTasks.isEmpty) return;
+  Future<void> _saveAll() async {
+    if (_tasks.isEmpty) return;
+
+    setState(() => _isSaving = true);
 
     try {
-      final authProvider = context.read<AuthProvider>();
+      final auth = context.read<AuthProvider>();
       final taskProvider = context.read<TaskProvider>();
-
-      for (var taskData in _extractedTasks) {
+      final entryProvider = context.read<EntryProvider>();
+      
+      // Save all tasks
+      for (var t in _tasks) {
         await taskProvider.createTask(
-          userId: authProvider.user!.id,
-          title: taskData['title'] ?? '',
-          description: taskData['description'] ?? '',
-          priority: taskData['priority'] ?? 'medium',
+          userId: auth.user!.id,
+          title: t['title'] ?? '',
+          description: t['description'] ?? '',
+          priority: t['priority'] ?? 'medium',
+        );
+      }
+      
+      // Save the brainstorm session as a journal entry for future reference
+      final content = _originalContent ?? _controller.text;
+      if (content.isNotEmpty && _summary != null) {
+        await entryProvider.createBrainstormEntry(
+          userId: auth.user!.id,
+          content: content,
+          summary: _summary!,
+          extractedTasks: List<Map<String, dynamic>>.from(_tasks),
         );
       }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✓ ${_extractedTasks.length} tasks saved!')),
+        SnackBar(content: Text('${_tasks.length} tasks saved to Tasks and session saved to Journal')),
       );
-
       setState(() {
-        _extractedTasks.clear();
-        _textController.clear();
-        _structuredOutput = null;
+        _tasks.clear();
+        _controller.clear();
+        _summary = null;
+        _originalContent = null;
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() => _isSaving = false);
     }
   }
 
-  void _removeTask(int index) {
-    setState(() {
-      _extractedTasks.removeAt(index);
-    });
+  Color _getPriorityColor(String? p) {
+    switch (p?.toLowerCase()) {
+      case 'high': return const Color(0xFFdc2626);
+      case 'medium': return AppTheme.navy;
+      default: return AppTheme.grey;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '🧠 BRAINSTORM',
-              style: Theme.of(context).textTheme.displaySmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Dump your thoughts freely. AI will help you structure them into actionable tasks.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 24),
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Brainstorm', style: Theme.of(context).textTheme.displaySmall),
+          const SizedBox(height: 4),
+          Text(
+            'Write freely. We\'ll help organize your thoughts.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 24),
 
-            // Input area
-            TextField(
-              controller: _textController,
-              maxLines: 10,
-              decoration: const InputDecoration(
-                hintText: 'Start typing your thoughts, ideas, problems...\n\nExamples:\n• "I need to finish the project report by Friday, also call mom, and maybe start exercising again..."\n• "Feeling overwhelmed with work. Should delegate some tasks. Need to prioritize better..."',
-                prefixIcon: Padding(
-                  padding: EdgeInsets.only(bottom: 180),
-                  child: Icon(Icons.lightbulb_outline),
+          // Input
+          TextField(
+            controller: _controller,
+            maxLines: 8,
+            style: TextStyle(color: isDark ? Colors.white : Colors.black),
+            decoration: InputDecoration(
+              hintText: 'Start typing your ideas, problems, goals...',
+              hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Process button - turn thoughts into tasks
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isProcessing ? null : _process,
+              child: _isProcessing
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('EXTRACT TASKS'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          // Save as Idea button - save without processing
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _isSavingIdea ? null : _saveAsIdea,
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(
+                  color: isDark ? Colors.white : AppTheme.navy,
                 ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              ),
+              child: _isSavingIdea
+                  ? SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2, 
+                        color: isDark ? Colors.white : AppTheme.navy,
+                      ),
+                    )
+                  : Text(
+                      'SAVE AS IDEA',
+                      style: TextStyle(
+                        color: isDark ? Colors.white : AppTheme.navy,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Summary
+          if (_summary != null) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark 
+                    ? AppTheme.darkCard 
+                    : AppTheme.greyLight.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SUMMARY', style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  Text(_summary!, style: Theme.of(context).textTheme.bodyMedium),
+                ],
               ),
             ),
             const SizedBox(height: 16),
+          ],
 
-            // Process Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isProcessing ? null : _processWithAI,
-                child: _isProcessing
-                    ? const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF0a0e27)),
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Text('Processing...'),
-                        ],
-                      )
-                    : const Text('✨ STRUCTURE WITH AI'),
-              ),
+          // Tasks
+          if (_tasks.isNotEmpty) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('TASKS (${_tasks.length})', style: Theme.of(context).textTheme.labelLarge),
+                TextButton(
+                  onPressed: _isSaving ? null : _saveAll,
+                  child: _isSaving 
+                      ? const SizedBox(
+                          height: 14,
+                          width: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          'SAVE ALL',
+                          style: TextStyle(color: isDark ? Colors.white : AppTheme.navy),
+                        ),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-
-            // Summary
-            if (_structuredOutput != null) ...[
+            const SizedBox(height: 8),
+            for (var i = 0; i < _tasks.length; i++)
               Container(
+                margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1a1f3a),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF00ffd5)),
+                  color: isDark ? AppTheme.darkCard : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? AppTheme.greyDark : AppTheme.greyLight,
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.auto_awesome,
-                            color: Color(0xFF00ffd5), size: 18),
-                        const SizedBox(width: 8),
-                        Text(
-                          'AI SUMMARY',
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _structuredOutput!,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Extracted Tasks
-            if (_extractedTasks.isNotEmpty) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '✅ EXTRACTED TASKS (${_extractedTasks.length})',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  TextButton(
-                    onPressed: _saveAllTasks,
-                    child: const Text('SAVE ALL'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ...List.generate(_extractedTasks.length, (index) {
-                final task = _extractedTasks[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1a1f3a),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: const Color(0xFF2a2f4a),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _getPriorityColor(task['priority']),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              (task['priority'] ?? 'medium').toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF0a0e27),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: _getPriorityColor(_tasks[i]['priority']).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  (_tasks[i]['priority'] ?? 'medium').toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: _getPriorityColor(_tasks[i]['priority']),
+                                  ),
+                                ),
                               ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _tasks[i]['title'] ?? '',
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
+                          ),
+                          if (_tasks[i]['description']?.isNotEmpty ?? false) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _tasks[i]['description'],
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle,
-                                color: Color(0xFF00ffd5)),
-                            onPressed: () => _saveTask(task),
-                            tooltip: 'Save task',
-                            iconSize: 20,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.delete,
-                                color: Color(0xFFff3bff)),
-                            onPressed: () => _removeTask(index),
-                            tooltip: 'Remove',
-                            iconSize: 20,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
+                          ],
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        task['title'] ?? '',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      if (task['description'] != null &&
-                          task['description'].isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          task['description'],
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              }),
-            ],
-
-            // Tips section
-            if (_extractedTasks.isEmpty && _structuredOutput == null) ...[
-              const SizedBox(height: 32),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1a1f3a).withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '💡 Tips for effective brainstorming:',
-                      style: Theme.of(context).textTheme.labelLarge,
                     ),
-                    const SizedBox(height: 12),
-                    _tipItem('Write without censoring - let ideas flow'),
-                    _tipItem('Mix big goals with small tasks'),
-                    _tipItem('Include deadlines if you have them'),
-                    _tipItem('Mention people to involve or delegate to'),
-                    _tipItem('Note any blockers or concerns'),
+                    IconButton(
+                      icon: Icon(
+                        Icons.add_circle,
+                        color: isDark ? Colors.white : AppTheme.navy,
+                      ),
+                      onPressed: () => _saveTask(_tasks[i]),
+                      tooltip: 'Save',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: AppTheme.grey),
+                      onPressed: () => setState(() => _tasks.removeAt(i)),
+                      tooltip: 'Remove',
+                    ),
                   ],
                 ),
               ),
-            ],
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _tipItem(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('• ', style: TextStyle(color: Color(0xFF00ffd5))),
-          Expanded(
-            child: Text(
-              text,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
         ],
       ),
     );
-  }
-
-  Color _getPriorityColor(String? priority) {
-    switch (priority?.toLowerCase()) {
-      case 'high':
-        return const Color(0xFFff0033);
-      case 'medium':
-        return const Color(0xFF00ffd5);
-      default:
-        return const Color(0xFF7a7a7a);
-    }
   }
 }

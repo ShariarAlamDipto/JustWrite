@@ -3,31 +3,34 @@ import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import '../styles/globals.css';
 import { AuthProvider } from '@/lib/useAuth';
+import { ThemeProvider } from '@/lib/ThemeContext';
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-        <meta name="theme-color" content="#000000" />
+        <meta name="theme-color" content="#0a0a0a" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <title>JustWrite</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+        {/* Load Times New Roman as fallback, system fonts */}
         <style>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
           }
+          
+          /* Prevent flash of wrong theme */
+          html { background: #0a0a0a; }
+          html[data-theme="light"] { background: #ffffff; }
         `}</style>
       </Head>
-      <AuthProvider>
-        <div className="container">
+      <ThemeProvider>
+        <AuthProvider>
           <Component {...pageProps} />
-        </div>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </>
   );
 }
