@@ -1,6 +1,7 @@
 /**
  * Security utilities for JustWrite
  * Provides input sanitization, rate limiting helpers, and validation
+ * SECURITY AUDIT: Enhanced with additional protections
  */
 
 // HTML entity encoding to prevent XSS
@@ -13,7 +14,9 @@ export function sanitizeHtml(input: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+    .replace(/\//g, '&#x2F;')
+    .replace(/`/g, '&#x60;')
+    .replace(/=/g, '&#x3D;');
 }
 
 // Sanitize user input for database storage (removes dangerous patterns)
@@ -22,6 +25,14 @@ export function sanitizeInput(input: string): string {
   
   // Remove null bytes and control characters (except newlines and tabs)
   let sanitized = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  
+  // SECURITY: Remove potential SQL injection patterns (defense in depth)
+  sanitized = sanitized.replace(/(['";\\])/g, '');
+  
+  // SECURITY: Remove potential script injection patterns
+  sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  sanitized = sanitized.replace(/javascript:/gi, '');
+  sanitized = sanitized.replace(/on\w+\s*=/gi, '');
   
   // Limit length to prevent DoS
   sanitized = sanitized.slice(0, 50000);

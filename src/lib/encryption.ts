@@ -71,6 +71,7 @@ export async function decrypt(ciphertext: string, key: CryptoKey): Promise<strin
 }
 
 // Derive key from password (for password-based encryption)
+// SECURITY: Using 600,000 iterations as recommended by OWASP 2023
 export async function deriveKeyFromPassword(
   password: string, 
   salt?: Uint8Array
@@ -78,7 +79,7 @@ export async function deriveKeyFromPassword(
   const encoder = new TextEncoder();
   const passwordData = encoder.encode(password);
   
-  // Use provided salt or generate new one
+  // Use provided salt or generate new one (16 bytes for security)
   const useSalt = salt || crypto.getRandomValues(new Uint8Array(16));
   
   // Import password as key material
@@ -90,12 +91,12 @@ export async function deriveKeyFromPassword(
     ['deriveKey']
   );
   
-  // Derive encryption key
+  // Derive encryption key with high iteration count
   const key = await crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
       salt: useSalt.buffer as ArrayBuffer,
-      iterations: 100000,
+      iterations: 600000, // SECURITY: OWASP 2023 recommended minimum
       hash: 'SHA-256'
     },
     keyMaterial,
@@ -123,8 +124,11 @@ export function isEncryptionSupported(): boolean {
          typeof crypto.subtle.encrypt === 'function';
 }
 
-// Store encryption key in localStorage (consider more secure storage in production)
+// SECURITY: Store encryption key securely
+// Uses sessionStorage instead of localStorage for better security
+// Key is cleared when browser tab is closed
 const KEY_STORAGE_KEY = 'jw_encryption_key';
+const KEY_DERIVED_FLAG = 'jw_key_derived';
 
 export async function getOrCreateStoredKey(): Promise<CryptoKey | null> {
   if (!isEncryptionSupported()) {
@@ -133,7 +137,9 @@ export async function getOrCreateStoredKey(): Promise<CryptoKey | null> {
   }
 
   try {
-    const storedKey = localStorage.getItem(KEY_STORAGE_KEY);
+    // SECURITY: Use sessionStorage for better security (cleared on tab close)
+    const storage = typeof sessionStorage !== 'undefined' ? sessionStorage : localStorage;
+    const storedKey = storage.getItem(KEY_STORAGE_KEY);
     
     if (storedKey) {
       return await importKey(storedKey);
@@ -142,7 +148,7 @@ export async function getOrCreateStoredKey(): Promise<CryptoKey | null> {
     // Generate new key
     const newKey = await generateKey();
     const exportedKey = await exportKey(newKey);
-    localStorage.setItem(KEY_STORAGE_KEY, exportedKey);
+    storage.setItem(KEY_STORAGE_KEY, exportedKey);
     
     return newKey;
   } catch (error) {
@@ -153,5 +159,12 @@ export async function getOrCreateStoredKey(): Promise<CryptoKey | null> {
 
 // Clear stored encryption key (for logout/key rotation)
 export function clearStoredKey(): void {
-  localStorage.removeItem(KEY_STORAGE_KEY);
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem(KEY_STORAGE_KEY);
+    sessionStorage.removeItem(KEY_DERIVED_FLAG);
+  }
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(KEY_STORAGE_KEY);
+    localStorage.removeItem(KEY_DERIVED_FLAG);
+  }
 }

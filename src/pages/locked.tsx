@@ -11,15 +11,66 @@ const getMoodLabel = (mood: number) => {
   return 'Great';
 };
 
-// Simple hash function for PIN verification (not crypto-secure, but sufficient for local privacy)
-const hashPin = (pin: string): string => {
-  let hash = 0;
-  for (let i = 0; i < pin.length; i++) {
-    const char = pin.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
+// SECURITY: Cryptographically secure PIN hashing using PBKDF2
+// Uses 600,000 iterations as recommended by OWASP 2023
+const PBKDF2_ITERATIONS = 600000;
+const SALT_LENGTH = 16;
+
+const generateSalt = (): string => {
+  const salt = new Uint8Array(SALT_LENGTH);
+  crypto.getRandomValues(salt);
+  return Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
+const hashPinSecure = async (pin: string, salt: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const pinData = encoder.encode(pin);
+  const saltData = Uint8Array.from(salt.match(/.{2}/g)!.map(b => parseInt(b, 16)));
+  
+  // Import PIN as key material
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    pinData,
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  
+  // Derive bits using PBKDF2 with SHA-256
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltData,
+      iterations: PBKDF2_ITERATIONS,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    256
+  );
+  
+  // Convert to hex string
+  const hashArray = Array.from(new Uint8Array(derivedBits));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
+// Store format: salt:hash
+const createPinHash = async (pin: string): Promise<string> => {
+  const salt = generateSalt();
+  const hash = await hashPinSecure(pin, salt);
+  return `${salt}:${hash}`;
+};
+
+const verifyPinHash = async (pin: string, storedHash: string): Promise<boolean> => {
+  const [salt, hash] = storedHash.split(':');
+  if (!salt || !hash) return false;
+  const computedHash = await hashPinSecure(pin, salt);
+  // SECURITY: Constant-time comparison to prevent timing attacks
+  if (computedHash.length !== hash.length) return false;
+  let result = 0;
+  for (let i = 0; i < computedHash.length; i++) {
+    result |= computedHash.charCodeAt(i) ^ hash.charCodeAt(i);
   }
-  return hash.toString(36);
+  return result === 0;
 };
 
 // Entry Card Component
@@ -260,22 +311,32 @@ const PinSetupModal = ({ isOpen, onClose, onSetPin }: { isOpen: boolean; onClose
   );
 };
 
-// PIN Entry Modal
-const PinEntryModal = ({ isOpen, onClose, onVerify }: { isOpen: boolean; onClose: () => void; onVerify: (pin: string) => boolean }) => {
+// PIN Entry Modal - SECURITY: Updated to handle async verification
+const PinEntryModal = ({ isOpen, onClose, onVerify }: { isOpen: boolean; onClose: () => void; onVerify: (pin: string) => Promise<boolean> }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  const [verifying, setVerifying] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (onVerify(pin)) {
-      setPin('');
-      setError('');
-      onClose();
-    } else {
-      setError('Incorrect PIN');
-      setPin('');
+    setVerifying(true);
+    setError('');
+    try {
+      const isValid = await onVerify(pin);
+      if (isValid) {
+        setPin('');
+        setError('');
+        onClose();
+      } else {
+        setError('Incorrect PIN');
+        setPin('');
+      }
+    } catch (err) {
+      setError('Verification failed');
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -295,11 +356,14 @@ const PinEntryModal = ({ isOpen, onClose, onVerify }: { isOpen: boolean; onClose
             className="input"
             style={{ marginBottom: '0.75rem' }}
             autoFocus
+            disabled={verifying}
           />
           {error && <p style={{ color: '#ff6b6b', fontSize: '12px', marginBottom: '0.75rem' }}>{error}</p>}
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button type="submit" className="btn btn-primary">Unlock</button>
-            <button type="button" onClick={onClose} className="btn">Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={verifying}>
+              {verifying ? 'Verifying...' : 'Unlock'}
+            </button>
+            <button type="button" onClick={onClose} className="btn" disabled={verifying}>Cancel</button>
           </div>
         </form>
       </div>
@@ -382,17 +446,18 @@ export default function LockedJournal() {
     }
   };
 
-  const handleSetPin = (pin: string) => {
-    const pinHash = hashPin(pin);
+  const handleSetPin = async (pin: string) => {
+    const pinHash = await createPinHash(pin);
     localStorage.setItem('justwrite_locked_pin', pinHash);
     setHasPin(true);
     setIsUnlocked(true);
   };
 
-  const handleVerifyPin = (pin: string): boolean => {
+  const handleVerifyPin = async (pin: string): Promise<boolean> => {
     const storedHash = localStorage.getItem('justwrite_locked_pin');
-    const inputHash = hashPin(pin);
-    if (storedHash === inputHash) {
+    if (!storedHash) return false;
+    const isValid = await verifyPinHash(pin, storedHash);
+    if (isValid) {
       setIsUnlocked(true);
       return true;
     }

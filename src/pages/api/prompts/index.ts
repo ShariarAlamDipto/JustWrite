@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { withAuth } from '../../../lib/withAuth';
-import { sanitizeInput, validateContentLength, checkRateLimit } from '../../../lib/security';
+import { sanitizeInput, validateContentLength, checkRateLimit, isValidUUID } from '../../../lib/security';
 import { listCustomPrompts, createCustomPrompt, deleteCustomPrompt } from '../../../lib/storage';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -44,12 +44,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'DELETE') {
       const { id } = req.body;
       
-      if (!id) {
+      // SECURITY: Validate ID presence and format
+      if (!id || typeof id !== 'string') {
         return res.status(400).json({ error: 'Prompt ID is required' });
       }
       
-      await deleteCustomPrompt(id, userId);
-      return res.status(200).json({ success: true });
+      if (!isValidUUID(id)) {
+        return res.status(400).json({ error: 'Invalid prompt ID format' });
+      }
+      
+      try {
+        await deleteCustomPrompt(id, userId);
+        return res.status(200).json({ success: true });
+      } catch (err) {
+        return res.status(404).json({ error: 'Prompt not found or access denied' });
+      }
     }
 
     res.setHeader('Allow', 'GET,POST,DELETE');

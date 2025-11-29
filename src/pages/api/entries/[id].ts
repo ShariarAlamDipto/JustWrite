@@ -1,10 +1,17 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getEntryById, updateEntry, deleteEntry } from '../../../lib/storage';
 import { withAuth } from '../../../lib/withAuth';
-import { sanitizeInput, validateContentLength, isValidUUID } from '../../../lib/security';
+import { sanitizeInput, validateContentLength, isValidUUID, checkRateLimit } from '../../../lib/security';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
+    // SECURITY: Rate limiting
+    const rateLimit = checkRateLimit(userId, 100, 60000);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+    }
+    res.setHeader('X-RateLimit-Remaining', rateLimit.remaining.toString());
+    
     const { id } = req.query;
     
     if (!id || typeof id !== 'string') {
@@ -56,7 +63,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         updates.summary = sanitizeInput(summary);
       }
 
-      const updatedEntry = await updateEntry(id, updates);
+      // SECURITY: Pass userId to verify ownership
+      const updatedEntry = await updateEntry(id, updates, userId);
       return res.status(200).json({ entry: updatedEntry });
     }
 
