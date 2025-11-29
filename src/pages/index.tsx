@@ -80,7 +80,7 @@ const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, tok
   };
 
   const date = new Date(entry.created_at);
-  const isIdea = entry.type === 'idea' || entry.type === 'brainstorm';
+  const isIdea = entry.source === 'idea' || entry.source === 'brainstorm';
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -184,7 +184,7 @@ const EntryCard = memo(function EntryCard({
   const date = new Date(entry.created_at);
   const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  const isIdea = entry.type === 'idea' || entry.type === 'brainstorm';
+  const isIdea = entry.source === 'idea' || entry.source === 'brainstorm';
   
   return (
     <div style={cardStyles.card} onClick={() => onClick(entry)}>
@@ -334,7 +334,8 @@ export default function Home() {
         body: JSON.stringify({ 
           content: fullContent, 
           mood, 
-          type: 'journal'
+          source: 'text',
+          is_locked: false
         })
       });
       if (res.ok) {

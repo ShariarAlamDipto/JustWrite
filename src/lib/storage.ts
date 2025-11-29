@@ -12,9 +12,37 @@ const supabase = supabaseUrl && supabaseKey
 // In-memory fallback for development without Supabase
 let memoryDb: { entries: any[]; tasks: any[] } = { entries: [], tasks: [] };
 
+// Track if is_locked column exists (checked on first query)
+let isLockedColumnExists: boolean | null = null;
+
+// Check if is_locked column exists in the database
+async function checkIsLockedColumn(): Promise<boolean> {
+  if (isLockedColumnExists !== null) return isLockedColumnExists;
+  if (!supabase) return true; // Memory mode supports it
+  
+  try {
+    // Try a simple query with is_locked filter
+    const { error } = await supabase
+      .from('entries')
+      .select('id')
+      .eq('is_locked', false)
+      .limit(1);
+    
+    isLockedColumnExists = !error || !error.message.includes('is_locked');
+    if (!isLockedColumnExists) {
+      console.warn('is_locked column not found. Run supabase_custom_prompts.sql to enable private journal.');
+    }
+    return isLockedColumnExists;
+  } catch {
+    return false;
+  }
+}
+
 // SECURITY: All queries now filter by user_id to prevent data leakage
 export async function listEntries(userId?: string, options?: { locked?: boolean }) {
   if (supabase) {
+    const hasLockedColumn = await checkIsLockedColumn();
+    
     let query = supabase
       .from('entries')
       .select('*')
@@ -25,8 +53,8 @@ export async function listEntries(userId?: string, options?: { locked?: boolean 
       query = query.eq('user_id', userId);
     }
     
-    // Filter by locked status
-    if (options?.locked !== undefined) {
+    // Filter by locked status only if column exists
+    if (hasLockedColumn && options?.locked !== undefined) {
       query = query.eq('is_locked', options.locked);
     }
     
@@ -51,17 +79,24 @@ export async function listEntries(userId?: string, options?: { locked?: boolean 
 
 // SECURITY: Include user_id in entry creation
 export async function createEntry({ content, source = 'text', created_at, user_id, mood, is_locked }: any) {
-  const entry = {
+  const hasLockedColumn = await checkIsLockedColumn();
+  
+  // Build entry object, only include is_locked if column exists
+  const entry: any = {
     id: crypto.randomUUID(),
     content,
     source,
     user_id: user_id || null, // SECURITY: Associate entry with user
     created_at: created_at || new Date().toISOString(),
-    mood: mood || null,
-    is_locked: is_locked || false,
+    mood: mood !== undefined ? mood : null,
     summary: null,
     ai_metadata: null
   };
+  
+  // Only include is_locked field if database supports it
+  if (hasLockedColumn) {
+    entry.is_locked = is_locked || false;
+  }
 
   if (supabase) {
     const { data, error } = await supabase
@@ -76,10 +111,11 @@ export async function createEntry({ content, source = 'text', created_at, user_i
     return data;
   }
   
+  // In memory mode, always support is_locked
+  entry.is_locked = is_locked || false;
   memoryDb.entries.unshift(entry);
   return entry;
 }
-
 // SECURITY: Verify entry belongs to user before returning
 export async function getEntryById(id: string, userId?: string) {
   if (supabase) {

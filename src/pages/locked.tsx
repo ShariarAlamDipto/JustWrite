@@ -486,6 +486,7 @@ export default function LockedJournal() {
         body: JSON.stringify({
           content,
           mood,
+          source: 'text',
           is_locked: true
         })
       });

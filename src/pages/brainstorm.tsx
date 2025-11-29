@@ -61,7 +61,8 @@ export default function BrainstormPage() {
         },
         body: JSON.stringify({ 
           content: freeText.trim(), 
-          type: 'idea'
+          source: 'idea',
+          is_locked: false
           // Note: no mood field for ideas
         })
       });
