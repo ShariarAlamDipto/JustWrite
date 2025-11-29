@@ -23,15 +23,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Invalid entry ID format' });
     }
 
-    // Get entry and verify ownership
-    const entry = await getEntryById(id);
+    // Get entry and verify ownership - SECURITY: pass userId to filter by owner
+    const entry = await getEntryById(id, userId);
     if (!entry) {
       return res.status(404).json({ error: 'Entry not found' });
-    }
-    
-    // SECURITY: Verify the entry belongs to the authenticated user
-    if (entry.user_id && entry.user_id !== userId) {
-      return res.status(403).json({ error: 'Not authorized to access this entry' });
     }
 
     if (req.method === 'GET') {
@@ -69,8 +64,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'DELETE') {
-      await deleteEntry(id, userId);
-      return res.status(200).json({ success: true });
+      try {
+        await deleteEntry(id, userId);
+        return res.status(200).json({ success: true });
+      } catch (err: any) {
+        console.error('Delete entry error:', err);
+        return res.status(500).json({ error: err.message || 'Failed to delete entry' });
+      }
     }
 
     res.setHeader('Allow', 'GET,PATCH,DELETE');

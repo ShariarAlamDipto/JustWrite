@@ -190,19 +190,47 @@ export async function updateEntry(id: string, updates: any, userId?: string) {
 
 // SECURITY: Delete entry with ownership verification
 export async function deleteEntry(id: string, userId?: string) {
+  console.log(`deleteEntry called: id=${id}, userId=${userId}`);
+  
   if (supabase) {
-    let query = supabase
+    // First verify the entry exists and belongs to user
+    const { data: existingEntry, error: fetchError } = await supabase
+      .from('entries')
+      .select('id, user_id')
+      .eq('id', id)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching entry before delete:', fetchError);
+    }
+    console.log('Entry to delete:', existingEntry);
+    
+    // Now delete
+    const { error, count } = await supabase
       .from('entries')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', userId);
     
-    // SECURITY: Verify ownership
-    if (userId) {
-      query = query.eq('user_id', userId);
+    if (error) {
+      console.error('Supabase deleteEntry error:', error.message, error);
+      throw new Error(error.message);
     }
     
-    const { error } = await query;
-    if (error) throw new Error(error.message);
+    // Verify deletion
+    const { data: checkDeleted } = await supabase
+      .from('entries')
+      .select('id')
+      .eq('id', id)
+      .single();
+    
+    console.log(`Delete result - error: ${error}, count: ${count}, still exists: ${!!checkDeleted}`);
+    
+    if (checkDeleted) {
+      console.error('Entry still exists after delete!');
+      throw new Error('Delete operation failed - entry still exists');
+    }
+    
     return true;
   }
   
