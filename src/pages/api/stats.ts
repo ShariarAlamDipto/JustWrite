@@ -36,6 +36,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const avgMood = (moods: number[]) => 
         moods.length > 0 ? Math.round(moods.reduce((a, b) => a + b, 0) / moods.length) : null;
 
+      // Mood distribution for pie chart (categorize into 5 ranges)
+      const moodDistribution = { veryLow: 0, low: 0, neutral: 0, good: 0, great: 0 };
+      entriesWithMood.forEach((e: any) => {
+        const m = e.mood;
+        if (m <= 20) moodDistribution.veryLow++;
+        else if (m <= 40) moodDistribution.low++;
+        else if (m <= 60) moodDistribution.neutral++;
+        else if (m <= 80) moodDistribution.good++;
+        else moodDistribution.great++;
+      });
+
+      // Mood history for line chart (last 14 days with mood values)
+      const moodHistory: { date: string; mood: number }[] = [];
+      const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000);
+      entriesWithMood
+        .filter((e: any) => new Date(e.created_at) >= twoWeeksAgo)
+        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        .forEach((e: any) => {
+          const dateStr = new Date(e.created_at).toISOString().split('T')[0];
+          moodHistory.push({ date: dateStr, mood: e.mood });
+        });
+
       // Activity tag analysis
       const activityCounts: Record<string, number> = {};
       monthlyEntries.forEach((entry: any) => {
@@ -128,6 +150,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           trend: weeklyMoods.length >= 2 
             ? weeklyMoods[0] > weeklyMoods[weeklyMoods.length - 1] ? 'up' : 'down'
             : 'stable',
+          distribution: moodDistribution,
+          history: moodHistory,
         },
         activities: Object.entries(activityCounts)
           .sort((a, b) => b[1] - a[1])

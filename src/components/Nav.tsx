@@ -44,6 +44,12 @@ export function Nav() {
             Journal
           </Link>
           <Link 
+            href="/locked" 
+            style={{...styles.navLink, ...(isActive('/locked') ? styles.navLinkActive : {})}}
+          >
+            Private
+          </Link>
+          <Link 
             href="/tasks" 
             style={{...styles.navLink, ...(isActive('/tasks') ? styles.navLinkActive : {})}}
           >
@@ -54,6 +60,12 @@ export function Nav() {
             style={{...styles.navLink, ...(isActive('/brainstorm') ? styles.navLinkActive : {})}}
           >
             Ideas
+          </Link>
+          <Link 
+            href="/prompts" 
+            style={{...styles.navLink, ...(isActive('/prompts') ? styles.navLinkActive : {})}}
+          >
+            Prompts
           </Link>
           <Link 
             href="/insights" 
@@ -111,11 +123,17 @@ export function Nav() {
           <Link href="/" style={{...styles.mobileLink, ...(isActive('/') ? styles.mobileLinkActive : {})}}>
             Journal
           </Link>
+          <Link href="/locked" style={{...styles.mobileLink, ...(isActive('/locked') ? styles.mobileLinkActive : {})}}>
+            Private
+          </Link>
           <Link href="/tasks" style={{...styles.mobileLink, ...(isActive('/tasks') ? styles.mobileLinkActive : {})}}>
             Tasks
           </Link>
           <Link href="/brainstorm" style={{...styles.mobileLink, ...(isActive('/brainstorm') ? styles.mobileLinkActive : {})}}>
             Ideas
+          </Link>
+          <Link href="/prompts" style={{...styles.mobileLink, ...(isActive('/prompts') ? styles.mobileLinkActive : {})}}>
+            Prompts
           </Link>
           <Link href="/insights" style={{...styles.mobileLink, ...(isActive('/insights') ? styles.mobileLinkActive : {})}}>
             Insights

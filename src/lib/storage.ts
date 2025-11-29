@@ -13,7 +13,7 @@ const supabase = supabaseUrl && supabaseKey
 let memoryDb: { entries: any[]; tasks: any[] } = { entries: [], tasks: [] };
 
 // SECURITY: All queries now filter by user_id to prevent data leakage
-export async function listEntries(userId?: string) {
+export async function listEntries(userId?: string, options?: { locked?: boolean }) {
   if (supabase) {
     let query = supabase
       .from('entries')
@@ -25,6 +25,11 @@ export async function listEntries(userId?: string) {
       query = query.eq('user_id', userId);
     }
     
+    // Filter by locked status
+    if (options?.locked !== undefined) {
+      query = query.eq('is_locked', options.locked);
+    }
+    
     const { data, error } = await query;
     if (error) {
       console.error('Supabase listEntries error:', error.message);
@@ -32,20 +37,28 @@ export async function listEntries(userId?: string) {
     }
     return data || [];
   }
-  // Filter memory DB by userId if provided
-  return userId 
+  // Filter memory DB by userId and locked status if provided
+  let results = userId 
     ? memoryDb.entries.filter((e: any) => e.user_id === userId)
     : memoryDb.entries;
+  
+  if (options?.locked !== undefined) {
+    results = results.filter((e: any) => e.is_locked === options.locked);
+  }
+  
+  return results;
 }
 
 // SECURITY: Include user_id in entry creation
-export async function createEntry({ content, source = 'text', created_at, user_id }: any) {
+export async function createEntry({ content, source = 'text', created_at, user_id, mood, is_locked }: any) {
   const entry = {
     id: crypto.randomUUID(),
     content,
     source,
     user_id: user_id || null, // SECURITY: Associate entry with user
     created_at: created_at || new Date().toISOString(),
+    mood: mood || null,
+    is_locked: is_locked || false,
     summary: null,
     ai_metadata: null
   };
@@ -297,5 +310,76 @@ export async function deleteTask(id: string, userId?: string) {
   const idx = memoryDb.tasks.findIndex((t: any) => t.id === id && (!userId || t.user_id === userId));
   if (idx === -1) throw new Error('task not found or access denied');
   memoryDb.tasks.splice(idx, 1);
+  return true;
+}
+
+// ============= CUSTOM PROMPTS =============
+
+// In-memory store for custom prompts (development fallback)
+let memoryPrompts: any[] = [];
+
+// List custom prompts for a user
+export async function listCustomPrompts(userId: string) {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('custom_prompts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Supabase listCustomPrompts error:', error.message);
+      return [];
+    }
+    return data || [];
+  }
+  
+  return memoryPrompts.filter(p => p.user_id === userId);
+}
+
+// Create a custom prompt
+export async function createCustomPrompt({ text, category, user_id }: { text: string; category: string; user_id: string }) {
+  const prompt = {
+    id: crypto.randomUUID(),
+    text,
+    category,
+    user_id,
+    created_at: new Date().toISOString()
+  };
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('custom_prompts')
+      .insert(prompt)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Supabase createCustomPrompt error:', error.message);
+      throw new Error(error.message);
+    }
+    return data;
+  }
+  
+  memoryPrompts.unshift(prompt);
+  return prompt;
+}
+
+// Delete a custom prompt
+export async function deleteCustomPrompt(id: string, userId: string) {
+  if (supabase) {
+    const { error } = await supabase
+      .from('custom_prompts')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId);
+    
+    if (error) throw new Error(error.message);
+    return true;
+  }
+  
+  const idx = memoryPrompts.findIndex(p => p.id === id && p.user_id === userId);
+  if (idx === -1) throw new Error('prompt not found or access denied');
+  memoryPrompts.splice(idx, 1);
   return true;
 }

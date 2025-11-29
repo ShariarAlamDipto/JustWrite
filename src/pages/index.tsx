@@ -18,14 +18,12 @@ interface EntryDetailModalProps {
   entry: any;
   isOpen: boolean;
   onClose: () => void;
-  onDistill: (id: string) => void;
   onUpdate: (entry: any) => void;
   onDelete: (id: string) => void;
-  isDistilling: boolean;
   token: string;
 }
 
-const EntryDetailModal = memo(({ entry, isOpen, onClose, onDistill, onUpdate, onDelete, isDistilling, token }: EntryDetailModalProps) => {
+const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, token }: EntryDetailModalProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(entry?.content || '');
   const [saving, setSaving] = useState(false);
@@ -162,13 +160,6 @@ const EntryDetailModal = memo(({ entry, isOpen, onClose, onDistill, onUpdate, on
               <button className="btn" onClick={handleCopy}>
                 {copied ? 'Copied' : 'Copy'}
               </button>
-              <button 
-                className="btn btn-primary" 
-                onClick={() => { onClose(); onDistill(entry.id); }}
-                disabled={isDistilling}
-              >
-                {isDistilling ? 'Analyzing...' : 'Analyze'}
-              </button>
               <button className="btn btn-danger" onClick={handleDelete}>
                 Delete
               </button>
@@ -185,14 +176,10 @@ EntryDetailModal.displayName = 'EntryDetailModal';
 // Memoized entry card — minimal, clean design
 const EntryCard = memo(function EntryCard({ 
   entry, 
-  onDistill, 
   onClick, 
-  isDistilling 
 }: { 
   entry: any; 
-  onDistill: (id: string) => void; 
   onClick: (entry: any) => void; 
-  isDistilling: boolean;
 }) {
   const date = new Date(entry.created_at);
   const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -210,21 +197,10 @@ const EntryCard = memo(function EntryCard({
         {!isIdea && entry.mood !== undefined && entry.mood !== null && (
           <span style={cardStyles.mood}>{getMoodLabel(entry.mood)}</span>
         )}
-        {entry.summary && <span style={cardStyles.badge}>Analyzed</span>}
       </div>
       <p style={cardStyles.preview}>
         {entry.content.slice(0, 150)}{entry.content.length > 150 ? '…' : ''}
       </p>
-      <div style={cardStyles.actions} onClick={e => e.stopPropagation()}>
-        <button
-          onClick={() => onDistill(entry.id)}
-          disabled={isDistilling}
-          className="btn btn-primary btn-sm"
-          style={{ opacity: isDistilling ? 0.5 : 1 }}
-        >
-          {isDistilling ? '...' : 'Distill'}
-        </button>
-      </div>
     </div>
   );
 });
@@ -290,9 +266,7 @@ export default function Home() {
   
   // Daily prompts state (3 prompts)
   const [dailyPrompts, setDailyPrompts] = useState<JournalPrompt[]>([]);
-  
-  // Activity tags state
-  const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
+  const [promptAnswers, setPromptAnswers] = useState<string[]>(['', '', '']);
   
   // Stats state
   const [stats, setStats] = useState<any>(null);
@@ -339,6 +313,17 @@ export default function Home() {
   const createEntry = useCallback(async () => {
     if (!content.trim()) return;
     setSaving(true);
+    // Combine free text with prompt answers
+    const allAnswers = promptAnswers.filter(a => a.trim()).map((answer, idx) => 
+      dailyPrompts[idx] ? `**${dailyPrompts[idx].text}**\n${answer}` : answer
+    );
+    const fullContent = [content.trim(), ...allAnswers].filter(Boolean).join('\n\n');
+    
+    if (!fullContent) {
+      setSaving(false);
+      return;
+    }
+    
     try {
       const res = await fetch('/api/entries', {
         method: 'POST',
@@ -347,17 +332,16 @@ export default function Home() {
           'Authorization': `Bearer ${token || ''}`
         },
         body: JSON.stringify({ 
-          content: content.trim(), 
+          content: fullContent, 
           mood, 
-          type: 'journal',
-          activities: selectedActivities
+          type: 'journal'
         })
       });
       if (res.ok) {
         const json = await res.json();
         setContent('');
         setMood(50);
-        setSelectedActivities([]);
+        setPromptAnswers(['', '', '']);
         setEntries(prev => [json.entry, ...prev]);
         // Refresh stats after new entry
         fetchStats();
@@ -369,7 +353,7 @@ export default function Home() {
       alert('Failed to save. Try again.');
     }
     setSaving(false);
-  }, [content, mood, token, selectedActivities, fetchStats]);
+  }, [content, mood, token, promptAnswers, dailyPrompts, fetchStats]);
 
   const distill = useCallback(async (entryId: string) => {
     setDistillLoading(entryId);
@@ -434,15 +418,16 @@ export default function Home() {
   // Handle prompt selection - refresh all 3 prompts
   const handleSurpriseMe = useCallback(() => {
     setDailyPrompts([getRandomPrompt(), getRandomPrompt(), getRandomPrompt()]);
+    setPromptAnswers(['', '', '']);
   }, []);
 
-  // Handle activity toggle
-  const toggleActivity = useCallback((activityId: string) => {
-    setSelectedActivities(prev => 
-      prev.includes(activityId) 
-        ? prev.filter(a => a !== activityId)
-        : [...prev, activityId]
-    );
+  // Handle prompt answer change
+  const handlePromptAnswerChange = useCallback((index: number, value: string) => {
+    setPromptAnswers(prev => {
+      const newAnswers = [...prev];
+      newAnswers[index] = value;
+      return newAnswers;
+    });
   }, []);
 
   const addToTodo = useCallback(async (tasks: any[]) => {
@@ -513,8 +498,8 @@ export default function Home() {
       <main style={styles.main}>
         {/* Header with Stats */}
         <header style={styles.header}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <h1 style={styles.title}>Journal</h1>
               <p style={styles.subtitle}>Write freely, distill into tasks.</p>
             </div>
@@ -525,7 +510,7 @@ export default function Home() {
                   <span style={styles.statLabel}>day streak</span>
                 </div>
                 <div style={styles.statItem}>
-                  <span style={styles.statValue}>Level {stats.level.current}</span>
+                  <span style={styles.statValue}>Lv {stats.level.current}</span>
                   <span style={styles.statLabel}>{stats.level.title}</span>
                 </div>
               </div>
@@ -536,7 +521,7 @@ export default function Home() {
           )}
         </header>
 
-        {/* Daily Prompts - 3 questions */}
+        {/* Daily Prompts - 3 questions with answer areas */}
         {dailyPrompts.length > 0 && (
           <section style={styles.promptSection}>
             <div style={styles.promptHeader}>
@@ -550,17 +535,19 @@ export default function Home() {
               </button>
             </div>
             
-            <div style={styles.promptGrid}>
+            <div style={styles.promptList}>
               {dailyPrompts.map((prompt, idx) => (
-                <div 
-                  key={prompt.id + idx}
-                  style={styles.promptCard}
-                  onClick={() => setContent(prev => prev ? prev + '\n\n' + prompt.text : prompt.text)}
-                >
+                <div key={prompt.id + idx} style={styles.promptCard}>
                   <span style={styles.promptCategory}>
                     {PROMPT_CATEGORIES.find(c => c.id === prompt.category)?.label}
                   </span>
                   <p style={styles.promptText}>{prompt.text}</p>
+                  <textarea
+                    value={promptAnswers[idx]}
+                    onChange={(e) => handlePromptAnswerChange(idx, e.target.value)}
+                    placeholder="Write your answer here..."
+                    style={styles.promptAnswerArea}
+                  />
                 </div>
               ))}
             </div>
@@ -590,26 +577,6 @@ export default function Home() {
               onChange={e => setMood(Number(e.target.value))}
               className="mood-slider"
             />
-          </div>
-          
-          {/* Activity Tags */}
-          <div style={styles.activitiesSection}>
-            <label style={styles.activitiesLabel}>What have you been doing?</label>
-            <div style={styles.activityTags}>
-              {ACTIVITY_TAGS.map(tag => (
-                <button
-                  key={tag.id}
-                  onClick={() => toggleActivity(tag.id)}
-                  className={`btn btn-sm ${selectedActivities.includes(tag.id) ? 'btn-primary' : ''}`}
-                  style={{
-                    fontSize: '12px',
-                    padding: '0.25rem 0.5rem',
-                  }}
-                >
-                  {tag.label}
-                </button>
-              ))}
-            </div>
           </div>
           
           <button
@@ -644,9 +611,7 @@ export default function Home() {
                 <EntryCard
                   key={e.id}
                   entry={e}
-                  onDistill={distill}
                   onClick={handleEntryClick}
-                  isDistilling={distillLoading === e.id}
                 />
               ))}
             </div>
@@ -659,10 +624,8 @@ export default function Home() {
         entry={selectedEntry}
         isOpen={detailOpen}
         onClose={() => setDetailOpen(false)}
-        onDistill={distill}
         onUpdate={handleEntryUpdate}
         onDelete={handleEntryDelete}
-        isDistilling={distillLoading === selectedEntry?.id}
         token={token || ''}
       />
 
@@ -682,28 +645,28 @@ const styles: Record<string, React.CSSProperties> = {
   main: {
     maxWidth: '680px',
     margin: '0 auto',
-    padding: '2.5rem 1rem 4rem',
+    padding: '1.5rem 1rem 4rem',
   },
   header: {
-    marginBottom: '2rem',
+    marginBottom: '1.5rem',
   },
   title: {
-    fontSize: '28px',
+    fontSize: 'clamp(22px, 5vw, 28px)',
     fontWeight: 700,
     margin: 0,
     color: 'var(--fg)',
     letterSpacing: '-0.02em',
   },
   subtitle: {
-    fontSize: '15px',
+    fontSize: '14px',
     color: 'var(--muted)',
     margin: '0.375rem 0 0',
   },
   editorSection: {
     background: 'var(--bg-card)',
-    padding: '1.25rem',
+    padding: '1rem',
     borderRadius: 'var(--radius-lg)',
-    marginBottom: '2.5rem',
+    marginBottom: '2rem',
     border: '1px solid var(--border)',
   },
   section: {
@@ -733,19 +696,19 @@ const styles: Record<string, React.CSSProperties> = {
   },
   textarea: {
     width: '100%',
-    minHeight: '160px',
+    minHeight: '120px',
     background: 'var(--input-bg)',
     color: 'var(--fg)',
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius-md)',
-    padding: '1rem',
+    padding: '0.875rem',
     fontSize: '15px',
     lineHeight: 1.6,
     resize: 'vertical',
   },
   moodSection: {
-    marginTop: '1rem',
-    padding: '0.875rem 1rem',
+    marginTop: '0.875rem',
+    padding: '0.75rem',
     background: 'var(--bg)',
     borderRadius: 'var(--radius-md)',
     border: '1px solid var(--border)',
@@ -753,18 +716,18 @@ const styles: Record<string, React.CSSProperties> = {
   moodLabel: {
     display: 'flex',
     alignItems: 'center',
-    marginBottom: '0.625rem',
+    marginBottom: '0.5rem',
     fontSize: '13px',
     color: 'var(--fg-dim)',
   },
   entryList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.75rem',
+    gap: '0.625rem',
   },
   empty: {
     textAlign: 'center',
-    padding: '3rem 2rem',
+    padding: '2.5rem 1.5rem',
     background: 'var(--bg-card)',
     borderRadius: 'var(--radius-lg)',
     border: '1px dashed var(--border)',
@@ -783,21 +746,21 @@ const styles: Record<string, React.CSSProperties> = {
   // Hero (unauthenticated)
   hero: {
     textAlign: 'center',
-    padding: '4rem 2rem',
-    marginTop: '3rem',
+    padding: '3rem 1.5rem',
+    marginTop: '2rem',
     background: 'var(--bg-card)',
     borderRadius: 'var(--radius-lg)',
     border: '1px solid var(--border)',
   },
   heroTitle: {
-    fontSize: '42px',
+    fontSize: 'clamp(28px, 8vw, 42px)',
     fontWeight: 700,
     color: 'var(--fg)',
     margin: '0 0 0.75rem',
     letterSpacing: '-0.03em',
   },
   heroSubtitle: {
-    fontSize: '17px',
+    fontSize: '15px',
     color: 'var(--fg-dim)',
     margin: '0 0 1.5rem',
   },
@@ -805,14 +768,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'center',
     gap: '0.75rem',
-    fontSize: '14px',
+    fontSize: '13px',
     color: 'var(--fg-dim)',
     flexWrap: 'wrap',
   },
   // Stats widget
   statsWidget: {
     display: 'flex',
-    gap: '1.25rem',
+    gap: '1rem',
+    flexWrap: 'wrap',
   },
   statItem: {
     display: 'flex',
@@ -821,12 +785,12 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0.125rem',
   },
   statValue: {
-    fontSize: '18px',
+    fontSize: '16px',
     fontWeight: 700,
     color: 'var(--accent-bright)',
   },
   statLabel: {
-    fontSize: '11px',
+    fontSize: '10px',
     color: 'var(--muted)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
@@ -854,10 +818,10 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
-  promptGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: '0.75rem',
+  promptList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
   },
   promptCard: {
     background: 'var(--bg-card)',
@@ -865,8 +829,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 'var(--radius-md)',
     border: '1px solid var(--border)',
     borderLeft: '3px solid var(--accent)',
-    cursor: 'pointer',
-    transition: 'all 0.15s ease',
   },
   promptCategory: {
     fontSize: '11px',
@@ -881,23 +843,17 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--fg)',
     margin: '0.625rem 0',
   },
-  // Activities section
-  activitiesSection: {
-    marginTop: '1rem',
-    padding: '0.875rem 1rem',
-    background: 'var(--bg)',
-    borderRadius: 'var(--radius-md)',
+  promptAnswerArea: {
+    width: '100%',
+    minHeight: '80px',
+    background: 'var(--input-bg)',
+    color: 'var(--fg)',
     border: '1px solid var(--border)',
-  },
-  activitiesLabel: {
-    display: 'block',
-    fontSize: '13px',
-    color: 'var(--fg-dim)',
-    marginBottom: '0.625rem',
-  },
-  activityTags: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '0.375rem',
+    borderRadius: 'var(--radius-md)',
+    padding: '0.75rem',
+    fontSize: '14px',
+    lineHeight: 1.6,
+    resize: 'vertical',
+    marginTop: '0.5rem',
   },
 };

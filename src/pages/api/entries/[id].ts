@@ -61,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'DELETE') {
-      await deleteEntry(id);
+      await deleteEntry(id, userId);
       return res.status(200).json({ success: true });
     }
 

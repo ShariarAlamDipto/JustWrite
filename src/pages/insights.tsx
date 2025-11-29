@@ -2,6 +2,103 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
 
+// Mood Line Chart (CSS-based)
+const MoodLineChart = ({ moodHistory }: { moodHistory: { date: string; mood: number }[] }) => {
+  if (!moodHistory || moodHistory.length === 0) {
+    return <p style={{ color: 'var(--muted)', fontSize: '13px' }}>No mood data yet</p>;
+  }
+  
+  const maxMood = 100;
+  const chartHeight = 120;
+  const chartWidth = 280;
+  const padding = 20;
+  
+  // Take last 14 days
+  const data = moodHistory.slice(-14);
+  const pointSpacing = (chartWidth - padding * 2) / Math.max(data.length - 1, 1);
+  
+  const points = data.map((d, i) => ({
+    x: padding + i * pointSpacing,
+    y: chartHeight - padding - ((d.mood / maxMood) * (chartHeight - padding * 2)),
+    mood: d.mood,
+    date: d.date,
+  }));
+  
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  
+  return (
+    <div style={{ position: 'relative' }}>
+      <svg width={chartWidth} height={chartHeight} style={{ overflow: 'visible' }}>
+        {/* Grid lines */}
+        {[0, 25, 50, 75, 100].map(v => {
+          const y = chartHeight - padding - ((v / maxMood) * (chartHeight - padding * 2));
+          return (
+            <line key={v} x1={padding} y1={y} x2={chartWidth - padding} y2={y} 
+              stroke="var(--border)" strokeWidth="1" strokeDasharray="4,4" />
+          );
+        })}
+        {/* Line */}
+        <path d={pathD} fill="none" stroke="var(--accent-bright)" strokeWidth="2" />
+        {/* Points */}
+        {points.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r="4" fill="var(--accent-bright)" stroke="var(--bg-card)" strokeWidth="2">
+            <title>{p.date}: {p.mood}</title>
+          </circle>
+        ))}
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--muted)', marginTop: '0.25rem', paddingLeft: padding, paddingRight: padding }}>
+        <span>{data[0]?.date?.slice(5)}</span>
+        <span>{data[data.length - 1]?.date?.slice(5)}</span>
+      </div>
+    </div>
+  );
+};
+
+// Mood Pie Chart (CSS-based)
+const MoodPieChart = ({ distribution }: { distribution: { veryLow: number; low: number; neutral: number; good: number; great: number } }) => {
+  const total = distribution.veryLow + distribution.low + distribution.neutral + distribution.good + distribution.great;
+  if (total === 0) return <p style={{ color: 'var(--muted)', fontSize: '13px' }}>No mood data yet</p>;
+  
+  const segments = [
+    { label: 'Very Low', value: distribution.veryLow, color: '#e53e3e' },
+    { label: 'Low', value: distribution.low, color: '#dd6b20' },
+    { label: 'Neutral', value: distribution.neutral, color: '#d69e2e' },
+    { label: 'Good', value: distribution.good, color: '#38a169' },
+    { label: 'Great', value: distribution.great, color: '#3182ce' },
+  ].filter(s => s.value > 0);
+  
+  // Build conic gradient
+  let currentAngle = 0;
+  const gradientParts = segments.map(segment => {
+    const startAngle = currentAngle;
+    const angle = (segment.value / total) * 360;
+    currentAngle += angle;
+    return `${segment.color} ${startAngle}deg ${currentAngle}deg`;
+  }).join(', ');
+  
+  return (
+    <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{
+        width: '120px',
+        height: '120px',
+        borderRadius: '50%',
+        background: `conic-gradient(${gradientParts})`,
+        flexShrink: 0,
+      }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+        {segments.map(segment => (
+          <div key={segment.label} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: segment.color }} />
+            <span style={{ fontSize: '13px', color: 'var(--fg-dim)' }}>
+              {segment.label}: {segment.value} ({Math.round((segment.value / total) * 100)}%)
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Simple bar for mood visualization
 const MoodBar = ({ value, max = 100 }: { value: number; max?: number }) => {
   const percent = Math.round((value / max) * 100);
@@ -50,6 +147,7 @@ export default function Insights() {
   const { user, loading: authLoading, token } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [moodChartType, setMoodChartType] = useState<'pie' | 'line'>('pie');
 
   useEffect(() => {
     if (user && token) fetchStats();
@@ -200,6 +298,38 @@ export default function Insights() {
           </div>
         </section>
 
+        {/* Mood Distribution Chart */}
+        {stats.mood.distribution && (
+          <section style={styles.section}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <h2 style={styles.sectionTitle}>Mood Distribution</h2>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button 
+                  className={`btn btn-sm ${moodChartType === 'pie' ? 'btn-primary' : ''}`}
+                  onClick={() => setMoodChartType('pie')}
+                  style={{ fontSize: '11px', padding: '0.25rem 0.5rem' }}
+                >
+                  Pie
+                </button>
+                <button 
+                  className={`btn btn-sm ${moodChartType === 'line' ? 'btn-primary' : ''}`}
+                  onClick={() => setMoodChartType('line')}
+                  style={{ fontSize: '11px', padding: '0.25rem 0.5rem' }}
+                >
+                  Line
+                </button>
+              </div>
+            </div>
+            <div style={styles.card}>
+              {moodChartType === 'pie' ? (
+                <MoodPieChart distribution={stats.mood.distribution} />
+              ) : (
+                <MoodLineChart moodHistory={stats.mood.history || []} />
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Activity Calendar */}
         <section style={styles.section}>
           <h2 style={styles.sectionTitle}>Last 30 Days</h2>
@@ -220,24 +350,7 @@ export default function Insights() {
           </div>
         </section>
 
-        {/* Top Keywords */}
-        {stats.keywords && stats.keywords.length > 0 && (
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>Top Keywords</h2>
-            <div style={styles.card}>
-              <div style={styles.keywordList}>
-                {stats.keywords.map((kw: any, i: number) => (
-                  <span key={kw.word} style={styles.keyword}>
-                    {kw.word}
-                    <span style={styles.keywordCount}>{kw.count}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Top Activities */}
+        
         {stats.activities && stats.activities.length > 0 && (
           <section style={styles.section}>
             <h2 style={styles.sectionTitle}>Top Activities</h2>
