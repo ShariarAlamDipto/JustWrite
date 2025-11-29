@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SECURITY: Network Security Configuration -->
 <!-- Prevents man-in-the-middle attacks by enforcing HTTPS and certificate pinning -->
+<!-- IMPORTANT: Certificate pins must be updated when Supabase/Groq rotate their certificates -->
 <network-security-config>
     <!-- Base configuration: only allow HTTPS -->
     <base-config cleartextTrafficPermitted="false">
@@ -9,23 +10,60 @@
         </trust-anchors>
     </base-config>
     
-    <!-- Domain-specific configuration for Supabase -->
+    <!-- Domain-specific configuration for Supabase with certificate pinning -->
+    <!-- Note: Pin expiration should be monitored; pins may need updates quarterly -->
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">supabase.co</domain>
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
+        <!-- Certificate pinning for Supabase (Let's Encrypt + backup pins) -->
+        <!-- ISRG Root X1 (Let's Encrypt) - expires 2035 -->
+        <pin-set expiration="2025-12-31">
+            <!-- Let's Encrypt ISRG Root X1 -->
+            <pin digest="SHA-256">C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=</pin>
+            <!-- DigiCert Global Root G2 (backup) -->
+            <pin digest="SHA-256">i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=</pin>
+            <!-- Google Trust Services Root R1 (backup) -->
+            <pin digest="SHA-256">hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=</pin>
+        </pin-set>
     </domain-config>
     
-    <!-- Domain-specific configuration for Groq API -->
+    <!-- Domain-specific configuration for Groq API with certificate pinning -->
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">groq.com</domain>
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
+        <!-- Certificate pinning for Groq API -->
+        <pin-set expiration="2025-12-31">
+            <!-- Cloudflare Root CA -->
+            <pin digest="SHA-256">Wf4wRlGfLvlOiNj9D5jMCPhH6dOujPqOvYaJz1kRGGo=</pin>
+            <!-- DigiCert Global Root G2 (backup) -->
+            <pin digest="SHA-256">i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=</pin>
+            <!-- Google Trust Services Root R1 (backup) -->
+            <pin digest="SHA-256">hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=</pin>
+        </pin-set>
+    </domain-config>
+    
+    <!-- Domain-specific configuration for Google APIs (OAuth) -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">google.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+        <!-- Certificate pinning for Google -->
+        <pin-set expiration="2025-12-31">
+            <!-- Google Trust Services Root R1 -->
+            <pin digest="SHA-256">hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=</pin>
+            <!-- GlobalSign Root R2 (backup) -->
+            <pin digest="SHA-256">iie1VXtL7HzAMF+/PVPR9xzT80kQxdZeJ+zduCB3uj0=</pin>
+        </pin-set>
     </domain-config>
     
     <!-- Debug configuration (only for debug builds) -->
+    <!-- WARNING: Debug overrides bypass certificate pinning - do not use in production -->
     <debug-overrides>
         <trust-anchors>
             <certificates src="user" />

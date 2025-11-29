@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:justwrite_mobile/models/entry.dart';
 import 'package:justwrite_mobile/models/task.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 
@@ -17,8 +18,8 @@ class SupabaseService {
   final supabase = Supabase.instance.client;
   
   // Google Sign-In configuration
-  // Web Client ID from Google Cloud Console (OAuth 2.0 Web Client)
-  static const String _webClientId = '186814791712-hnk7rsqoqt9gjd7v41cnab01tq55nhsr.apps.googleusercontent.com';
+  // SECURITY: Web Client ID loaded from environment variable (not hardcoded)
+  static String get _webClientId => dotenv.env['GOOGLE_WEB_CLIENT_ID'] ?? '';
 
   // Get the appropriate redirect URL for the platform
   String get _redirectUrl {
@@ -37,6 +38,12 @@ class SupabaseService {
   // Google Sign-In
   Future<AuthResponse> signInWithGoogle() async {
     debugPrint('[Auth] Starting Google Sign-In...');
+    
+    // SECURITY: Validate that client ID is configured
+    if (_webClientId.isEmpty) {
+      debugPrint('[Auth] ERROR: GOOGLE_WEB_CLIENT_ID not configured in .env');
+      throw Exception('Google Sign-In is not configured. Please set GOOGLE_WEB_CLIENT_ID in .env');
+    }
     
     final GoogleSignIn googleSignIn = GoogleSignIn(
       serverClientId: _webClientId,

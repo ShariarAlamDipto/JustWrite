@@ -2,12 +2,20 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { listEntries } from '../../lib/storage';
 import { withAuth } from '../../lib/withAuth';
 import { calculateStats, getLevelFromPoints, getLevelProgress, BADGES, getBadgeById, getMotivationalMessage } from '../../lib/gamification';
+import { checkRateLimit } from '../../lib/security';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
     if (req.method !== 'GET') {
       res.setHeader('Allow', 'GET');
       return res.status(405).end('Method Not Allowed');
+    }
+
+    // Rate limiting: 30 requests per minute for stats endpoint
+    const { allowed, remaining } = checkRateLimit(userId, 30, 60000);
+    res.setHeader('X-RateLimit-Remaining', remaining.toString());
+    if (!allowed) {
+      return res.status(429).json({ error: 'Too many requests. Please try again later.' });
     }
 
     try {
