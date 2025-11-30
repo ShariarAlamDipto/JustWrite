@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
+import { useRouter } from 'next/router';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
 
@@ -399,6 +400,7 @@ const MoodSlider = ({ value, onChange }: { value: number; onChange: (v: number) 
 };
 
 export default function LockedJournal() {
+  const router = useRouter();
   const { user, loading: authLoading, token } = useAuth();
   const isAuthenticated = !!user;
   
@@ -417,6 +419,11 @@ export default function LockedJournal() {
   // PIN/Lock states
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [hasPin, setHasPin] = useState(false);
+
+  // Handle cancel - navigate back to main journal
+  const handlePinCancel = useCallback(() => {
+    router.push('/');
+  }, [router]);
 
   // Check for existing PIN on mount
   useEffect(() => {
@@ -563,12 +570,12 @@ export default function LockedJournal() {
         {/* PIN Modals */}
         <PinSetupModal 
           isOpen={showPinSetup} 
-          onClose={() => {}} 
+          onClose={handlePinCancel} 
           onSetPin={handleSetPin} 
         />
         <PinEntryModal 
           isOpen={showPinEntry && !isUnlocked} 
-          onClose={() => {}} 
+          onClose={handlePinCancel} 
           onVerify={handleVerifyPin} 
         />
 

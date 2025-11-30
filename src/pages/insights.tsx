@@ -9,17 +9,22 @@ const MoodLineChart = ({ moodHistory }: { moodHistory: { date: string; mood: num
   }
   
   const maxMood = 100;
-  const chartHeight = 120;
-  const chartWidth = 280;
-  const padding = 20;
+  const chartHeight = 140;
+  const chartWidth = 320;
+  const paddingLeft = 50; // More space for Y-axis label
+  const paddingRight = 20;
+  const paddingTop = 20;
+  const paddingBottom = 40; // More space for X-axis label
   
   // Take last 14 days
   const data = moodHistory.slice(-14);
-  const pointSpacing = (chartWidth - padding * 2) / Math.max(data.length - 1, 1);
+  const plotWidth = chartWidth - paddingLeft - paddingRight;
+  const plotHeight = chartHeight - paddingTop - paddingBottom;
+  const pointSpacing = plotWidth / Math.max(data.length - 1, 1);
   
   const points = data.map((d, i) => ({
-    x: padding + i * pointSpacing,
-    y: chartHeight - padding - ((d.mood / maxMood) * (chartHeight - padding * 2)),
+    x: paddingLeft + i * pointSpacing,
+    y: paddingTop + plotHeight - ((d.mood / maxMood) * plotHeight),
     mood: d.mood,
     date: d.date,
   }));
@@ -29,24 +34,67 @@ const MoodLineChart = ({ moodHistory }: { moodHistory: { date: string; mood: num
   return (
     <div style={{ position: 'relative' }}>
       <svg width={chartWidth} height={chartHeight} style={{ overflow: 'visible' }}>
+        {/* Y-axis label */}
+        <text 
+          x={15} 
+          y={chartHeight / 2} 
+          fill="var(--fg-dim)" 
+          fontSize="11" 
+          textAnchor="middle" 
+          transform={`rotate(-90, 15, ${chartHeight / 2})`}
+        >
+          Mood
+        </text>
+        
+        {/* Y-axis tick labels */}
+        {[0, 25, 50, 75, 100].map(v => {
+          const y = paddingTop + plotHeight - ((v / maxMood) * plotHeight);
+          return (
+            <text key={`label-${v}`} x={paddingLeft - 8} y={y + 3} fill="var(--muted)" fontSize="9" textAnchor="end">
+              {v}
+            </text>
+          );
+        })}
+        
         {/* Grid lines */}
         {[0, 25, 50, 75, 100].map(v => {
-          const y = chartHeight - padding - ((v / maxMood) * (chartHeight - padding * 2));
+          const y = paddingTop + plotHeight - ((v / maxMood) * plotHeight);
           return (
-            <line key={v} x1={padding} y1={y} x2={chartWidth - padding} y2={y} 
+            <line key={v} x1={paddingLeft} y1={y} x2={chartWidth - paddingRight} y2={y} 
               stroke="var(--border)" strokeWidth="1" strokeDasharray="4,4" />
           );
         })}
+        
+        {/* Y-axis line */}
+        <line x1={paddingLeft} y1={paddingTop} x2={paddingLeft} y2={paddingTop + plotHeight} 
+          stroke="var(--border)" strokeWidth="1" />
+        
+        {/* X-axis line */}
+        <line x1={paddingLeft} y1={paddingTop + plotHeight} x2={chartWidth - paddingRight} y2={paddingTop + plotHeight} 
+          stroke="var(--border)" strokeWidth="1" />
+        
         {/* Line */}
         <path d={pathD} fill="none" stroke="var(--accent-bright)" strokeWidth="2" />
+        
         {/* Points */}
         {points.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r="4" fill="var(--accent-bright)" stroke="var(--bg-card)" strokeWidth="2">
             <title>{p.date}: {p.mood}</title>
           </circle>
         ))}
+        
+        {/* X-axis label */}
+        <text 
+          x={paddingLeft + plotWidth / 2} 
+          y={chartHeight - 5} 
+          fill="var(--fg-dim)" 
+          fontSize="11" 
+          textAnchor="middle"
+        >
+          Days
+        </text>
       </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--muted)', marginTop: '0.25rem', paddingLeft: padding, paddingRight: padding }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--muted)', marginTop: '0.25rem', paddingLeft: paddingLeft, paddingRight: paddingRight }}>
         <span>{data[0]?.date?.slice(5)}</span>
         <span>{data[data.length - 1]?.date?.slice(5)}</span>
       </div>

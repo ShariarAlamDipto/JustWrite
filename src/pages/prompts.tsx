@@ -108,14 +108,14 @@ export default function Prompts() {
   const getCategoryColor = (categoryId: string) => {
     const colors: Record<string, string> = {
       gratitude: '#38a169',
-      reflection: '#3182ce',
+      reflection: '#ffffff',
       emotional_checkin: '#dd6b20',
       morning_intentions: '#805ad5',
       self_discovery: '#d69e2e',
       creative: '#e53e3e',
-      custom: 'var(--accent)'
+      custom: '#ffffff'
     };
-    return colors[categoryId] || 'var(--accent)';
+    return colors[categoryId] || '#ffffff';
   };
 
   if (authLoading) {
@@ -135,7 +135,7 @@ export default function Prompts() {
         <Nav />
         <main className="container" style={{ padding: '2rem 1rem', textAlign: 'center' }}>
           <h1>Custom Prompts</h1>
-          <p style={{ color: 'var(--text-muted)', marginTop: '1rem' }}>
+          <p style={{ color: '#ffffff', marginTop: '1rem' }}>
             Sign in to create and manage your custom prompts.
           </p>
         </main>
@@ -159,7 +159,7 @@ export default function Prompts() {
               {showForm ? 'Cancel' : '+ New Prompt'}
             </button>
           </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '0.5rem' }}>
+          <p style={{ color: '#ffffff', fontSize: '14px', marginTop: '0.5rem', opacity: 0.8 }}>
             Create your own journal prompts to inspire your writing.
           </p>
         </div>
@@ -170,7 +170,7 @@ export default function Prompts() {
             <h3 style={{ fontSize: '14px', marginBottom: '1rem' }}>Create New Prompt</h3>
             
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: '#ffffff', marginBottom: '0.5rem', opacity: 0.9 }}>
                 Prompt Text
               </label>
               <textarea
@@ -182,13 +182,13 @@ export default function Prompts() {
                 maxLength={500}
                 required
               />
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'right', marginTop: '0.25rem' }}>
+              <div style={{ fontSize: '11px', color: '#ffffff', textAlign: 'right', marginTop: '0.25rem', opacity: 0.7 }}>
                 {newPromptText.length}/500
               </div>
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: '#ffffff', marginBottom: '0.5rem', opacity: 0.9 }}>
                 Category
               </label>
               <select
@@ -216,15 +216,15 @@ export default function Prompts() {
 
         {/* Prompts List */}
         <div>
-          <h2 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text-muted)' }}>
+          <h2 style={{ fontSize: '1rem', marginBottom: '1rem', color: '#ffffff' }}>
             Your Prompts ({prompts.length})
           </h2>
           
           {loading ? (
-            <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Loading prompts...</p>
+            <p style={{ textAlign: 'center', color: '#ffffff', opacity: 0.8 }}>Loading prompts...</p>
           ) : prompts.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
-              <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              <p style={{ color: '#ffffff', marginBottom: '1rem', opacity: 0.8 }}>
                 No custom prompts yet.
               </p>
               <button onClick={() => setShowForm(true)} className="btn btn-primary">
@@ -251,7 +251,7 @@ export default function Prompts() {
                         }}>
                           {getCategoryLabel(prompt.category)}
                         </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        <span style={{ fontSize: '11px', color: '#ffffff', opacity: 0.7 }}>
                           {new Date(prompt.created_at).toLocaleDateString()}
                         </span>
                       </div>
@@ -271,9 +271,9 @@ export default function Prompts() {
         </div>
 
         {/* Tips Section */}
-        <div className="card" style={{ marginTop: '2rem', background: 'var(--surface)', borderLeft: '3px solid var(--accent)' }}>
-          <h3 style={{ fontSize: '14px', marginBottom: '0.75rem' }}>Tips for Good Prompts</h3>
-          <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.8 }}>
+        <div className="card" style={{ marginTop: '2rem', background: 'var(--bg-card)', borderLeft: '3px solid #ffffff' }}>
+          <h3 style={{ fontSize: '14px', marginBottom: '0.75rem', color: '#ffffff' }}>Tips for Good Prompts</h3>
+          <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '13px', color: '#ffffff', lineHeight: 1.8, opacity: 0.85 }}>
             <li>Ask open-ended questions that invite reflection</li>
             <li>Be specific enough to provide direction</li>
             <li>Include emotional or sensory elements</li>
