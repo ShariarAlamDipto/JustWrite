@@ -3,10 +3,24 @@ import { createClient } from '@supabase/supabase-js';
 // Use Supabase for persistent storage (works on Vercel serverless)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 // SECURITY: Use service role key for server-side operations only (never expose to client)
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+// Prefer service role key which bypasses RLS
+const supabaseKey = supabaseServiceKey || supabaseAnonKey;
+
+// Log which key is being used (for debugging)
+if (supabaseUrl && supabaseKey) {
+  console.log(`Supabase initialized with ${supabaseServiceKey ? 'SERVICE ROLE' : 'ANON'} key`);
+}
 
 const supabase = supabaseUrl && supabaseKey 
-  ? createClient(supabaseUrl, supabaseKey)
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
   : null;
 
 // In-memory fallback for development without Supabase
@@ -202,15 +216,23 @@ export async function deleteEntry(id: string, userId?: string) {
     
     if (fetchError) {
       console.error('Error fetching entry before delete:', fetchError);
+      throw new Error('Entry not found');
     }
-    console.log('Entry to delete:', existingEntry);
     
-    // Now delete
-    const { error, count } = await supabase
+    console.log('Entry to delete:', existingEntry);
+    console.log(`Comparing user_id: DB="${existingEntry?.user_id}" vs Auth="${userId}"`);
+    
+    // Check if user_id matches (or if entry has no user_id)
+    if (existingEntry?.user_id && existingEntry.user_id !== userId) {
+      console.error('User ID mismatch - not authorized to delete');
+      throw new Error('Not authorized to delete this entry');
+    }
+    
+    // Now delete - use only id since we've already verified ownership
+    const { error } = await supabase
       .from('entries')
       .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
+      .eq('id', id);
     
     if (error) {
       console.error('Supabase deleteEntry error:', error.message, error);
@@ -224,13 +246,14 @@ export async function deleteEntry(id: string, userId?: string) {
       .eq('id', id)
       .single();
     
-    console.log(`Delete result - error: ${error}, count: ${count}, still exists: ${!!checkDeleted}`);
+    console.log(`Delete verification - still exists: ${!!checkDeleted}`);
     
     if (checkDeleted) {
       console.error('Entry still exists after delete!');
       throw new Error('Delete operation failed - entry still exists');
     }
     
+    console.log('Entry deleted successfully');
     return true;
   }
   

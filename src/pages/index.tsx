@@ -66,16 +66,23 @@ const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, tok
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this entry?')) return;
     try {
+      console.log('Deleting entry:', entry.id, 'with token:', token ? 'present' : 'missing');
       const res = await fetch(`/api/entries/${entry.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) {
+      console.log('Delete response status:', res.status);
+      const data = await res.json();
+      console.log('Delete response data:', data);
+      if (res.ok && data.success) {
         onDelete(entry.id);
         onClose();
+      } else {
+        alert(`Failed to delete: ${data.error || 'Unknown error'}`);
       }
     } catch (err) {
       console.error('Failed to delete:', err);
+      alert('Failed to delete entry. Check console for details.');
     }
   };
 

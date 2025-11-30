@@ -169,16 +169,22 @@ const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, tok
   const handleDelete = async () => {
     if (!confirm('Delete this entry? This cannot be undone.')) return;
     try {
+      console.log('Deleting entry:', entry.id);
       const res = await fetch(`/api/entries/${entry.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) {
+      const data = await res.json();
+      console.log('Delete response:', res.status, data);
+      if (res.ok && data.success) {
         onDelete(entry.id);
         onClose();
+      } else {
+        alert(`Failed to delete: ${data.error || 'Unknown error'}`);
       }
     } catch (err) {
       console.error('Failed to delete:', err);
+      alert('Failed to delete entry.');
     }
   };
 
