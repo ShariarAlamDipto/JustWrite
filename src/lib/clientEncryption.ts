@@ -192,3 +192,69 @@ export async function decryptEntries(entries: any[], userId: string): Promise<an
     }))
   );
 }
+
+/**
+ * Migrate unencrypted entries and tasks to encrypted format.
+ * Call this after login to encrypt existing data.
+ */
+export async function migrateToEncryption(
+  token: string,
+  userId: string,
+  entries: any[],
+  tasks: any[]
+): Promise<{ entriesUpdated: number; tasksUpdated: number }> {
+  // Find unencrypted entries
+  const unencryptedEntries = entries.filter(e => e.content && !isEncrypted(e.content));
+  const unencryptedTasks = tasks.filter(t => 
+    (t.title && !isEncrypted(t.title)) || 
+    (t.description && !isEncrypted(t.description))
+  );
+  
+  if (unencryptedEntries.length === 0 && unencryptedTasks.length === 0) {
+    return { entriesUpdated: 0, tasksUpdated: 0 };
+  }
+  
+  // Encrypt entries
+  const encryptedEntries = await Promise.all(
+    unencryptedEntries.map(async (entry) => ({
+      id: entry.id,
+      content: await encryptContent(entry.content, userId)
+    }))
+  );
+  
+  // Encrypt tasks
+  const encryptedTasks = await Promise.all(
+    unencryptedTasks.map(async (task) => ({
+      id: task.id,
+      title: task.title ? await encryptContent(task.title, userId) : undefined,
+      description: task.description ? await encryptContent(task.description, userId) : undefined
+    }))
+  );
+  
+  // Send to server
+  try {
+    const res = await fetch('/api/migrate-encryption', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        entries: encryptedEntries,
+        tasks: encryptedTasks
+      })
+    });
+    
+    if (res.ok) {
+      const result = await res.json();
+      return {
+        entriesUpdated: result.entriesUpdated || 0,
+        tasksUpdated: result.tasksUpdated || 0
+      };
+    }
+  } catch (e) {
+    console.error('Migration failed:', e);
+  }
+  
+  return { entriesUpdated: 0, tasksUpdated: 0 };
+}

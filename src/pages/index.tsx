@@ -3,7 +3,7 @@ import DistillView from '../components/DistillView';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
 import { getRandomPrompt, PROMPT_CATEGORIES, ACTIVITY_TAGS, JournalPrompt } from '../lib/prompts';
-import { encryptContent, decryptEntries } from '../lib/clientEncryption';
+import { encryptContent, decryptEntries, migrateToEncryption, isEncrypted } from '../lib/clientEncryption';
 
 // Mood level mapping (no emojis)
 const getMoodLabel = (mood: number) => {
@@ -297,6 +297,9 @@ export default function Home() {
   
   // Stats state
   const [stats, setStats] = useState<any>(null);
+  
+  // Migration state - tracks if we've checked for unencrypted data
+  const [migrationDone, setMigrationDone] = useState(false);
 
   useEffect(() => { 
     if (user && token) {
@@ -306,6 +309,32 @@ export default function Home() {
       setDailyPrompts([getRandomPrompt(), getRandomPrompt(), getRandomPrompt()]);
     }
   }, [user, token]);
+  
+  // Run migration check once after entries are loaded
+  useEffect(() => {
+    if (!user?.id || !token || migrationDone || entries.length === 0) return;
+    
+    // Check if any entries need migration
+    const needsMigration = entries.some(e => e.content && !isEncrypted(e.content));
+    if (needsMigration) {
+      // Fetch tasks too for migration
+      fetch('/api/tasks', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(res => res.json())
+        .then(async (json) => {
+          const tasks = json.tasks || [];
+          const result = await migrateToEncryption(token, user.id, entries, tasks);
+          if (result.entriesUpdated > 0 || result.tasksUpdated > 0) {
+            console.log(`Migration complete: ${result.entriesUpdated} entries, ${result.tasksUpdated} tasks encrypted`);
+            // Refresh entries after migration
+            fetchEntries();
+          }
+          setMigrationDone(true);
+        })
+        .catch(console.error);
+    } else {
+      setMigrationDone(true);
+    }
+  }, [user?.id, token, entries, migrationDone]);
 
   const fetchStats = useCallback(async () => {
     try {
