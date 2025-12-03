@@ -6,6 +6,7 @@ import 'package:flutter_sound/flutter_sound.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/voice_entry.dart';
 
 /// Service for recording, playing, and managing voice entries
@@ -50,14 +51,45 @@ class VoiceService {
     if (_recorderInitialized) return;
     await _recorder.openRecorder();
     _recorderInitialized = true;
+    debugPrint('[VoiceService] Recorder initialized');
+  }
+
+  /// Request microphone permission
+  Future<bool> _requestPermission() async {
+    final status = await Permission.microphone.status;
+    debugPrint('[VoiceService] Microphone permission status: $status');
+    
+    if (status.isGranted) {
+      return true;
+    }
+    
+    if (status.isDenied) {
+      final result = await Permission.microphone.request();
+      debugPrint('[VoiceService] Permission request result: $result');
+      return result.isGranted;
+    }
+    
+    if (status.isPermanentlyDenied) {
+      debugPrint('[VoiceService] Permission permanently denied, opening settings');
+      await openAppSettings();
+      return false;
+    }
+    
+    return false;
   }
 
   /// Check if recording permission is granted
   Future<bool> hasPermission() async {
     try {
+      final hasPermission = await _requestPermission();
+      if (!hasPermission) {
+        debugPrint('[VoiceService] No microphone permission');
+        return false;
+      }
       await _initRecorder();
       return true;
     } catch (e) {
+      debugPrint('[VoiceService] Error checking permission: $e');
       return false;
     }
   }
@@ -67,12 +99,21 @@ class VoiceService {
     try {
       if (_isRecording) return false;
       
+      // Check permission first
+      final hasPermission = await _requestPermission();
+      if (!hasPermission) {
+        debugPrint('[VoiceService] Cannot start recording - no permission');
+        return false;
+      }
+      
       await _initRecorder();
 
       // Get temp directory for recording
       final directory = await getTemporaryDirectory();
       final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.aac';
       _currentRecordingPath = '${directory.path}/$fileName';
+
+      debugPrint('[VoiceService] Starting recording to: $_currentRecordingPath');
 
       // Start recording with optimal settings
       await _recorder.startRecorder(
@@ -94,7 +135,7 @@ class VoiceService {
         }
       });
 
-      debugPrint('[VoiceService] Recording started: $_currentRecordingPath');
+      debugPrint('[VoiceService] Recording started successfully!');
       return true;
     } catch (e) {
       debugPrint('[VoiceService] Error starting recording: $e');

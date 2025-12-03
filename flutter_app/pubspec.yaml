@@ -56,6 +56,7 @@ dependencies:
   # Audio Recording & Playback
   flutter_sound: ^9.2.13
   audioplayers: ^5.2.1
+  permission_handler: ^11.3.1
 
   # Icons & UI
   cupertino_icons: ^1.0.2
