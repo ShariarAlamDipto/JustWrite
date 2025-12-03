@@ -190,53 +190,79 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Success message when email is sent
                 if (_emailSent && _sentToEmail != null) ...[
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     margin: const EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                        color: const Color(0xFF10B981),
+                        width: 2,
                       ),
                     ),
                     child: Column(
                       children: [
-                        const Icon(
-                          Icons.mark_email_read_outlined,
-                          color: Color(0xFF10B981),
-                          size: 32,
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check_circle,
+                            color: Color(0xFF10B981),
+                            size: 40,
+                          ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 16),
                         const Text(
-                          'Confirmation link sent to email',
+                          'Email Sent Successfully!',
                           style: TextStyle(
                             fontFamily: 'Times New Roman',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF10B981),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _sentToEmail!,
-                          style: const TextStyle(
-                            fontFamily: 'Times New Roman',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                             color: Color(0xFF059669),
                           ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Check your inbox and enter the 6-digit code below',
+                          'We sent a 6-digit code to:',
                           style: TextStyle(
                             fontFamily: 'Times New Roman',
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                            fontSize: 14,
+                            color: Colors.grey[700],
                           ),
                           textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _sentToEmail!,
+                          style: const TextStyle(
+                            fontFamily: 'Times New Roman',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF047857),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'Enter the code below to sign in',
+                            style: TextStyle(
+                              fontFamily: 'Times New Roman',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[800],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                       ],
                     ),

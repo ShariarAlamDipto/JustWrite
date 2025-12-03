@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/useAuth';
 import MoodSlider from '@/components/MoodSlider';
 import PromptCard from '@/components/PromptCard';
 import AIExtractedTasks from '@/components/AIExtractedTasks';
+import { encryptContent } from '@/lib/clientEncryption';
 
 const SCIENCE_BACKED_PROMPTS = [
   {
@@ -122,6 +123,20 @@ export default function EntryPage() {
     if (!token) return;
     setSavingStatus('saving');
     try {
+      // Encrypt content before saving
+      let contentToSave = entryData.freeText;
+      let titleToSave = entryData.title;
+      if (user?.id) {
+        try {
+          contentToSave = await encryptContent(entryData.freeText, user.id);
+          if (titleToSave) {
+            titleToSave = await encryptContent(titleToSave, user.id);
+          }
+        } catch (e) {
+          console.error('Failed to encrypt:', e);
+        }
+      }
+      
       const res = await fetch('/api/entries', {
         method: 'POST',
         headers: {
@@ -129,8 +144,8 @@ export default function EntryPage() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          content: entryData.freeText,
-          title: entryData.title,
+          content: contentToSave,
+          title: titleToSave,
           metadata: {
             mood: entryData.mood,
             moodIntensity: entryData.moodIntensity,

@@ -3,6 +3,7 @@ import DistillView from '../components/DistillView';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
 import { getRandomPrompt, PROMPT_CATEGORIES, ACTIVITY_TAGS, JournalPrompt } from '../lib/prompts';
+import { encryptContent, decryptEntries } from '../lib/clientEncryption';
 
 // Mood level mapping (no emojis)
 const getMoodLabel = (mood: number) => {
@@ -28,10 +29,16 @@ const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, tok
   const [editContent, setEditContent] = useState(entry?.content || '');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     if (entry) setEditContent(entry.content);
   }, [entry]);
+
+  // Reset expanded state when entry changes
+  useEffect(() => {
+    setIsExpanded(false);
+  }, [entry?.id]);
 
   if (!isOpen || !entry) return null;
 
@@ -120,18 +127,31 @@ const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, tok
             autoFocus
           />
         ) : (
-          <div style={{
-            background: 'var(--input-bg)',
-            padding: '1.25rem',
-            borderRadius: 'var(--radius-md)',
-            marginBottom: '1rem',
-            whiteSpace: 'pre-wrap',
-            lineHeight: 1.7,
-            maxHeight: '300px',
-            overflow: 'auto',
-          }}>
-            {entry.content}
-          </div>
+          <>
+            <div style={{
+              background: 'var(--input-bg)',
+              padding: '1.25rem',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '0.5rem',
+              whiteSpace: 'pre-wrap',
+              lineHeight: 1.7,
+              maxHeight: isExpanded ? 'none' : '300px',
+              overflow: isExpanded ? 'visible' : 'auto',
+              userSelect: 'text',
+              cursor: 'text',
+            }}>
+              {entry.content}
+            </div>
+            {entry.content.length > 500 && (
+              <button 
+                className="btn" 
+                onClick={() => setIsExpanded(!isExpanded)}
+                style={{ fontSize: '12px', marginBottom: '1rem', padding: '0.25rem 0.75rem' }}
+              >
+                {isExpanded ? 'Show Less' : 'View Full Entry'}
+              </button>
+            )}
+          </>
         )}
 
         {/* Summary if exists */}
@@ -309,13 +329,17 @@ export default function Home() {
       });
       if (res.ok) {
         const json = await res.json();
-        setEntries(json.entries || []);
+        // Decrypt entries client-side
+        const decryptedEntries = user?.id 
+          ? await decryptEntries(json.entries || [], user.id)
+          : json.entries || [];
+        setEntries(decryptedEntries);
       }
     } catch (err) {
       console.error('Failed to fetch entries:', err);
     }
     setLoading(false);
-  }, [token]);
+  }, [token, user?.id]);
 
   const createEntry = useCallback(async () => {
     if (!content.trim()) return;
@@ -332,6 +356,11 @@ export default function Home() {
     }
     
     try {
+      // Encrypt content before sending to server
+      const encryptedContent = user?.id 
+        ? await encryptContent(fullContent, user.id)
+        : fullContent;
+      
       const res = await fetch('/api/entries', {
         method: 'POST',
         headers: {
@@ -339,7 +368,7 @@ export default function Home() {
           'Authorization': `Bearer ${token || ''}`
         },
         body: JSON.stringify({ 
-          content: fullContent, 
+          content: encryptedContent, 
           mood, 
           source: 'text',
           is_locked: false
@@ -350,7 +379,9 @@ export default function Home() {
         setContent('');
         setMood(50);
         setPromptAnswers(['', '', '']);
-        setEntries(prev => [json.entry, ...prev]);
+        // Store decrypted version locally for display
+        const displayEntry = { ...json.entry, content: fullContent };
+        setEntries(prev => [displayEntry, ...prev]);
         // Refresh stats after new entry
         fetchStats();
       } else {
@@ -361,7 +392,7 @@ export default function Home() {
       alert('Failed to save. Try again.');
     }
     setSaving(false);
-  }, [content, mood, token, promptAnswers, dailyPrompts, fetchStats]);
+  }, [content, mood, token, promptAnswers, dailyPrompts, fetchStats, user?.id]);
 
   const distill = useCallback(async (entryId: string) => {
     setDistillLoading(entryId);

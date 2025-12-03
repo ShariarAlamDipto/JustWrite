@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
+import { encryptContent, decryptContent, isEncrypted } from '../lib/clientEncryption';
 
 // Priority indicator colors
 const priorityColors: Record<string, string> = {
@@ -302,13 +303,25 @@ export default function TasksPage() {
       });
       if (res.ok) {
         const json = await res.json();
-        setTasks(json.tasks || []);
+        // Decrypt task titles and descriptions
+        const decrypted = await Promise.all((json.tasks || []).map(async (task: any) => {
+          if (user?.id) {
+            if (task.title && isEncrypted(task.title)) {
+              task.title = await decryptContent(task.title, user.id);
+            }
+            if (task.description && isEncrypted(task.description)) {
+              task.description = await decryptContent(task.description, user.id);
+            }
+          }
+          return task;
+        }));
+        setTasks(decrypted);
       }
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
     }
     setLoading(false);
-  }, [token]);
+  }, [token, user?.id]);
 
   useEffect(() => {
     if (user && token) fetchTasks();
@@ -318,6 +331,20 @@ export default function TasksPage() {
     if (!token) return;
     setAddLoading(true);
     try {
+      // Encrypt task title and description
+      let titleToSave = taskData.title;
+      let descToSave = taskData.description;
+      if (user?.id) {
+        try {
+          titleToSave = await encryptContent(taskData.title, user.id);
+          if (descToSave) {
+            descToSave = await encryptContent(taskData.description, user.id);
+          }
+        } catch (e) {
+          console.error('Failed to encrypt task:', e);
+        }
+      }
+      
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: {
@@ -325,12 +352,23 @@ export default function TasksPage() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          ...taskData,
+          title: titleToSave,
+          description: descToSave,
+          priority: taskData.priority,
           status: 'todo'
         })
       });
       if (res.ok) {
         const json = await res.json();
+        // Decrypt returned task for display
+        if (json.task && user?.id) {
+          if (json.task.title && isEncrypted(json.task.title)) {
+            json.task.title = await decryptContent(json.task.title, user.id);
+          }
+          if (json.task.description && isEncrypted(json.task.description)) {
+            json.task.description = await decryptContent(json.task.description, user.id);
+          }
+        }
         setTasks(prev => [json.task, ...prev]);
         setShowAddModal(false);
       }
@@ -338,7 +376,7 @@ export default function TasksPage() {
       console.error('Failed to add task:', err);
     }
     setAddLoading(false);
-  }, [token]);
+  }, [token, user?.id]);
 
   const toggleDone = useCallback(async (t: any) => {
     if (!token) return;

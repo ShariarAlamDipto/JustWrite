@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import { useRouter } from 'next/router';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
+import { encryptContent, decryptContent, isEncrypted } from '../lib/clientEncryption';
 
 // Mood level mapping
 const getMoodLabel = (mood: number) => {
@@ -450,7 +451,18 @@ export default function LockedJournal() {
       });
       if (res.ok) {
         const json = await res.json();
-        setEntries(json.entries || []);
+        // Decrypt entries if encrypted
+        const decrypted = await Promise.all((json.entries || []).map(async (entry: any) => {
+          if (entry.content && isEncrypted(entry.content) && user?.id) {
+            try {
+              entry.content = await decryptContent(entry.content, user.id);
+            } catch (e) {
+              console.error('Failed to decrypt entry:', e);
+            }
+          }
+          return entry;
+        }));
+        setEntries(decrypted);
       }
     } catch (err) {
       console.error('Failed to load entries:', err);
@@ -490,6 +502,16 @@ export default function LockedJournal() {
     if (!content.trim() || !token) return;
     setSaving(true);
     try {
+      // Encrypt content before saving
+      let contentToSave = content;
+      if (user?.id) {
+        try {
+          contentToSave = await encryptContent(content, user.id);
+        } catch (e) {
+          console.error('Failed to encrypt:', e);
+        }
+      }
+      
       const res = await fetch('/api/entries', {
         method: 'POST',
         headers: {
@@ -497,7 +519,7 @@ export default function LockedJournal() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          content,
+          content: contentToSave,
           mood,
           source: 'text',
           is_locked: true
@@ -505,6 +527,14 @@ export default function LockedJournal() {
       });
       if (res.ok) {
         const json = await res.json();
+        // Decrypt the returned entry for display
+        if (json.entry && json.entry.content && isEncrypted(json.entry.content) && user?.id) {
+          try {
+            json.entry.content = await decryptContent(json.entry.content, user.id);
+          } catch (e) {
+            console.error('Failed to decrypt returned entry:', e);
+          }
+        }
         setEntries(prev => [json.entry, ...prev]);
         setContent('');
         setMood(50);

@@ -5,7 +5,6 @@ import '../../models/entry.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/entry_provider.dart';
 import '../../providers/task_provider.dart';
-import '../../providers/theme_provider.dart';
 import '../../services/llm_service.dart';
 import '../../theme/app_theme.dart';
 import '../entry/entry_screen.dart';
@@ -488,6 +487,7 @@ class _EntryDetailSheetState extends State<_EntryDetailSheet> {
   String? _summary;
   List<Map<String, dynamic>> _extractedTasks = [];
   bool _isEditing = false;
+  bool _isExpanded = false;
   late TextEditingController _editController;
 
   @override
@@ -694,17 +694,41 @@ class _EntryDetailSheetState extends State<_EntryDetailSheet> {
                 ),
               )
             else
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? AppTheme.darkCard : AppTheme.greyLight.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  widget.entry.content,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    constraints: _isExpanded 
+                        ? null 
+                        : const BoxConstraints(maxHeight: 200),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.darkCard : AppTheme.greyLight.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        widget.entry.content,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ),
+                  ),
+                  if (widget.entry.content.length > 300) ...[
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: () => setState(() => _isExpanded = !_isExpanded),
+                      icon: Icon(
+                        _isExpanded ? Icons.expand_less : Icons.expand_more,
+                        color: isDark ? Colors.white : AppTheme.navy,
+                      ),
+                      label: Text(
+                        _isExpanded ? 'Show Less' : 'View Full Entry',
+                        style: TextStyle(color: isDark ? Colors.white : AppTheme.navy),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             const SizedBox(height: 16),
             
@@ -783,7 +807,7 @@ class _EntryDetailSheetState extends State<_EntryDetailSheet> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(_summary!, style: Theme.of(context).textTheme.bodyMedium),
+                    SelectableText(_summary!, style: Theme.of(context).textTheme.bodyMedium),
                   ],
                 ),
               ),

@@ -289,7 +289,7 @@ class _BrainstormScreenState extends State<BrainstormScreen> with AutomaticKeepA
                 children: [
                   Text('SUMMARY', style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 8),
-                  Text(_summary!, style: Theme.of(context).textTheme.bodyMedium),
+                  SelectableText(_summary!, style: Theme.of(context).textTheme.bodyMedium),
                 ],
               ),
             ),

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
+import { encryptContent } from '../lib/clientEncryption';
 
 // Priority colors
 const priorityColors: Record<string, string> = {
@@ -53,6 +54,11 @@ export default function BrainstormPage() {
     if (!freeText.trim()) return;
     setSavingIdea(true);
     try {
+      // Encrypt content before sending to server
+      const encryptedContent = user?.id 
+        ? await encryptContent(freeText.trim(), user.id)
+        : freeText.trim();
+      
       const res = await fetch('/api/entries', {
         method: 'POST',
         headers: {
@@ -60,7 +66,7 @@ export default function BrainstormPage() {
           'Authorization': `Bearer ${token || ''}`
         },
         body: JSON.stringify({ 
-          content: freeText.trim(), 
+          content: encryptedContent, 
           source: 'idea',
           is_locked: false
           // Note: no mood field for ideas
