@@ -62,6 +62,12 @@ export function Nav() {
             Ideas
           </Link>
           <Link 
+            href="/voice" 
+            style={{...styles.navLink, ...(isActive('/voice') ? styles.navLinkActive : {})}}
+          >
+            Voice
+          </Link>
+          <Link 
             href="/prompts" 
             style={{...styles.navLink, ...(isActive('/prompts') ? styles.navLinkActive : {})}}
           >
@@ -131,6 +137,9 @@ export function Nav() {
           </Link>
           <Link href="/brainstorm" style={{...styles.mobileLink, ...(isActive('/brainstorm') ? styles.mobileLinkActive : {})}}>
             Ideas
+          </Link>
+          <Link href="/voice" style={{...styles.mobileLink, ...(isActive('/voice') ? styles.mobileLinkActive : {})}}>
+            Voice
           </Link>
           <Link href="/prompts" style={{...styles.mobileLink, ...(isActive('/prompts') ? styles.mobileLinkActive : {})}}>
             Prompts

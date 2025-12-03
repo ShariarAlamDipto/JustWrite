@@ -9,6 +9,7 @@ import 'package:justwrite_mobile/providers/task_provider.dart';
 import 'package:justwrite_mobile/providers/theme_provider.dart';
 import 'package:justwrite_mobile/screens/auth/login_screen.dart';
 import 'package:justwrite_mobile/screens/home/home_screen.dart';
+import 'package:justwrite_mobile/screens/voice/voice_entries_screen.dart';
 import 'package:justwrite_mobile/theme/app_theme.dart';
 
 void main() async {
@@ -78,6 +79,9 @@ class JustWriteApp extends StatelessWidget {
                 return const LoginScreen();
               },
             ),
+            routes: {
+              '/voice': (context) => const VoiceEntriesScreen(),
+            },
           );
         },
       ),

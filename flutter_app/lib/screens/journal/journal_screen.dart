@@ -81,8 +81,10 @@ class _JournalScreenState extends State<JournalScreen> {
                 const SizedBox(width: 8),
                 _FilterChip(
                   label: 'Voice',
-                  isSelected: _selectedFilter == 'voice',
-                  onSelected: () => setState(() => _selectedFilter = 'voice'),
+                  isSelected: false,
+                  onSelected: () {
+                    Navigator.pushNamed(context, '/voice');
+                  },
                 ),
               ],
             ),
