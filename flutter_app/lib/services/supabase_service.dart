@@ -88,7 +88,7 @@ class SupabaseService {
       debugPrint('[SupabaseService] ========== SEND MAGIC LINK ==========');
       debugPrint('[SupabaseService] Email: $email');
       debugPrint('[SupabaseService] Redirect URL: $_redirectUrl');
-      debugPrint('[SupabaseService] Supabase client initialized: ${supabase != null}');
+      debugPrint('[SupabaseService] Supabase client initialized: true');
       
       debugPrint('[SupabaseService] Calling signInWithOtp...');
       await supabase.auth.signInWithOtp(
