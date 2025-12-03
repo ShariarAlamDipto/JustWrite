@@ -4,12 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart' as p;
 import '../models/voice_entry.dart';
 
-/// Service for recording, playing, and managing voice entries
+/// Service for recording, playing, and managing voice entries locally
 class VoiceService {
   static final VoiceService _instance = VoiceService._internal();
   factory VoiceService() => _instance;
@@ -20,20 +21,24 @@ class VoiceService {
   final _uuid = const Uuid();
   bool _recorderInitialized = false;
   
+  // Local database
+  Database? _database;
+  String? _voiceStorageDir;
+
   // Recording state
   bool _isRecording = false;
   String? _currentRecordingPath;
   DateTime? _recordingStartTime;
-  
+
   // Playback state
   bool _isPlaying = false;
   String? _currentPlayingId;
-  
+
   // Stream controllers for state updates
   final _recordingStateController = StreamController<bool>.broadcast();
   final _playbackStateController = StreamController<PlaybackState>.broadcast();
   final _recordingDurationController = StreamController<Duration>.broadcast();
-  
+
   Timer? _durationTimer;
 
   // Getters
@@ -44,7 +49,51 @@ class VoiceService {
   Stream<PlaybackState> get playbackState => _playbackStateController.stream;
   Stream<Duration> get recordingDuration => _recordingDurationController.stream;
 
-  SupabaseClient get _supabase => Supabase.instance.client;
+  /// Initialize the local database
+  Future<Database> _getDatabase() async {
+    if (_database != null) return _database!;
+
+    final dbPath = await getDatabasesPath();
+    final path = p.join(dbPath, 'voice_entries.db');
+
+    _database = await openDatabase(
+      path,
+      version: 1,
+      onCreate: (db, version) async {
+        await db.execute('''
+          CREATE TABLE voice_entries (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            audio_path TEXT,
+            audio_duration INTEGER,
+            transcript TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT,
+            metadata TEXT
+          )
+        ''');
+        debugPrint('[VoiceService] Database created');
+      },
+    );
+
+    return _database!;
+  }
+
+  /// Get the voice storage directory
+  Future<String> _getVoiceStorageDir() async {
+    if (_voiceStorageDir != null) return _voiceStorageDir!;
+
+    final appDir = await getApplicationDocumentsDirectory();
+    final voiceDir = Directory(p.join(appDir.path, 'voice_recordings'));
+    
+    if (!await voiceDir.exists()) {
+      await voiceDir.create(recursive: true);
+    }
+    
+    _voiceStorageDir = voiceDir.path;
+    return _voiceStorageDir!;
+  }
 
   /// Initialize the recorder
   Future<void> _initRecorder() async {
@@ -58,23 +107,23 @@ class VoiceService {
   Future<bool> _requestPermission() async {
     final status = await Permission.microphone.status;
     debugPrint('[VoiceService] Microphone permission status: $status');
-    
+
     if (status.isGranted) {
       return true;
     }
-    
+
     if (status.isDenied) {
       final result = await Permission.microphone.request();
       debugPrint('[VoiceService] Permission request result: $result');
       return result.isGranted;
     }
-    
+
     if (status.isPermanentlyDenied) {
       debugPrint('[VoiceService] Permission permanently denied, opening settings');
       await openAppSettings();
       return false;
     }
-    
+
     return false;
   }
 
@@ -98,20 +147,20 @@ class VoiceService {
   Future<bool> startRecording() async {
     try {
       if (_isRecording) return false;
-      
+
       // Check permission first
       final hasPermission = await _requestPermission();
       if (!hasPermission) {
         debugPrint('[VoiceService] Cannot start recording - no permission');
         return false;
       }
-      
+
       await _initRecorder();
 
-      // Get temp directory for recording
-      final directory = await getTemporaryDirectory();
+      // Get storage directory for recording
+      final storageDir = await _getVoiceStorageDir();
       final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.aac';
-      _currentRecordingPath = '${directory.path}/$fileName';
+      _currentRecordingPath = p.join(storageDir, fileName);
 
       debugPrint('[VoiceService] Starting recording to: $_currentRecordingPath');
 
@@ -126,7 +175,7 @@ class VoiceService {
       _isRecording = true;
       _recordingStartTime = DateTime.now();
       _recordingStateController.add(true);
-      
+
       // Start duration timer
       _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (_recordingStartTime != null) {
@@ -147,14 +196,14 @@ class VoiceService {
   Future<String?> stopRecording() async {
     try {
       if (!_isRecording) return null;
-      
+
       _durationTimer?.cancel();
       _durationTimer = null;
-      
+
       final path = await _recorder.stopRecorder();
       _isRecording = false;
       _recordingStateController.add(false);
-      
+
       debugPrint('[VoiceService] Recording stopped: $path');
       return path ?? _currentRecordingPath;
     } catch (e) {
@@ -170,19 +219,20 @@ class VoiceService {
     try {
       _durationTimer?.cancel();
       _durationTimer = null;
-      
+
       if (_isRecording) {
         await _recorder.stopRecorder();
       }
-      
-      // Delete the temp file
+
+      // Delete the file
       if (_currentRecordingPath != null) {
         final file = File(_currentRecordingPath!);
         if (await file.exists()) {
           await file.delete();
+          debugPrint('[VoiceService] Deleted cancelled recording');
         }
       }
-      
+
       _isRecording = false;
       _currentRecordingPath = null;
       _recordingStartTime = null;
@@ -198,110 +248,138 @@ class VoiceService {
     return DateTime.now().difference(_recordingStartTime!);
   }
 
-  /// Upload audio file to Supabase Storage and create voice entry
+  /// Save voice entry locally
   Future<VoiceEntry?> saveVoiceEntry({
     required String title,
     required String filePath,
     int? duration,
   }) async {
     try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) {
-        debugPrint('[VoiceService] No user logged in');
-        return null;
-      }
-
       final file = File(filePath);
       if (!await file.exists()) {
         debugPrint('[VoiceService] File not found: $filePath');
         return null;
       }
 
-      // Generate unique file name
-      final fileExt = filePath.split('.').last;
-      final fileName = '${user.id}/${_uuid.v4()}.$fileExt';
+      final db = await _getDatabase();
+      final id = _uuid.v4();
+      final now = DateTime.now();
       
-      // Upload to Supabase Storage
-      final fileBytes = await file.readAsBytes();
-      final uploadPath = await _supabase.storage
-          .from('voice-recordings')
-          .uploadBinary(fileName, fileBytes, fileOptions: const FileOptions(
-            contentType: 'audio/aac',
-          ));
-      
-      debugPrint('[VoiceService] Uploaded to: $uploadPath');
-      
-      // Get public URL (or signed URL for private bucket)
-      final audioUrl = _supabase.storage
-          .from('voice-recordings')
-          .getPublicUrl(fileName);
+      // Get file size for metadata
+      final fileSize = await file.length();
 
-      // Create voice entry in database
-      final entryData = {
-        'user_id': user.id,
+      final entryMap = {
+        'id': id,
+        'user_id': 'local_user', // Local storage doesn't need real user
         'title': title,
-        'audio_url': audioUrl,
+        'audio_path': filePath,
         'audio_duration': duration,
-        'metadata': {
-          'file_name': fileName,
-          'file_size': fileBytes.length,
-          'format': fileExt,
-        },
+        'transcript': null,
+        'created_at': now.toIso8601String(),
+        'updated_at': null,
+        'metadata': '{"file_size": $fileSize, "format": "aac"}',
       };
 
-      final response = await _supabase
-          .from('voice_entries')
-          .insert(entryData)
-          .select()
-          .single();
+      await db.insert('voice_entries', entryMap);
+      debugPrint('[VoiceService] Voice entry saved locally: $id');
 
-      // Clean up temp file
-      await file.delete();
-
-      return VoiceEntry.fromJson(response);
+      // Convert to VoiceEntry model
+      return VoiceEntry(
+        id: id,
+        userId: 'local_user',
+        title: title,
+        audioUrl: filePath, // Use local path as URL
+        audioDuration: duration,
+        transcript: null,
+        createdAt: now,
+        updatedAt: null,
+        metadata: {'file_size': fileSize, 'format': 'aac'},
+      );
     } catch (e) {
       debugPrint('[VoiceService] Error saving voice entry: $e');
       return null;
     }
   }
 
-  /// Load all voice entries for current user
+  /// Load all voice entries from local storage
   Future<List<VoiceEntry>> loadVoiceEntries() async {
     try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return [];
+      final db = await _getDatabase();
+      final results = await db.query(
+        'voice_entries',
+        orderBy: 'created_at DESC',
+      );
 
-      final response = await _supabase
-          .from('voice_entries')
-          .select()
-          .eq('user_id', user.id)
-          .order('created_at', ascending: false);
+      debugPrint('[VoiceService] Loaded ${results.length} voice entries');
 
-      return (response as List)
-          .map((json) => VoiceEntry.fromJson(json))
-          .toList();
+      return results.map((row) {
+        return VoiceEntry(
+          id: row['id'] as String,
+          userId: row['user_id'] as String,
+          title: row['title'] as String,
+          audioUrl: row['audio_path'] as String?, // Local path
+          audioDuration: row['audio_duration'] as int?,
+          transcript: row['transcript'] as String?,
+          createdAt: DateTime.parse(row['created_at'] as String),
+          updatedAt: row['updated_at'] != null
+              ? DateTime.parse(row['updated_at'] as String)
+              : null,
+          metadata: row['metadata'] != null
+              ? Map<String, dynamic>.from(
+                  _parseMetadata(row['metadata'] as String))
+              : null,
+        );
+      }).toList();
     } catch (e) {
       debugPrint('[VoiceService] Error loading voice entries: $e');
       return [];
     }
   }
 
+  /// Parse metadata JSON string
+  Map<String, dynamic> _parseMetadata(String json) {
+    try {
+      // Simple JSON parsing for metadata
+      final cleaned = json.replaceAll('{', '').replaceAll('}', '');
+      final pairs = cleaned.split(',');
+      final result = <String, dynamic>{};
+      for (final pair in pairs) {
+        final parts = pair.split(':');
+        if (parts.length == 2) {
+          final key = parts[0].trim().replaceAll('"', '');
+          final value = parts[1].trim().replaceAll('"', '');
+          // Try to parse as int
+          final intValue = int.tryParse(value);
+          result[key] = intValue ?? value;
+        }
+      }
+      return result;
+    } catch (e) {
+      return {};
+    }
+  }
+
   /// Delete a voice entry
   Future<bool> deleteVoiceEntry(VoiceEntry entry) async {
     try {
-      // Delete from storage first
-      if (entry.metadata?['file_name'] != null) {
-        await _supabase.storage
-            .from('voice-recordings')
-            .remove([entry.metadata!['file_name']]);
+      // Delete the audio file
+      if (entry.audioUrl != null) {
+        final file = File(entry.audioUrl!);
+        if (await file.exists()) {
+          await file.delete();
+          debugPrint('[VoiceService] Deleted audio file: ${entry.audioUrl}');
+        }
       }
 
       // Delete from database
-      await _supabase
-          .from('voice_entries')
-          .delete()
-          .eq('id', entry.id);
+      final db = await _getDatabase();
+      await db.delete(
+        'voice_entries',
+        where: 'id = ?',
+        whereArgs: [entry.id],
+      );
 
+      debugPrint('[VoiceService] Deleted voice entry: ${entry.id}');
       return true;
     } catch (e) {
       debugPrint('[VoiceService] Error deleting voice entry: $e');
@@ -309,8 +387,8 @@ class VoiceService {
     }
   }
 
-  /// Play audio from URL
-  Future<void> playAudio(String url, String entryId) async {
+  /// Play audio from local file
+  Future<void> playAudio(String path, String entryId) async {
     try {
       if (_isPlaying && _currentPlayingId == entryId) {
         // Pause if same audio is playing
@@ -322,9 +400,16 @@ class VoiceService {
 
       // Stop any current playback
       await _player.stop();
-      
-      // Play new audio
-      await _player.play(UrlSource(url));
+
+      // Check if file exists
+      final file = File(path);
+      if (!await file.exists()) {
+        debugPrint('[VoiceService] Audio file not found: $path');
+        return;
+      }
+
+      // Play from local file
+      await _player.play(DeviceFileSource(path));
       _isPlaying = true;
       _currentPlayingId = entryId;
       _playbackStateController.add(PlaybackState(isPlaying: true, entryId: entryId));
@@ -335,6 +420,8 @@ class VoiceService {
         _currentPlayingId = null;
         _playbackStateController.add(PlaybackState(isPlaying: false, entryId: null));
       });
+      
+      debugPrint('[VoiceService] Playing audio: $path');
     } catch (e) {
       debugPrint('[VoiceService] Error playing audio: $e');
     }
@@ -351,20 +438,43 @@ class VoiceService {
   /// Update voice entry title
   Future<VoiceEntry?> updateVoiceEntry(String id, {String? title, String? transcript}) async {
     try {
-      final updates = <String, dynamic>{};
+      final db = await _getDatabase();
+      final updates = <String, dynamic>{
+        'updated_at': DateTime.now().toIso8601String(),
+      };
       if (title != null) updates['title'] = title;
       if (transcript != null) updates['transcript'] = transcript;
-      
-      if (updates.isEmpty) return null;
 
-      final response = await _supabase
-          .from('voice_entries')
-          .update(updates)
-          .eq('id', id)
-          .select()
-          .single();
+      await db.update(
+        'voice_entries',
+        updates,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
 
-      return VoiceEntry.fromJson(response);
+      // Reload the entry
+      final results = await db.query(
+        'voice_entries',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      if (results.isEmpty) return null;
+
+      final row = results.first;
+      return VoiceEntry(
+        id: row['id'] as String,
+        userId: row['user_id'] as String,
+        title: row['title'] as String,
+        audioUrl: row['audio_path'] as String?,
+        audioDuration: row['audio_duration'] as int?,
+        transcript: row['transcript'] as String?,
+        createdAt: DateTime.parse(row['created_at'] as String),
+        updatedAt: row['updated_at'] != null
+            ? DateTime.parse(row['updated_at'] as String)
+            : null,
+        metadata: null,
+      );
     } catch (e) {
       debugPrint('[VoiceService] Error updating voice entry: $e');
       return null;
@@ -379,6 +489,7 @@ class VoiceService {
     _recordingStateController.close();
     _playbackStateController.close();
     _recordingDurationController.close();
+    _database?.close();
   }
 }
 
@@ -386,6 +497,6 @@ class VoiceService {
 class PlaybackState {
   final bool isPlaying;
   final String? entryId;
-  
+
   PlaybackState({required this.isPlaying, this.entryId});
 }
