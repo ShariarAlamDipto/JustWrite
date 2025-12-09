@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:provider/provider.dart';
 import 'dart:async';
 import '../../models/voice_entry.dart';
 import '../../services/voice_service.dart';
+import '../../providers/theme_provider.dart';
+import '../../theme/app_theme.dart';
 
-// Theme colors
+// Accent color (consistent across themes)
 const Color _accentCyan = Color(0xFF00ffd5);
-const Color _bgDark = Color(0xFF0a0a0a);
-const Color _cardDark = Color(0xFF141414);
-const Color _textMuted = Color(0xFF666666);
 
 class VoiceEntriesScreen extends StatefulWidget {
   const VoiceEntriesScreen({super.key});
@@ -159,20 +159,21 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
   }
 
   Future<void> _deleteEntry(VoiceEntry entry) async {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: _cardDark,
+        backgroundColor: isDark ? const Color(0xFF141414) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete?', style: TextStyle(color: Colors.white)),
+        title: Text('Delete?', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
         content: Text(
           'Delete "${entry.title}"?',
-          style: const TextStyle(color: _textMuted),
+          style: TextStyle(color: isDark ? const Color(0xFF666666) : Colors.grey[600]),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey[400])),
+            child: Text('Cancel', style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -208,21 +209,25 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+    final bgColor = isDark ? const Color(0xFF0a0a0a) : Colors.grey[50]!;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    
     return Scaffold(
-      backgroundColor: _bgDark,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: _bgDark,
+        backgroundColor: bgColor,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Voice',
           style: TextStyle(
-            color: Colors.white,
+            color: textColor,
             fontSize: 20,
             fontWeight: FontWeight.w500,
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: textColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -234,8 +239,8 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
                   child: CircularProgressIndicator(color: _accentCyan),
                 )
               : _entries.isEmpty
-                  ? _buildEmptyState()
-                  : _buildEntriesList(),
+                  ? _buildEmptyState(isDark)
+                  : _buildEntriesList(isDark),
 
           // Recording overlay
           if (_isRecording) _buildRecordingOverlay(),
@@ -252,7 +257,7 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(bool isDark) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -260,14 +265,14 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
           Icon(
             Icons.mic_none_rounded,
             size: 72,
-            color: Colors.grey[800],
+            color: isDark ? Colors.grey[800] : Colors.grey[400],
           ),
           const SizedBox(height: 16),
           Text(
             'No voice entries',
             style: TextStyle(
               fontSize: 18,
-              color: Colors.grey[600],
+              color: isDark ? Colors.grey[600] : Colors.grey[700],
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -275,7 +280,7 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
           Text(
             'Tap the mic to start',
             style: TextStyle(
-              color: Colors.grey[700],
+              color: isDark ? Colors.grey[700] : Colors.grey[600],
               fontSize: 14,
             ),
           ),
@@ -285,7 +290,11 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
     );
   }
 
-  Widget _buildEntriesList() {
+  Widget _buildEntriesList(bool isDark) {
+    final cardColor = isDark ? const Color(0xFF141414) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final mutedColor = isDark ? const Color(0xFF666666) : Colors.grey[600]!;
+    
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
       itemCount: _entries.length,
@@ -296,12 +305,19 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: _cardDark,
+            color: cardColor,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isPlaying ? _accentCyan.withOpacity(0.5) : Colors.transparent,
+              color: isPlaying ? _accentCyan.withOpacity(0.5) : (isDark ? Colors.transparent : Colors.grey[300]!),
               width: 1,
             ),
+            boxShadow: isDark ? null : [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
@@ -318,12 +334,12 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: isPlaying ? _accentCyan : const Color(0xFF1a1a1a),
+                      color: isPlaying ? _accentCyan : (isDark ? const Color(0xFF1a1a1a) : Colors.grey[200]),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      color: isPlaying ? _bgDark : Colors.white,
+                      color: isPlaying ? (isDark ? const Color(0xFF0a0a0a) : Colors.black87) : (isDark ? Colors.white : Colors.black87),
                       size: 24,
                     ),
                   ),
@@ -335,8 +351,8 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
                       children: [
                         Text(
                           entry.title,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: textColor,
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
                           ),
@@ -348,16 +364,16 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
                           children: [
                             Text(
                               entry.formattedDuration,
-                              style: const TextStyle(
-                                color: _textMuted,
+                              style: TextStyle(
+                                color: mutedColor,
                                 fontSize: 13,
                               ),
                             ),
                             const SizedBox(width: 12),
                             Text(
                               entry.formattedDate,
-                              style: const TextStyle(
-                                color: _textMuted,
+                              style: TextStyle(
+                                color: mutedColor,
                                 fontSize: 13,
                               ),
                             ),
@@ -368,7 +384,7 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
                   ),
                   // Delete
                   IconButton(
-                    icon: Icon(Icons.close, color: Colors.grey[700], size: 20),
+                    icon: Icon(Icons.close, color: isDark ? Colors.grey[700] : Colors.grey[500], size: 20),
                     onPressed: () => _deleteEntry(entry),
                     splashRadius: 20,
                   ),
@@ -401,15 +417,19 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
         child: const Icon(
           Icons.mic_rounded,
           size: 28,
-          color: _bgDark,
+          color: Color(0xFF0a0a0a),
         ),
       ),
     );
   }
 
   Widget _buildRecordingOverlay() {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
+    final bgColor = isDark ? const Color(0xFF0a0a0a) : Colors.grey[50]!;
+    final mutedColor = isDark ? const Color(0xFF666666) : Colors.grey[600]!;
+    
     return Container(
-      color: _bgDark.withOpacity(0.95),
+      color: bgColor.withOpacity(0.95),
       child: SafeArea(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -451,18 +471,18 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
             // Duration
             Text(
               _formatDuration(_recordingDuration),
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
                 fontSize: 48,
                 fontWeight: FontWeight.w300,
                 letterSpacing: 2,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Recording...',
               style: TextStyle(
-                color: _textMuted,
+                color: mutedColor,
                 fontSize: 14,
               ),
             ),
@@ -481,12 +501,12 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
                       height: 56,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFF1a1a1a),
-                        border: Border.all(color: Colors.grey[800]!, width: 1),
+                        color: isDark ? const Color(0xFF1a1a1a) : Colors.grey[200],
+                        border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[400]!, width: 1),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.close_rounded,
-                        color: Colors.white,
+                        color: isDark ? Colors.white : Colors.black87,
                         size: 26,
                       ),
                     ),
@@ -509,9 +529,9 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
                           ),
                         ],
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.check_rounded,
-                        color: _bgDark,
+                        color: isDark ? const Color(0xFF0a0a0a) : Colors.black87,
                         size: 36,
                       ),
                     ),

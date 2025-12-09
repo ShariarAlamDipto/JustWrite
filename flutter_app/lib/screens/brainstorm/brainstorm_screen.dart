@@ -75,10 +75,12 @@ class _BrainstormScreenState extends State<BrainstormScreen> with AutomaticKeepA
       if (!mounted) return;
       debugPrint('[Brainstorm] Error saving idea: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving idea: $e')),
+        SnackBar(content: Text('Error: ${e.toString().split(':').last.trim()}')),
       );
     } finally {
-      setState(() => _isSavingIdea = false);
+      if (mounted) {
+        setState(() => _isSavingIdea = false);
+      }
     }
   }
 
@@ -142,38 +144,55 @@ class _BrainstormScreenState extends State<BrainstormScreen> with AutomaticKeepA
   Future<void> _saveAll() async {
     if (_tasks.isEmpty) return;
 
+    // Capture values before async operations
+    final auth = context.read<AuthProvider>();
+    final taskProvider = context.read<TaskProvider>();
+    final entryProvider = context.read<EntryProvider>();
+    final userId = auth.user?.id;
+    
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in first')),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
+    
+    // Copy tasks to avoid modification during iteration
+    final tasksToSave = List<Map<String, dynamic>>.from(_tasks);
+    final contentToSave = _originalContent ?? _controller.text;
+    final summaryToSave = _summary;
+    final taskCount = tasksToSave.length;
 
     try {
-      final auth = context.read<AuthProvider>();
-      final taskProvider = context.read<TaskProvider>();
-      final entryProvider = context.read<EntryProvider>();
-      
-      // Save all tasks
-      for (var t in _tasks) {
+      // Save all tasks sequentially to avoid race conditions
+      for (final t in tasksToSave) {
+        if (!mounted) return;
         await taskProvider.createTask(
-          userId: auth.user!.id,
-          title: t['title'] ?? '',
-          description: t['description'] ?? '',
-          priority: t['priority'] ?? 'medium',
+          userId: userId,
+          title: t['title']?.toString() ?? '',
+          description: t['description']?.toString() ?? '',
+          priority: t['priority']?.toString() ?? 'medium',
         );
       }
       
       // Save the brainstorm session as a journal entry for future reference
-      final content = _originalContent ?? _controller.text;
-      if (content.isNotEmpty && _summary != null) {
+      if (contentToSave.isNotEmpty && summaryToSave != null && mounted) {
         await entryProvider.createBrainstormEntry(
-          userId: auth.user!.id,
-          content: content,
-          summary: _summary!,
-          extractedTasks: List<Map<String, dynamic>>.from(_tasks),
+          userId: userId,
+          content: contentToSave,
+          summary: summaryToSave,
+          extractedTasks: tasksToSave,
         );
       }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${_tasks.length} tasks saved to Tasks and session saved to Journal')),
+        SnackBar(content: Text('$taskCount tasks saved')),
       );
+      
+      // Clear form only after successful save
       setState(() {
         _tasks.clear();
         _controller.clear();
@@ -182,9 +201,14 @@ class _BrainstormScreenState extends State<BrainstormScreen> with AutomaticKeepA
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      debugPrint('[Brainstorm] Error saving: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString().split(':').last.trim()}')),
+      );
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 

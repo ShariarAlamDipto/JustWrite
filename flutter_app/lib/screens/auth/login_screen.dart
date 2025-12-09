@@ -61,14 +61,43 @@ class _LoginScreenState extends State<LoginScreen> {
         _sentToEmail = email;
       });
       
-      // Also show a snackbar for extra visibility
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Confirmation code sent! Check your email.'),
-          backgroundColor: Color(0xFF10B981),
-          duration: Duration(seconds: 3),
-        ),
-      );
+      // Show a dialog for clear visibility
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
+                SizedBox(width: 12),
+                Text('Check Your Email'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('We sent a 6-digit code to:'),
+                SizedBox(height: 8),
+                Text(
+                  email,
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF047857)),
+                ),
+                SizedBox(height: 16),
+                Text('Enter the code below to sign in.', style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('GOT IT', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
       
       debugPrint('[Login] UI updated: _emailSent=$_emailSent, _showOtpInput=$_showOtpInput');
       
@@ -216,7 +245,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 16),
                         const Text(
-                          'Email Sent Successfully!',
+                          'Check your email for confirmation',
                           style: TextStyle(
                             fontFamily: 'Times New Roman',
                             fontSize: 20,

@@ -1,6 +1,8 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 /// Response cache entry with expiration
 class _CacheEntry {
@@ -28,6 +30,9 @@ class LLMService {
   // Response cache to avoid duplicate API calls
   final Map<String, _CacheEntry> _cache = {};
   static const int _maxCacheSize = 50;
+  
+  // Request timeout
+  static const Duration _timeout = Duration(seconds: 30);
 
   final groqUrl = dotenv.env['GROQ_API_URL']!;
   final groqKey = dotenv.env['GROQ_API_KEY']!;
@@ -40,6 +45,9 @@ class LLMService {
   
   // Precompiled regex for JSON extraction
   static final RegExp _jsonRegex = RegExp(r'\{[\s\S]*\}');
+  
+  // In-flight request tracking to prevent duplicate requests
+  final Map<String, Future<dynamic>> _inFlightRequests = {};
   
   /// Generate cache key from text
   String _getCacheKey(String prefix, String text) {
@@ -72,6 +80,24 @@ class LLMService {
       return List<Map<String, dynamic>>.from(cached.data);
     }
     
+    // Check for in-flight request
+    if (_inFlightRequests.containsKey(cacheKey)) {
+      final result = await _inFlightRequests[cacheKey];
+      return List<Map<String, dynamic>>.from(result ?? []);
+    }
+    
+    // Create the request future
+    final requestFuture = _extractTasksInternal(text, cacheKey);
+    _inFlightRequests[cacheKey] = requestFuture;
+    
+    try {
+      return await requestFuture;
+    } finally {
+      _inFlightRequests.remove(cacheKey);
+    }
+  }
+  
+  Future<List<Map<String, dynamic>>> _extractTasksInternal(String text, String cacheKey) async {
     try {
       final response = await _client.post(
         Uri.parse(groqUrl),
@@ -81,60 +107,38 @@ class LLMService {
           'messages': [
             {
               'role': 'system',
-              'content': '''You are a highly skilled task extraction assistant. Your ONLY response must be valid JSON with no additional text before or after.
-You will extract 3-5 actionable tasks from the user's input. Each task should be:
-- **Title**: A concise action-oriented title (max 10 words).
-- **Description**: A clear, actionable breakdown of the task that outlines the **step-by-step process** and any **resources/tools** needed. If the task requires multiple sub-tasks, break them down clearly.
-- **Priority**: Assign "high", "medium", or "low" priority based on:
-    - "high" for tasks critical to the project or that unblock others.
-    - "medium" for important but non-urgent tasks.
-    - "low" for optional or low-impact tasks.
+              'content': '''You are a task extraction assistant. Analyze the text thoroughly and extract ALL actionable tasks, no matter how many. Be comprehensive and detailed.
 
-### Additional Guidelines:
-- If the user input is unclear or vague, make **reasonable assumptions** to fill in the gaps, but ensure the resulting tasks are still **actionable** and useful.
-- If necessary, provide **dependencies** between tasks and indicate which ones should be done first.
-- Avoid overwhelming the user—keep tasks **manageable** (typically something that can be completed in 30-90 minutes).
-- If a task requires a **tool**, resource, or extra context, mention it in the description.
-- **Do not** include any explanations or elaboration beyond the JSON response.
+For each task provide:
+- A clear, specific title
+- Detailed description with step-by-step instructions when applicable
+- Priority level (high/medium/low) based on urgency and importance
 
-Return **only** the following JSON format:
-{
-  "tasks": [
-    {
-      "title": "string (brief, under 10 words)",
-      "description": "string (clear, actionable description with necessary resources/tools)",
-      "priority": "high" | "medium" | "low"
-    }
-  ]
-}
-If the user's text is extremely vague, make reasonable assumptions and proceed.''',
+Return ONLY valid JSON in this format:
+{"tasks":[{"title":"specific task title","description":"detailed steps and instructions","priority":"high|medium|low"}]}
+
+Extract every possible task - do not limit the number. Be thorough and capture all actionable items from the text.''',
             },
-            {
-              'role': 'user',
-              'content': text,
-            },
+            {'role': 'user', 'content': text},
           ],
-          'temperature': 0.7,
-          'max_tokens': 1024,
+          'temperature': 0.5,
+          'max_tokens': 4000,
         }),
-      );
+      ).timeout(const Duration(seconds: 60));
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to extract tasks: ${response.statusCode}');
+        if (kDebugMode) debugPrint('[LLM] Task extraction failed: ${response.statusCode}');
+        return [];
       }
 
       final data = jsonDecode(response.body);
       final content = data['choices']?[0]?['message']?['content'] as String?;
+      if (content == null) return [];
 
-      if (content == null) {
-        throw Exception('No content in response');
-      }
-
-      // Extract JSON from response (handle markdown formatting)
+      // Extract JSON from response
       final jsonMatch = _jsonRegex.firstMatch(content);
       final jsonStr = jsonMatch?.group(0) ?? content;
       final parsed = jsonDecode(jsonStr);
-
       final tasks = List<Map<String, dynamic>>.from(parsed['tasks'] ?? []);
       
       // Cache result
@@ -142,8 +146,11 @@ If the user's text is extremely vague, make reasonable assumptions and proceed.'
       _cache[cacheKey] = _CacheEntry(tasks);
       
       return tasks;
+    } on TimeoutException {
+      if (kDebugMode) debugPrint('[LLM] Task extraction timeout');
+      return [];
     } catch (e) {
-      // SECURITY: Error logged without sensitive details
+      if (kDebugMode) debugPrint('[LLM] Task extraction error: $e');
       return [];
     }
   }
@@ -157,6 +164,24 @@ If the user's text is extremely vague, make reasonable assumptions and proceed.'
       return cached.data as String;
     }
     
+    // Check for in-flight request
+    if (_inFlightRequests.containsKey(cacheKey)) {
+      final result = await _inFlightRequests[cacheKey];
+      return result as String? ?? '';
+    }
+    
+    // Create the request future
+    final requestFuture = _generateSummaryInternal(text, cacheKey);
+    _inFlightRequests[cacheKey] = requestFuture;
+    
+    try {
+      return await requestFuture;
+    } finally {
+      _inFlightRequests.remove(cacheKey);
+    }
+  }
+  
+  Future<String> _generateSummaryInternal(String text, String cacheKey) async {
     try {
       final response = await _client.post(
         Uri.parse(groqUrl),
@@ -166,21 +191,18 @@ If the user's text is extremely vague, make reasonable assumptions and proceed.'
           'messages': [
             {
               'role': 'system',
-              'content':
-                  'You are a journaling assistant. Summarize the user\'s journal entry in 1-2 sentences (max 100 words). Be concise and capture the essence.',
+              'content': 'Summarize in 1-2 sentences (max 50 words). Be concise.',
             },
-            {
-              'role': 'user',
-              'content': text,
-            },
+            {'role': 'user', 'content': text},
           ],
-          'temperature': 0.5,
-          'max_tokens': 200,
+          'temperature': 0.3,
+          'max_tokens': 100,
         }),
-      );
+      ).timeout(_timeout);
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to generate summary: ${response.statusCode}');
+        if (kDebugMode) debugPrint('[LLM] Summary failed: ${response.statusCode}');
+        return '';
       }
 
       final data = jsonDecode(response.body);
@@ -191,8 +213,11 @@ If the user's text is extremely vague, make reasonable assumptions and proceed.'
       _cache[cacheKey] = _CacheEntry(summary);
       
       return summary;
+    } on TimeoutException {
+      if (kDebugMode) debugPrint('[LLM] Summary timeout');
+      return '';
     } catch (e) {
-      // SECURITY: Error logged without sensitive details
+      if (kDebugMode) debugPrint('[LLM] Summary error: $e');
       return '';
     }
   }

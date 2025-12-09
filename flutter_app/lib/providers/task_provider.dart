@@ -9,15 +9,33 @@ class TaskProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   DateTime? _lastFetch;
+  bool _isCreating = false;
   
-  // Cache duration: 30 seconds
-  static const _cacheDuration = Duration(seconds: 30);
+  // Cached filtered lists - only recompute when tasks change
+  List<Task>? _cachedPending;
+  List<Task>? _cachedCompleted;
+  
+  // Cache duration: 60 seconds
+  static const _cacheDuration = Duration(seconds: 60);
 
   List<Task> get tasks => _tasks;
   
-  // Cached computed properties using late initialization
-  List<Task> get pendingTasks => _tasks.where((t) => !t.isDone).toList();
-  List<Task> get completedTasks => _tasks.where((t) => t.isDone).toList();
+  // Cached computed properties - avoid repeated filtering
+  List<Task> get pendingTasks {
+    _cachedPending ??= _tasks.where((t) => !t.isDone).toList();
+    return _cachedPending!;
+  }
+  
+  List<Task> get completedTasks {
+    _cachedCompleted ??= _tasks.where((t) => t.isDone).toList();
+    return _cachedCompleted!;
+  }
+  
+  // Invalidate cached lists when tasks change
+  void _invalidateCache() {
+    _cachedPending = null;
+    _cachedCompleted = null;
+  }
   
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -33,6 +51,9 @@ class TaskProvider extends ChangeNotifier {
       return;
     }
     
+    // Prevent duplicate loading
+    if (_isLoading) return;
+    
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -40,10 +61,10 @@ class TaskProvider extends ChangeNotifier {
     try {
       _tasks = await _supabaseService.getTasks();
       _lastFetch = DateTime.now();
-      _isLoading = false;
-      notifyListeners();
+      _invalidateCache(); // Clear cached filtered lists
     } catch (e) {
       _error = e.toString();
+    } finally {
       _isLoading = false;
       notifyListeners();
     }
@@ -58,6 +79,15 @@ class TaskProvider extends ChangeNotifier {
     String? ifThenPlan,
     DateTime? dueDate,
   }) async {
+    // Prevent concurrent creates with a short wait
+    if (_isCreating) {
+      await Future.delayed(const Duration(milliseconds: 50));
+      if (_isCreating) {
+        throw Exception('Task creation in progress');
+      }
+    }
+    _isCreating = true;
+    
     try {
       final task = Task(
         id: const Uuid().v4(),
@@ -73,14 +103,16 @@ class TaskProvider extends ChangeNotifier {
       );
 
       final created = await _supabaseService.createTask(task);
-      // Optimistic update
       _tasks.insert(0, created);
+      _invalidateCache(); // Clear cached filtered lists
       notifyListeners();
       return created;
     } catch (e) {
       _error = e.toString();
       notifyListeners();
       rethrow;
+    } finally {
+      _isCreating = false;
     }
   }
 
@@ -94,6 +126,7 @@ class TaskProvider extends ChangeNotifier {
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index != -1) {
       _tasks[index] = updatedTask;
+      _invalidateCache();
       notifyListeners();
     }
 
@@ -103,6 +136,7 @@ class TaskProvider extends ChangeNotifier {
       // Rollback on failure
       if (index != -1) {
         _tasks[index] = task;
+        _invalidateCache();
         notifyListeners();
       }
       _error = e.toString();
@@ -117,6 +151,7 @@ class TaskProvider extends ChangeNotifier {
       final index = _tasks.indexWhere((t) => t.id == task.id);
       if (index != -1) {
         _tasks[index] = task;
+        _invalidateCache();
         notifyListeners();
       }
     } catch (e) {
@@ -131,6 +166,7 @@ class TaskProvider extends ChangeNotifier {
     final removedTask = _tasks.firstWhere((t) => t.id == taskId);
     final removedIndex = _tasks.indexWhere((t) => t.id == taskId);
     _tasks.removeWhere((t) => t.id == taskId);
+    _invalidateCache();
     notifyListeners();
     
     try {
@@ -138,6 +174,7 @@ class TaskProvider extends ChangeNotifier {
     } catch (e) {
       // Rollback on failure
       _tasks.insert(removedIndex, removedTask);
+      _invalidateCache();
       _error = e.toString();
       notifyListeners();
       rethrow;

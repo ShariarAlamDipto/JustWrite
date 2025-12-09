@@ -7,7 +7,6 @@ import '../../providers/entry_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../services/llm_service.dart';
 import '../../theme/app_theme.dart';
-import '../entry/entry_screen.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -178,10 +177,7 @@ class _JournalScreenState extends State<JournalScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _createNewEntry(),
-        child: const Icon(Icons.add),
-      ),
+      // FAB removed - Write tab handles entry creation
     );
   }
 
@@ -196,15 +192,6 @@ class _JournalScreenState extends State<JournalScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => _EntryDetailSheet(entry: entry, isDark: isDark),
-    );
-  }
-
-  void _createNewEntry() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const EntryScreen(),
-      ),
     );
   }
 

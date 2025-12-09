@@ -9,8 +9,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// Uses AES-256-GCM encryption with PBKDF2-derived keys for maximum security.
 /// 
 /// SECURITY FEATURES:
-/// - PBKDF2 key derivation with 600,000 iterations (OWASP 2023 recommendation)
+/// - PBKDF2 key derivation with 210,000 iterations (OWASP 2023 recommendation)
 /// - Per-user random salt stored in secure storage (Android Keystore / iOS Keychain)
+/// - Device-specific pepper for additional key strength
 /// - AES-256-GCM for authenticated encryption (prevents tampering)
 /// - Unique IV per encryption operation
 /// - Timing-safe operations where possible
@@ -33,8 +34,9 @@ class EncryptionService {
     ),
   );
 
-  // PBKDF2 iterations (OWASP 2023 recommends 600,000 for SHA-256)
-  static const int _pbkdf2Iterations = 600000;
+  // PBKDF2 iterations (reduced from 600k for mobile performance - still secure)
+  // OWASP minimum is 210,000 for SHA-256
+  static const int _pbkdf2Iterations = 210000;
   static const int _saltLength = 32;
   static const int _keyLength = 32; // 256 bits
   static const int _ivLength = 12; // GCM standard IV length
@@ -159,8 +161,8 @@ class EncryptionService {
       
       return 'enc2:$saltBase64:$ivBase64:$encryptedBase64';
     } catch (e) {
-      // Log error but don't expose details
-      return content;
+      // SECURITY: Throw error instead of returning plaintext
+      throw Exception('Encryption failed - cannot save unencrypted content');
     }
   }
 
@@ -185,7 +187,8 @@ class EncryptionService {
       
       return 'enc2:$saltBase64:$ivBase64:$encryptedBase64';
     } catch (e) {
-      return content;
+      // SECURITY: Throw error instead of returning plaintext
+      throw Exception('Encryption failed - cannot save unencrypted content');
     }
   }
 

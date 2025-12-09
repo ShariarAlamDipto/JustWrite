@@ -8,6 +8,7 @@ import 'package:justwrite_mobile/screens/entry/entry_screen.dart';
 import 'package:justwrite_mobile/screens/tasks/tasks_screen.dart';
 import 'package:justwrite_mobile/screens/journal/journal_screen.dart';
 import 'package:justwrite_mobile/screens/brainstorm/brainstorm_screen.dart';
+import 'package:justwrite_mobile/screens/insights/insights_screen.dart';
 import 'package:justwrite_mobile/theme/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -32,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
       EntryScreen(),
       BrainstormScreen(),
       TasksScreen(),
+      InsightsScreen(),
     ];
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -156,6 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: BottomNavigationBar(
               currentIndex: _selectedIndex,
               onTap: (index) => setState(() => _selectedIndex = index),
+              type: BottomNavigationBarType.fixed,
               items: const [
                 BottomNavigationBarItem(
                   icon: Icon(Icons.book_outlined),
@@ -176,6 +179,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icon(Icons.check_circle_outline),
                   activeIcon: Icon(Icons.check_circle),
                   label: 'Tasks',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.insights_outlined),
+                  activeIcon: Icon(Icons.insights),
+                  label: 'Insights',
                 ),
               ],
             ),

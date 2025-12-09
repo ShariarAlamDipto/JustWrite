@@ -13,19 +13,33 @@ class EntryProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   DateTime? _lastFetch;
+  bool _isCreating = false;
   
-  // Cache duration: 30 seconds
-  static const _cacheDuration = Duration(seconds: 30);
+  // Cached filtered lists
+  List<Entry>? _cachedJournal;
+  List<Entry>? _cachedBrainstorm;
+  
+  // Cache duration: 60 seconds
+  static const _cacheDuration = Duration(seconds: 60);
 
   List<Entry> get entries => _entries;
   
-  /// Get only journal entries (source = 'text')
-  List<Entry> get journalEntries => 
-      _entries.where((e) => e.source == EntrySource.text).toList();
+  /// Get only journal entries (source = 'text') - cached
+  List<Entry> get journalEntries {
+    _cachedJournal ??= _entries.where((e) => e.source == EntrySource.text).toList();
+    return _cachedJournal!;
+  }
   
-  /// Get only brainstorm sessions (source = 'brainstorm')
-  List<Entry> get brainstormEntries => 
-      _entries.where((e) => e.source == EntrySource.brainstorm).toList();
+  /// Get only brainstorm sessions (source = 'brainstorm') - cached
+  List<Entry> get brainstormEntries {
+    _cachedBrainstorm ??= _entries.where((e) => e.source == EntrySource.brainstorm).toList();
+    return _cachedBrainstorm!;
+  }
+  
+  void _invalidateFilterCache() {
+    _cachedJournal = null;
+    _cachedBrainstorm = null;
+  }
   
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -41,6 +55,9 @@ class EntryProvider extends ChangeNotifier {
       return;
     }
     
+    // Prevent duplicate loading
+    if (_isLoading) return;
+    
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -49,17 +66,24 @@ class EntryProvider extends ChangeNotifier {
       final rawEntries = await _supabaseService.getEntries();
       // Decrypt and decompress content when loading
       _entries = rawEntries.map((e) {
-        // First decrypt (if encrypted), then decompress (if compressed)
         String content = e.content;
-        content = _encryptionService.decrypt(content, e.userId);
-        content = _compressionService.decompress(content);
+        final isJournal = e.source == EntrySource.text || e.source.toString() == 'text';
+        
+        if (isJournal) {
+          // Journal entries: decrypt then decompress
+          content = _encryptionService.decrypt(content, e.userId);
+          content = _compressionService.decompress(content);
+        } else {
+          // Ideas/Brainstorm: only decompress (not encrypted)
+          content = _compressionService.decompress(content);
+        }
         return e.copyWith(content: content);
       }).toList();
+      _invalidateFilterCache();
       _lastFetch = DateTime.now();
-      _isLoading = false;
-      notifyListeners();
     } catch (e) {
       _error = e.toString();
+    } finally {
       _isLoading = false;
       notifyListeners();
     }
@@ -77,22 +101,28 @@ class EntryProvider extends ChangeNotifier {
     Map<String, dynamic>? aiMetadata,
     String source = 'text',
   }) async {
-    debugPrint('[EntryProvider] ===== CREATE ENTRY =====');
-    debugPrint('[EntryProvider] userId: $userId');
-    debugPrint('[EntryProvider] content length: ${content.length}');
-    debugPrint('[EntryProvider] title: $title');
-    debugPrint('[EntryProvider] summary: $summary');
-    debugPrint('[EntryProvider] mood: $mood, intensity: $moodIntensity');
-    debugPrint('[EntryProvider] gratitude: $gratitude');
-    debugPrint('[EntryProvider] promptAnswers: $promptAnswers');
-    debugPrint('[EntryProvider] aiMetadata: $aiMetadata');
-    debugPrint('[EntryProvider] source: $source');
+    // Prevent concurrent creates that could cause crashes
+    if (_isCreating) {
+      throw Exception('Entry creation already in progress');
+    }
+    _isCreating = true;
+    
+    debugPrint('[EntryProvider] Creating entry...');
     
     try {
-      // First compress, then encrypt content for secure storage
-      String processedContent = _compressionService.compress(content);
-      processedContent = _encryptionService.encrypt(processedContent, userId);
-      debugPrint('[EntryProvider] Processed content length: ${processedContent.length}');
+      // Only encrypt Journal entries (source = 'text'), not Ideas/Brainstorm
+      // This allows Ideas to be viewed on any device without encryption key
+      String processedContent;
+      final isJournal = source == 'text' || source == EntrySource.text;
+      
+      if (isJournal) {
+        // Journal entries: compress then encrypt for privacy
+        processedContent = _compressionService.compress(content);
+        processedContent = _encryptionService.encrypt(processedContent, userId);
+      } else {
+        // Ideas/Brainstorm: only compress for storage efficiency (no encryption)
+        processedContent = _compressionService.compress(content);
+      }
       
       final entry = Entry(
         id: const Uuid().v4(),
@@ -108,26 +138,26 @@ class EntryProvider extends ChangeNotifier {
         source: source,
         createdAt: DateTime.now(),
       );
-
-      debugPrint('[EntryProvider] Entry JSON to save: ${entry.toJson()}');
       
       final created = await _supabaseService.createEntry(entry);
-      debugPrint('[EntryProvider] Entry created successfully with id: ${created.id}');
+      debugPrint('[EntryProvider] Entry created: ${created.id}');
       
       // Store decrypted and decompressed version in local cache for display
       final displayEntry = created.copyWith(
         content: content, // Use original unencrypted content for display
       );
       _entries.insert(0, displayEntry);
+      _invalidateFilterCache();
       notifyListeners();
-      debugPrint('[EntryProvider] ===== ENTRY SAVED =====');
       return displayEntry;
     } catch (e, stackTrace) {
-      debugPrint('[EntryProvider] ERROR saving entry: $e');
+      debugPrint('[EntryProvider] Error: $e');
       debugPrint('[EntryProvider] Stack: $stackTrace');
       _error = e.toString();
       notifyListeners();
       rethrow;
+    } finally {
+      _isCreating = false;
     }
   }
   
@@ -159,20 +189,30 @@ class EntryProvider extends ChangeNotifier {
 
   Future<void> updateEntry(Entry entry) async {
     try {
-      // Compress and encrypt content before updating
-      String processedContent = _compressionService.compress(entry.content);
-      processedContent = _encryptionService.encrypt(processedContent, entry.userId);
+      // Only encrypt Journal entries (source = 'text'), not Ideas/Brainstorm
+      final isJournal = entry.source == EntrySource.text || entry.source.toString() == 'text';
+      String processedContent;
       
-      final encryptedEntry = entry.copyWith(
+      if (isJournal) {
+        // Journal entries: compress then encrypt for privacy
+        processedContent = _compressionService.compress(entry.content);
+        processedContent = _encryptionService.encrypt(processedContent, entry.userId);
+      } else {
+        // Ideas/Brainstorm: only compress (no encryption)
+        processedContent = _compressionService.compress(entry.content);
+      }
+      
+      final processedEntry = entry.copyWith(
         content: processedContent,
       );
       
-      await _supabaseService.updateEntry(encryptedEntry);
+      await _supabaseService.updateEntry(processedEntry);
       
       // Update local cache with decrypted version
       final index = _entries.indexWhere((e) => e.id == entry.id);
       if (index != -1) {
         _entries[index] = entry; // Keep decrypted in cache
+        _invalidateFilterCache();
         notifyListeners();
       }
     } catch (e) {
@@ -187,6 +227,7 @@ class EntryProvider extends ChangeNotifier {
     final removedEntry = _entries.firstWhere((e) => e.id == entryId);
     final removedIndex = _entries.indexWhere((e) => e.id == entryId);
     _entries.removeWhere((e) => e.id == entryId);
+    _invalidateFilterCache();
     notifyListeners();
     
     try {
@@ -194,6 +235,7 @@ class EntryProvider extends ChangeNotifier {
     } catch (e) {
       // Rollback on failure
       _entries.insert(removedIndex, removedEntry);
+      _invalidateFilterCache();
       _error = e.toString();
       notifyListeners();
       rethrow;

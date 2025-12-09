@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:justwrite_mobile/services/supabase_service.dart';
 
@@ -84,11 +84,11 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> sendMagicLink(String email) async {
-    debugPrint('[AuthProvider] sendMagicLink called with: $email');
+    if (kDebugMode) debugPrint('[AuthProvider] sendMagicLink called');
     
     // SECURITY: Basic email validation before sending
     if (email.isEmpty || !email.contains('@') || email.length > 254) {
-      debugPrint('[AuthProvider] Email validation failed');
+      if (kDebugMode) debugPrint('[AuthProvider] Email validation failed');
       _error = 'Invalid email address';
       _isLoading = false;
       notifyListeners();
@@ -98,20 +98,20 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
-    debugPrint('[AuthProvider] Set isLoading=true, calling SupabaseService...');
+    if (kDebugMode) debugPrint('[AuthProvider] Calling SupabaseService...');
 
     try {
       final cleanEmail = email.trim().toLowerCase();
-      debugPrint('[AuthProvider] Calling supabaseService.sendMagicLink($cleanEmail)');
       await _supabaseService.sendMagicLink(cleanEmail);
-      debugPrint('[AuthProvider] SupabaseService returned successfully');
+      if (kDebugMode) debugPrint('[AuthProvider] Magic link sent successfully');
       _isLoading = false;
       _error = null;
       notifyListeners();
-      debugPrint('[AuthProvider] Notified listeners, isLoading=false, error=null');
     } catch (e, stackTrace) {
-      debugPrint('[AuthProvider] EXCEPTION: $e');
-      debugPrint('[AuthProvider] Stack: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('[AuthProvider] EXCEPTION: $e');
+        debugPrint('[AuthProvider] Stack: $stackTrace');
+      }
       _error = 'Failed to send login code. Please check your email and try again.';
       _isLoading = false;
       notifyListeners();

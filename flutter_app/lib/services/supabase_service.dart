@@ -37,11 +37,11 @@ class SupabaseService {
 
   // Google Sign-In
   Future<AuthResponse> signInWithGoogle() async {
-    debugPrint('[Auth] Starting Google Sign-In...');
+    if (kDebugMode) debugPrint('[Auth] Starting Google Sign-In...');
     
     // SECURITY: Validate that client ID is configured
     if (_webClientId.isEmpty) {
-      debugPrint('[Auth] ERROR: GOOGLE_WEB_CLIENT_ID not configured in .env');
+      if (kDebugMode) debugPrint('[Auth] ERROR: GOOGLE_WEB_CLIENT_ID not configured in .env');
       throw Exception('Google Sign-In is not configured. Please set GOOGLE_WEB_CLIENT_ID in .env');
     }
     
@@ -54,22 +54,22 @@ class SupabaseService {
     
     final googleUser = await googleSignIn.signIn();
     if (googleUser == null) {
-      debugPrint('[Auth] Google Sign-In cancelled by user');
+      if (kDebugMode) debugPrint('[Auth] Google Sign-In cancelled by user');
       throw Exception('Google Sign-In was cancelled');
     }
     
-    debugPrint('[Auth] Google user: ${googleUser.email}');
+    if (kDebugMode) debugPrint('[Auth] Google user authenticated');
     
     final googleAuth = await googleUser.authentication;
     final idToken = googleAuth.idToken;
     final accessToken = googleAuth.accessToken;
     
     if (idToken == null) {
-      debugPrint('[Auth] No ID token received from Google');
+      if (kDebugMode) debugPrint('[Auth] No ID token received from Google');
       throw Exception('No ID token received from Google');
     }
     
-    debugPrint('[Auth] Got Google tokens, signing into Supabase...');
+    if (kDebugMode) debugPrint('[Auth] Got Google tokens, signing into Supabase...');
     
     // Sign in to Supabase with Google tokens
     final response = await supabase.auth.signInWithIdToken(
@@ -78,39 +78,37 @@ class SupabaseService {
       accessToken: accessToken,
     );
     
-    debugPrint('[Auth] Supabase sign-in successful: ${response.user?.email}');
+    if (kDebugMode) debugPrint('[Auth] Supabase sign-in successful');
     return response;
   }
 
   // Auth Methods - Magic Link (backup)
   Future<void> sendMagicLink(String email) async {
     try {
-      debugPrint('[SupabaseService] ========== SEND MAGIC LINK ==========');
-      debugPrint('[SupabaseService] Email: $email');
-      debugPrint('[SupabaseService] Redirect URL: $_redirectUrl');
-      debugPrint('[SupabaseService] Supabase client initialized: true');
+      if (kDebugMode) {
+        debugPrint('[SupabaseService] Sending magic link...');
+      }
       
-      debugPrint('[SupabaseService] Calling signInWithOtp...');
       await supabase.auth.signInWithOtp(
         email: email,
         emailRedirectTo: _redirectUrl,
       );
       
-      debugPrint('[SupabaseService] signInWithOtp completed!');
-      debugPrint('[SupabaseService] OTP sent successfully to $email');
-      debugPrint('[SupabaseService] ========== END SEND MAGIC LINK ==========');
+      if (kDebugMode) {
+        debugPrint('[SupabaseService] OTP sent successfully');
+      }
     } catch (e, stackTrace) {
-      debugPrint('[SupabaseService] ERROR sending OTP!');
-      debugPrint('[SupabaseService] Exception: $e');
-      debugPrint('[SupabaseService] Type: ${e.runtimeType}');
-      debugPrint('[SupabaseService] Stack: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('[SupabaseService] ERROR sending OTP: $e');
+        debugPrint('[SupabaseService] Stack: $stackTrace');
+      }
       rethrow;
     }
   }
 
   Future<void> verifyOtp(String email, String token) async {
     try {
-      debugPrint('[Auth] Verifying OTP for: $email');
+      if (kDebugMode) debugPrint('[Auth] Verifying OTP...');
       
       await supabase.auth.verifyOTP(
         email: email,
@@ -118,10 +116,9 @@ class SupabaseService {
         type: OtpType.email,
       );
       
-      debugPrint('[Auth] OTP verified successfully');
-      debugPrint('[Auth] Current user: ${supabase.auth.currentUser?.email}');
+      if (kDebugMode) debugPrint('[Auth] OTP verified successfully');
     } catch (e) {
-      debugPrint('[Auth] Error verifying OTP: $e');
+      if (kDebugMode) debugPrint('[Auth] Error verifying OTP: $e');
       rethrow;
     }
   }
@@ -133,9 +130,9 @@ class SupabaseService {
       await googleSignIn.signOut();
       
       await supabase.auth.signOut();
-      debugPrint('[Auth] Signed out successfully');
+      if (kDebugMode) debugPrint('[Auth] Signed out successfully');
     } catch (e) {
-      debugPrint('[Auth] Error signing out: $e');
+      if (kDebugMode) debugPrint('[Auth] Error signing out: $e');
       rethrow;
     }
   }

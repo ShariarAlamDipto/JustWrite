@@ -9,12 +9,16 @@ class CompressionService {
   factory CompressionService() => _instance;
   
   CompressionService._internal();
+  
+  // Cache for recently decompressed content
+  final Map<int, String> _decompressCache = {};
+  static const int _maxCacheSize = 20;
 
   /// Compresses text content to a base64-encoded gzip string.
   /// Returns the original text if compression doesn't reduce size.
   String compress(String text) {
-    if (text.isEmpty || text.length < 100) {
-      // Don't compress very short text - overhead isn't worth it
+    if (text.isEmpty || text.length < 150) {
+      // Increased threshold - don't compress shorter text
       return text;
     }
     
@@ -22,35 +26,42 @@ class CompressionService {
       final bytes = utf8.encode(text);
       final compressed = gzip.encode(bytes);
       
-      // Only use compressed version if it's actually smaller
-      if (compressed.length < bytes.length) {
-        // Prefix with 'gz:' to indicate compressed content
+      // Only use compressed version if it saves at least 20%
+      if (compressed.length < bytes.length * 0.8) {
         return 'gz:${base64Encode(compressed)}';
       }
       return text;
     } catch (e) {
-      // If compression fails, return original text
       return text;
     }
   }
 
   /// Decompresses a gzip-compressed base64 string back to text.
-  /// Automatically handles both compressed and uncompressed content.
+  /// Uses caching for recently accessed content.
   String decompress(String content) {
     if (content.isEmpty) return content;
+    if (!content.startsWith('gz:')) return content;
     
-    // Check if content is compressed (starts with 'gz:')
-    if (!content.startsWith('gz:')) {
-      return content; // Not compressed, return as-is
+    // Check cache first
+    final cacheKey = content.hashCode;
+    if (_decompressCache.containsKey(cacheKey)) {
+      return _decompressCache[cacheKey]!;
     }
     
     try {
-      final base64Data = content.substring(3); // Remove 'gz:' prefix
+      final base64Data = content.substring(3);
       final compressed = base64Decode(base64Data);
       final decompressed = gzip.decode(compressed);
-      return utf8.decode(decompressed);
+      final result = utf8.decode(decompressed);
+      
+      // Cache result
+      if (_decompressCache.length >= _maxCacheSize) {
+        _decompressCache.remove(_decompressCache.keys.first);
+      }
+      _decompressCache[cacheKey] = result;
+      
+      return result;
     } catch (e) {
-      // If decompression fails, return original (might be plain text)
       return content;
     }
   }
