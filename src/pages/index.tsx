@@ -98,7 +98,7 @@ const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, tok
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px' }}>
         <div className="modal-header">
           <div>
             <span className={`entry-type-badge ${isIdea ? 'entry-type-idea' : 'entry-type-journal'}`}>
@@ -711,9 +711,9 @@ export default function Home() {
 
 const styles: Record<string, React.CSSProperties> = {
   main: {
-    maxWidth: '680px',
+    maxWidth: '720px',
     margin: '0 auto',
-    padding: '1.5rem 1rem 4rem',
+    padding: '2rem 1rem 4rem',
   },
   header: {
     marginBottom: '1.5rem',
@@ -732,7 +732,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   editorSection: {
     background: 'var(--bg-card)',
-    padding: '1rem',
+    padding: '1.25rem',
     borderRadius: 'var(--radius-lg)',
     marginBottom: '2rem',
     border: '1px solid var(--border)',
@@ -769,14 +769,14 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--fg)',
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius-md)',
-    padding: '0.875rem',
+    padding: '1rem',
     fontSize: '15px',
     lineHeight: 1.6,
     resize: 'vertical',
   },
   moodSection: {
-    marginTop: '0.875rem',
-    padding: '0.75rem',
+    marginTop: '1rem',
+    padding: '0.875rem',
     background: 'var(--bg)',
     borderRadius: 'var(--radius-md)',
     border: '1px solid var(--border)',
@@ -791,7 +791,7 @@ const styles: Record<string, React.CSSProperties> = {
   entryList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.625rem',
+    gap: '0.75rem',
   },
   empty: {
     textAlign: 'center',
@@ -918,10 +918,10 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--fg)',
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius-md)',
-    padding: '0.75rem',
+    padding: '0.875rem',
     fontSize: '14px',
     lineHeight: 1.6,
     resize: 'vertical',
-    marginTop: '0.5rem',
+    marginTop: '0.625rem',
   },
 };

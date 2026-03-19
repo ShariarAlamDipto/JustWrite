@@ -55,15 +55,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         else moodDistribution.great++;
       });
 
-      // Mood history for line chart (last 14 days with mood values)
+      // Mood history for line chart (last 14 days, one average per day)
       const moodHistory: { date: string; mood: number }[] = [];
       const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000);
+      const dailyMoods: Record<string, number[]> = {};
       entriesWithMood
         .filter((e: any) => new Date(e.created_at) >= twoWeeksAgo)
-        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
         .forEach((e: any) => {
           const dateStr = new Date(e.created_at).toISOString().split('T')[0];
-          moodHistory.push({ date: dateStr, mood: e.mood });
+          if (!dailyMoods[dateStr]) dailyMoods[dateStr] = [];
+          dailyMoods[dateStr].push(e.mood);
+        });
+      Object.entries(dailyMoods)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([date, moods]) => {
+          const avgMoodForDay = Math.round(moods.reduce((s, m) => s + m, 0) / moods.length);
+          moodHistory.push({ date, mood: avgMoodForDay });
         });
 
       // Activity tag analysis
@@ -77,20 +84,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       // Word frequency for keywords (simple implementation)
+      // Skip entries with encrypted content (starts with enc2: or enc:) - server can't decrypt client-side encrypted content
       const wordCounts: Record<string, number> = {};
       const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'i', 'my', 'me', 'we', 'you', 'it', 'is', 'was', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'this', 'that', 'these', 'those', 'am', 'are', 'been', 'being', 'so', 'as', 'if', 'then', 'than', 'just', 'very', 'really', 'about', 'also', 'more', 'some', 'any', 'all', 'not', 'no', 'yes', 'can', 'get', 'got', 'like', 'think', 'know', 'want', 'feel', 'felt', 'today', 'day', 'time']);
-      
+
       monthlyEntries.forEach((entry: any) => {
-        if (entry.content) {
-          const words = entry.content.toLowerCase()
-            .replace(/[^a-z\s]/g, '')
-            .split(/\s+/)
-            .filter((w: string) => w.length > 3 && !stopWords.has(w));
-          
-          words.forEach((word: string) => {
-            wordCounts[word] = (wordCounts[word] || 0) + 1;
-          });
-        }
+        // Skip encrypted entries - server cannot decrypt client-side encrypted content
+        if (!entry.content || entry.content.startsWith('enc2:') || entry.content.startsWith('enc:')) return;
+
+        const words = entry.content.toLowerCase()
+          .replace(/[^a-z\s]/g, '')
+          .split(/\s+/)
+          .filter((w: string) => w.length > 3 && !stopWords.has(w));
+
+        words.forEach((word: string) => {
+          wordCounts[word] = (wordCounts[word] || 0) + 1;
+        });
       });
 
       const topKeywords = Object.entries(wordCounts)
@@ -155,8 +164,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           weeklyAverage: avgMood(weeklyMoods),
           monthlyAverage: avgMood(monthlyMoods),
           allTimeAverage: avgMood(entriesWithMood.map((e: any) => e.mood)),
-          trend: weeklyMoods.length >= 2 
-            ? weeklyMoods[0] > weeklyMoods[weeklyMoods.length - 1] ? 'up' : 'down'
+          trend: weeklyMoods.length >= 2
+            ? weeklyMoods[weeklyMoods.length - 1] < weeklyMoods[0] ? 'up' : weeklyMoods[weeklyMoods.length - 1] > weeklyMoods[0] ? 'down' : 'stable'
             : 'stable',
           distribution: moodDistribution,
           history: moodHistory,
@@ -174,8 +183,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         motivationalMessage: getMotivationalMessage(stats),
       });
-    } catch (err) {
-      console.error('Stats error:', err);
+    } catch {
       return res.status(500).json({ error: 'Failed to calculate stats' });
     }
   });

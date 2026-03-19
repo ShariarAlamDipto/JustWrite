@@ -91,7 +91,7 @@ const taskStyles: Record<string, React.CSSProperties> = {
   item: {
     display: 'flex',
     alignItems: 'flex-start',
-    gap: '0.875rem',
+    gap: '1rem',
     padding: '1rem 1.25rem',
     background: 'var(--bg-card)',
     borderLeft: '3px solid var(--accent)',
@@ -194,7 +194,7 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, loading }: AddTaskModalProps) =>
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
         <div className="modal-header">
           <h2 className="modal-title">Add New Task</h2>
           <button className="modal-close" onClick={onClose}>×</button>
@@ -578,15 +578,15 @@ export default function TasksPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   main: {
-    maxWidth: '680px',
+    maxWidth: '720px',
     margin: '0 auto',
-    padding: '2.5rem 1rem 5rem',
+    padding: '2rem 1rem 4rem',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: '2rem',
+    marginBottom: '1.5rem',
   },
   title: {
     fontSize: '28px',
@@ -637,7 +637,7 @@ const styles: Record<string, React.CSSProperties> = {
   taskList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem',
+    gap: '0.75rem',
   },
   empty: {
     textAlign: 'center',

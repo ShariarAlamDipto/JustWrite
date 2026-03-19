@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { withAuth } from '../../../lib/withAuth';
 import { createClient } from '@supabase/supabase-js';
+import { isValidUUID, sanitizeInput } from '../../../lib/security';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,8 +17,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const { id } = req.query;
-    if (!id || typeof id !== 'string') {
-      return res.status(400).json({ error: 'Invalid ID' });
+    // SECURITY: Validate ID format to prevent injection attacks
+    if (!id || typeof id !== 'string' || !isValidUUID(id)) {
+      return res.status(400).json({ error: 'Invalid ID format' });
     }
 
     if (req.method === 'GET') {
@@ -35,8 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(404).json({ error: 'Voice entry not found' });
         }
         return res.status(200).json({ voiceEntry: data });
-      } catch (err) {
-        console.error('Failed to get voice entry:', err);
+      } catch {
         return res.status(500).json({ error: 'Failed to get voice entry' });
       }
     }
@@ -46,8 +47,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         const { title, transcript } = req.body;
         const updates: any = {};
-        if (title !== undefined) updates.title = title;
-        if (transcript !== undefined) updates.transcript = transcript;
+        // SECURITY: Sanitize inputs before storing
+        if (title !== undefined) updates.title = sanitizeInput(title);
+        if (transcript !== undefined) updates.transcript = sanitizeInput(transcript);
 
         const { data, error } = await supabase
           .from('voice_entries')
@@ -59,8 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (error) throw error;
         return res.status(200).json({ voiceEntry: data });
-      } catch (err) {
-        console.error('Failed to update voice entry:', err);
+      } catch {
         return res.status(500).json({ error: 'Failed to update voice entry' });
       }
     }
@@ -92,8 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (error) throw error;
         return res.status(200).json({ success: true });
-      } catch (err) {
-        console.error('Failed to delete voice entry:', err);
+      } catch {
         return res.status(500).json({ error: 'Failed to delete voice entry' });
       }
     }

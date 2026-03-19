@@ -295,12 +295,12 @@ export default function BrainstormPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   main: {
-    maxWidth: '680px',
+    maxWidth: '720px',
     margin: '0 auto',
-    padding: '2.5rem 1rem 4rem',
+    padding: '2rem 1rem 4rem',
   },
   header: {
-    marginBottom: '2rem',
+    marginBottom: '1.5rem',
   },
   title: {
     fontSize: '28px',
@@ -366,7 +366,7 @@ const styles: Record<string, React.CSSProperties> = {
   taskList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem',
+    gap: '0.75rem',
   },
   taskItem: {
     display: 'flex',

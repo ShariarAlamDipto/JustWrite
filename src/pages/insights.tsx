@@ -195,7 +195,6 @@ export default function Insights() {
   const { user, loading: authLoading, token } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [moodChartType, setMoodChartType] = useState<'pie' | 'line'>('pie');
 
   useEffect(() => {
     if (user && token) fetchStats();
@@ -349,31 +348,9 @@ export default function Insights() {
         {/* Mood Distribution Chart */}
         {stats.mood.distribution && (
           <section style={styles.section}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <h2 style={styles.sectionTitle}>Mood Distribution</h2>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button 
-                  className={`btn btn-sm ${moodChartType === 'pie' ? 'btn-primary' : ''}`}
-                  onClick={() => setMoodChartType('pie')}
-                  style={{ fontSize: '11px', padding: '0.25rem 0.5rem' }}
-                >
-                  Pie
-                </button>
-                <button 
-                  className={`btn btn-sm ${moodChartType === 'line' ? 'btn-primary' : ''}`}
-                  onClick={() => setMoodChartType('line')}
-                  style={{ fontSize: '11px', padding: '0.25rem 0.5rem' }}
-                >
-                  Line
-                </button>
-              </div>
-            </div>
+            <h2 style={styles.sectionTitle}>Mood Distribution</h2>
             <div style={styles.card}>
-              {moodChartType === 'pie' ? (
-                <MoodPieChart distribution={stats.mood.distribution} />
-              ) : (
-                <MoodLineChart moodHistory={stats.mood.history || []} />
-              )}
+              <MoodPieChart distribution={stats.mood.distribution} />
             </div>
           </section>
         )}
@@ -469,9 +446,9 @@ export default function Insights() {
 
 const styles: Record<string, React.CSSProperties> = {
   main: {
-    maxWidth: '680px',
+    maxWidth: '720px',
     margin: '0 auto',
-    padding: '2.5rem 1rem 4rem',
+    padding: '2rem 1rem 4rem',
   },
   header: {
     marginBottom: '2rem',
@@ -489,35 +466,35 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0.375rem 0 0',
   },
   section: {
-    marginBottom: '2rem',
+    marginBottom: '1.75rem',
   },
   sectionTitle: {
-    fontSize: '12px',
+    fontSize: '11px',
     fontWeight: 600,
     margin: '0 0 0.75rem',
     color: 'var(--muted)',
     textTransform: 'uppercase',
-    letterSpacing: '0.05em',
+    letterSpacing: '0.06em',
   },
   card: {
     background: 'var(--bg-card)',
-    padding: '1.25rem',
+    padding: '1.25rem 1.5rem',
     borderRadius: 'var(--radius-lg)',
     border: '1px solid var(--border)',
   },
   statsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '0.75rem',
+    gap: '0.875rem',
   },
   statCard: {
     background: 'var(--bg-card)',
-    padding: '1rem',
+    padding: '1.25rem',
     borderRadius: 'var(--radius-md)',
     border: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.25rem',
+    gap: '0.375rem',
   },
   statValue: {
     fontSize: '24px',
@@ -545,7 +522,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '0.5rem 0',
+    padding: '0.625rem 0',
     borderBottom: '1px solid var(--border)',
   },
   moodLabel: {
@@ -580,25 +557,25 @@ const styles: Record<string, React.CSSProperties> = {
   activityList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem',
+    gap: '0',
   },
   activityItem: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '0.5rem 0',
+    padding: '0.625rem 0',
     borderBottom: '1px solid var(--border)',
     fontSize: '14px',
   },
   badgeGrid: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.75rem',
+    gap: '0.875rem',
   },
   badge: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.75rem',
+    gap: '0.875rem',
   },
   badgeIcon: {
     fontSize: '24px',

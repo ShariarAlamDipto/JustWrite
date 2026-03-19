@@ -17,6 +17,9 @@ const getMoodLabel = (mood: number) => {
 // Uses 600,000 iterations as recommended by OWASP 2023
 const PBKDF2_ITERATIONS = 600000;
 const SALT_LENGTH = 16;
+const MIN_PIN_LENGTH = 6; // SECURITY: Increased from 4 to 6 for better brute-force resistance
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 
 const generateSalt = (): string => {
   const salt = new Uint8Array(SALT_LENGTH);
@@ -75,6 +78,60 @@ const verifyPinHash = async (pin: string, storedHash: string): Promise<boolean> 
   return result === 0;
 };
 
+// SECURITY: Lockout mechanism to prevent brute-force attacks
+const getLockoutState = (): { failedAttempts: number; lockedUntil: number | null } => {
+  try {
+    const state = localStorage.getItem('justwrite_pin_lockout');
+    if (state) {
+      return JSON.parse(state);
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return { failedAttempts: 0, lockedUntil: null };
+};
+
+const setLockoutState = (failedAttempts: number, lockedUntil: number | null): void => {
+  localStorage.setItem('justwrite_pin_lockout', JSON.stringify({ failedAttempts, lockedUntil }));
+};
+
+const clearLockoutState = (): void => {
+  localStorage.removeItem('justwrite_pin_lockout');
+};
+
+const isLockedOut = (): boolean => {
+  const state = getLockoutState();
+  if (state.lockedUntil && Date.now() < state.lockedUntil) {
+    return true;
+  }
+  // Clear expired lockout
+  if (state.lockedUntil && Date.now() >= state.lockedUntil) {
+    clearLockoutState();
+  }
+  return false;
+};
+
+const getRemainingLockoutTime = (): string => {
+  const state = getLockoutState();
+  if (!state.lockedUntil) return '';
+  const remaining = Math.max(0, state.lockedUntil - Date.now());
+  const minutes = Math.ceil(remaining / 60000);
+  return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+};
+
+const recordFailedAttempt = (): boolean => {
+  const state = getLockoutState();
+  const newAttempts = state.failedAttempts + 1;
+  
+  if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+    setLockoutState(newAttempts, Date.now() + LOCKOUT_DURATION_MS);
+    return true; // Now locked out
+  }
+  
+  setLockoutState(newAttempts, null);
+  return false;
+};
+
 // Entry Card Component
 const EntryCard = memo(({ entry, onClick }: { entry: any; onClick: () => void }) => {
   const date = new Date(entry.created_at);
@@ -125,9 +182,10 @@ interface EntryDetailModalProps {
   onUpdate: (entry: any) => void;
   onDelete: (id: string) => void;
   token: string;
+  userId: string | undefined;
 }
 
-const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, token }: EntryDetailModalProps) => {
+const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, token, userId }: EntryDetailModalProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(entry?.content || '');
   const [saving, setSaving] = useState(false);
@@ -148,21 +206,40 @@ const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, tok
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Encrypt content before saving (private entries must be encrypted)
+      let contentToSave = editContent;
+      if (userId) {
+        try {
+          contentToSave = await encryptContent(editContent, userId);
+        } catch {
+          alert('Could not encrypt your entry. Please try again.');
+          setSaving(false);
+          return;
+        }
+      }
       const res = await fetch(`/api/entries/${entry.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ content: editContent })
+        body: JSON.stringify({ content: contentToSave })
       });
       if (res.ok) {
         const json = await res.json();
+        // Decrypt the returned entry for display
+        if (json.entry && json.entry.content && isEncrypted(json.entry.content) && userId) {
+          try {
+            json.entry.content = await decryptContent(json.entry.content, userId);
+          } catch {
+            json.entry.content = editContent; // Use the edited content as fallback
+          }
+        }
         onUpdate(json.entry);
         setIsEditing(false);
       }
-    } catch (err) {
-      console.error('Failed to save:', err);
+    } catch {
+      alert('Failed to save entry. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -171,21 +248,18 @@ const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, tok
   const handleDelete = async () => {
     if (!confirm('Delete this entry? This cannot be undone.')) return;
     try {
-      console.log('Deleting entry:', entry.id);
       const res = await fetch(`/api/entries/${entry.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      console.log('Delete response:', res.status, data);
       if (res.ok && data.success) {
         onDelete(entry.id);
         onClose();
       } else {
         alert(`Failed to delete: ${data.error || 'Unknown error'}`);
       }
-    } catch (err) {
-      console.error('Failed to delete:', err);
+    } catch {
       alert('Failed to delete entry.');
     }
   };
@@ -194,7 +268,7 @@ const EntryDetailModal = memo(({ entry, isOpen, onClose, onUpdate, onDelete, tok
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', maxHeight: '80vh', overflow: 'auto' }}>
+      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <div>
             <div style={{ fontSize: '14px', fontWeight: 600 }}>
@@ -269,8 +343,8 @@ const PinSetupModal = ({ isOpen, onClose, onSetPin }: { isOpen: boolean; onClose
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin.length < 4) {
-      setError('PIN must be at least 4 characters');
+    if (pin.length < MIN_PIN_LENGTH) {
+      setError(`PIN must be at least ${MIN_PIN_LENGTH} characters`);
       return;
     }
     if (pin !== confirmPin) {
@@ -286,7 +360,7 @@ const PinSetupModal = ({ isOpen, onClose, onSetPin }: { isOpen: boolean; onClose
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
         <h2 style={{ marginBottom: '1rem' }}>Set Up Private PIN</h2>
         <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '1rem' }}>
           Create a PIN to protect your private journal entries. This PIN is stored locally on your device.
@@ -294,7 +368,7 @@ const PinSetupModal = ({ isOpen, onClose, onSetPin }: { isOpen: boolean; onClose
         <form onSubmit={handleSubmit}>
           <input
             type="password"
-            placeholder="Enter PIN (min 4 characters)"
+            placeholder={`Enter PIN (min ${MIN_PIN_LENGTH} characters)`}
             value={pin}
             onChange={e => setPin(e.target.value)}
             className="input"
@@ -319,29 +393,66 @@ const PinSetupModal = ({ isOpen, onClose, onSetPin }: { isOpen: boolean; onClose
   );
 };
 
-// PIN Entry Modal - SECURITY: Updated to handle async verification
+// PIN Entry Modal - SECURITY: Updated to handle async verification and lockout
 const PinEntryModal = ({ isOpen, onClose, onVerify }: { isOpen: boolean; onClose: () => void; onVerify: (pin: string) => Promise<boolean> }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [lockoutTime, setLockoutTime] = useState('');
+
+  // Check lockout status on mount and periodically
+  useEffect(() => {
+    const checkLockout = () => {
+      const isLocked = isLockedOut();
+      setLocked(isLocked);
+      if (isLocked) {
+        setLockoutTime(getRemainingLockoutTime());
+        setError(`Too many failed attempts. Try again in ${getRemainingLockoutTime()}.`);
+      } else {
+        setError('');
+      }
+    };
+    
+    checkLockout();
+    const interval = setInterval(checkLockout, 10000); // Check every 10 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // SECURITY: Check lockout before attempting verification
+    if (isLockedOut()) {
+      setError(`Too many failed attempts. Try again in ${getRemainingLockoutTime()}.`);
+      return;
+    }
+    
     setVerifying(true);
     setError('');
     try {
       const isValid = await onVerify(pin);
       if (isValid) {
+        clearLockoutState(); // Reset on successful login
         setPin('');
         setError('');
         onClose();
       } else {
-        setError('Incorrect PIN');
+        const nowLockedOut = recordFailedAttempt();
+        if (nowLockedOut) {
+          setLocked(true);
+          setLockoutTime(getRemainingLockoutTime());
+          setError(`Too many failed attempts. Try again in ${getRemainingLockoutTime()}.`);
+        } else {
+          const state = getLockoutState();
+          const remaining = MAX_FAILED_ATTEMPTS - state.failedAttempts;
+          setError(`Incorrect PIN. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`);
+        }
         setPin('');
       }
-    } catch (err) {
+    } catch {
       setError('Verification failed');
     } finally {
       setVerifying(false);
@@ -350,7 +461,7 @@ const PinEntryModal = ({ isOpen, onClose, onVerify }: { isOpen: boolean; onClose
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
         <h2 style={{ marginBottom: '1rem' }}>Enter PIN</h2>
         <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '1rem' }}>
           Enter your PIN to access private entries.
@@ -364,12 +475,12 @@ const PinEntryModal = ({ isOpen, onClose, onVerify }: { isOpen: boolean; onClose
             className="input"
             style={{ marginBottom: '0.75rem' }}
             autoFocus
-            disabled={verifying}
+            disabled={verifying || locked}
           />
           {error && <p style={{ color: '#ff6b6b', fontSize: '12px', marginBottom: '0.75rem' }}>{error}</p>}
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button type="submit" className="btn btn-primary" disabled={verifying}>
-              {verifying ? 'Verifying...' : 'Unlock'}
+            <button type="submit" className="btn btn-primary" disabled={verifying || locked}>
+              {verifying ? 'Verifying...' : locked ? 'Locked' : 'Unlock'}
             </button>
             <button type="button" onClick={onClose} className="btn" disabled={verifying}>Cancel</button>
           </div>
@@ -456,16 +567,17 @@ export default function LockedJournal() {
           if (entry.content && isEncrypted(entry.content) && user?.id) {
             try {
               entry.content = await decryptContent(entry.content, user.id);
-            } catch (e) {
-              console.error('Failed to decrypt entry:', e);
+            } catch {
+              // Keep encrypted content if decryption fails
+              entry.content = '[Unable to decrypt - device key mismatch]';
             }
           }
           return entry;
         }));
         setEntries(decrypted);
       }
-    } catch (err) {
-      console.error('Failed to load entries:', err);
+    } catch {
+      // Failed to load entries silently
     } finally {
       setLoading(false);
     }
@@ -507,8 +619,11 @@ export default function LockedJournal() {
       if (user?.id) {
         try {
           contentToSave = await encryptContent(content, user.id);
-        } catch (e) {
-          console.error('Failed to encrypt:', e);
+        } catch {
+          // SECURITY: Don't save if encryption fails
+          alert('Could not encrypt your entry. Please try again.');
+          setSaving(false);
+          return;
         }
       }
       
@@ -531,16 +646,16 @@ export default function LockedJournal() {
         if (json.entry && json.entry.content && isEncrypted(json.entry.content) && user?.id) {
           try {
             json.entry.content = await decryptContent(json.entry.content, user.id);
-          } catch (e) {
-            console.error('Failed to decrypt returned entry:', e);
+          } catch {
+            json.entry.content = content; // Show original content if decryption fails
           }
         }
         setEntries(prev => [json.entry, ...prev]);
         setContent('');
         setMood(50);
       }
-    } catch (err) {
-      console.error('Failed to save:', err);
+    } catch {
+      alert('Failed to save entry. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -581,7 +696,7 @@ export default function LockedJournal() {
   return (
     <>
       <Nav />
-      <main className="container" style={{ padding: '1rem', maxWidth: '800px', margin: '0 auto' }}>
+      <main className="container" style={{ padding: '2rem 1rem 4rem', maxWidth: '720px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{ marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -617,6 +732,7 @@ export default function LockedJournal() {
           onUpdate={handleEntryUpdate}
           onDelete={handleEntryDelete}
           token={token || ''}
+          userId={user?.id}
         />
 
         {/* Main Content - Only show when unlocked */}

@@ -17,7 +17,7 @@ function extractTasksFromText(text: string) {
       }
     }
   }
-  return tasks.slice(0, 10); // SECURITY: Limit tasks
+  return tasks; // No limit on heuristic extraction
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -53,6 +53,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // SECURITY: Pass userId to verify ownership
       const entry = await getEntryById(entryId as string, userId);
       if (!entry) return res.status(404).json({ error: 'Entry not found or access denied' });
+      // Check if content is client-side encrypted (server cannot decrypt)
+      if (entry.content && (entry.content.startsWith('enc2:') || entry.content.startsWith('enc:'))) {
+        return res.status(400).json({ error: 'Entry content is client-side encrypted. Please send the decrypted content via customText instead.' });
+      }
       contentToSummarize = entry.content;
     } else {
       return res.status(400).json({ error: 'entryId or customText required' });
@@ -70,14 +74,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Try GEMINI provider first (free and fast)
     if (geminiKey) {
       try {
-        const prompt = `Summarize the following journal entry and extract 2-5 actionable tasks. Return ONLY valid JSON: {"summary": "string (max 100 words)", "tasks": [{"title": "string", "description": "string or null", "priority": "low|medium|high"}]}. Entry:\n${contentToSummarize}`;
+        const prompt = `Summarize the following journal entry and extract ALL actionable tasks. Be thorough and detailed. Return ONLY valid JSON: {"summary": "string (max 100 words)", "tasks": [{"title": "string", "description": "string or null", "priority": "low|medium|high"}]}. Entry:\n${contentToSummarize}`;
         
         const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens: 500, temperature: 0.3 }
+            generationConfig: { maxOutputTokens: 4000, temperature: 0.3 }
           })
         });
         
@@ -98,8 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             summary = contentToSummarize.slice(0, 300) + (contentToSummarize.length > 300 ? '…' : '');
           }
         }
-      } catch (err) {
-        console.error('gemini distill error', err);
+      } catch {
         // fall through to next provider
       }
     }
@@ -107,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Try GROQ provider if GEMINI didn't populate tasks
     if (!tasks.length && groqUrl && groqKey) {
       try {
-        const prompt = `Summarize and extract actionable tasks from the following journal entry. Return strict JSON: {"summary": string, "tasks": [{"title": string, "description": string|null, "priority": "low"|"medium"|"high", "due": null|string}] }\\nEntry:\n'''${contentToSummarize}'''`;
+        const prompt = `Summarize and extract ALL actionable tasks from the following journal entry. Be thorough and detailed. Return strict JSON: {"summary": string, "tasks": [{"title": string, "description": string|null, "priority": "low"|"medium"|"high", "due": null|string}] }\\nEntry:\n'''${contentToSummarize}'''`;
         const resp = await fetch(groqUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
@@ -135,20 +138,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tasks = extractTasksFromText(contentToSummarize);
           summary = contentToSummarize.slice(0, 300) + (contentToSummarize.length > 300 ? '…' : '');
         }
-      } catch (err) {
-        console.error('groq distill error', err);
+      } catch {
         // fall through to next provider
       }
     }
 
     // If GROQ didn't populate tasks, try OpenAI if available
     if (!tasks.length && openaiKey) {
-      const prompt = `You are an assistant that converts a personal journal entry into a short summary and a list of actionable tasks. Return only valid JSON with fields: { \"summary\": string, \"tasks\": [ {\"title\":string, \"description\":string|null, \"priority\":\"low\"|\"medium\"|\"high\", \"due\": null | string } ] }. Entry:\n'''${contentToSummarize}'''`;
+      const prompt = `You are an assistant that converts a personal journal entry into a short summary and a list of ALL actionable tasks. Be thorough and detailed. Return only valid JSON with fields: { \"summary\": string, \"tasks\": [ {\"title\":string, \"description\":string|null, \"priority\":\"low\"|\"medium\"|\"high\", \"due\": null | string } ] }. Entry:\n'''${contentToSummarize}'''`;
 
       const resp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
-        body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: [{ role: 'system', content: 'You output only JSON.' }, { role: 'user', content: prompt }], max_tokens: 600 })
+        body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: [{ role: 'system', content: 'You output only JSON.' }, { role: 'user', content: prompt }], max_tokens: 2000 })
       });
       const j = await resp.json();
       const text = j?.choices?.[0]?.message?.content;
@@ -171,8 +173,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       summary = contentToSummarize.slice(0, 300) + (contentToSummarize.length > 300 ? '…' : '');
       tasks = extractTasksFromText(contentToSummarize);
     }
-  } catch (err) {
-    console.error('distill error', err);
+  } catch {
     summary = contentToSummarize.slice(0, 300) + (contentToSummarize.length > 300 ? '…' : '');
     tasks = extractTasksFromText(contentToSummarize);
   }

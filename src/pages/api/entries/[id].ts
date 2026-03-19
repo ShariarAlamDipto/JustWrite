@@ -64,13 +64,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'DELETE') {
-      console.log(`API: DELETE request for entry ${id} by user ${userId}`);
       try {
-        const result = await deleteEntry(id, userId);
-        console.log(`API: Delete result for entry ${id}:`, result);
+        await deleteEntry(id, userId);
         return res.status(200).json({ success: true });
       } catch (err: any) {
-        console.error('API: Delete entry error:', err);
         return res.status(500).json({ error: err.message || 'Failed to delete entry' });
       }
     }

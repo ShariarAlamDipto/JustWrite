@@ -1,15 +1,19 @@
 /**
  * Client-Side Encryption Service for JustWrite
- * 
+ *
  * This provides end-to-end encryption for journal entries so that
  * even database admins cannot read user content.
- * 
+ *
  * Encryption format: enc2:{salt}:{iv}:{encryptedData}
  * Compatible with Flutter app encryption format.
+ *
+ * SECURITY: Key derivation uses userId as key material with PBKDF2.
  */
 
-// PBKDF2 iterations (OWASP 2023 recommends 600,000 for SHA-256)
+// PBKDF2 iterations - MUST match Flutter app (600,000 for new entries)
 const PBKDF2_ITERATIONS = 600000;
+// Legacy mobile iteration count (Flutter used 210k before the fix)
+const PBKDF2_ITERATIONS_LEGACY_MOBILE = 210000;
 const SALT_LENGTH = 32;
 const KEY_LENGTH = 256; // bits
 const IV_LENGTH = 12; // GCM standard
@@ -38,7 +42,7 @@ function fromBase64(base64: string): Uint8Array {
 /**
  * Derive encryption key from userId using PBKDF2
  */
-async function deriveKey(userId: string, salt: Uint8Array): Promise<CryptoKey> {
+async function deriveKey(userId: string, salt: Uint8Array, iterations: number = PBKDF2_ITERATIONS): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
@@ -52,7 +56,7 @@ async function deriveKey(userId: string, salt: Uint8Array): Promise<CryptoKey> {
     {
       name: 'PBKDF2',
       salt: salt.buffer as ArrayBuffer,
-      iterations: PBKDF2_ITERATIONS,
+      iterations: iterations,
       hash: 'SHA-256'
     },
     keyMaterial,
@@ -63,49 +67,27 @@ async function deriveKey(userId: string, salt: Uint8Array): Promise<CryptoKey> {
 }
 
 /**
- * Get or create salt for user (stored in localStorage)
- */
-function getOrCreateSalt(userId: string): Uint8Array {
-  const storageKey = `jw_salt_${userId}`;
-  
-  if (typeof localStorage !== 'undefined') {
-    const existingSalt = localStorage.getItem(storageKey);
-    if (existingSalt) {
-      return fromBase64(existingSalt);
-    }
-  }
-  
-  // Generate new salt
-  const newSalt = generateRandomBytes(SALT_LENGTH);
-  
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(storageKey, toBase64(newSalt));
-  }
-  
-  return newSalt;
-}
-
-/**
  * Encrypt content using AES-256-GCM
  * Returns: enc2:{salt}:{iv}:{encryptedData}
+ * SECURITY: Fresh salt generated for each encryption operation
  */
 export async function encryptContent(content: string, userId: string): Promise<string> {
   if (!content || !userId) return content;
-  
+
   // Check if Web Crypto API is available
   if (typeof crypto === 'undefined' || !crypto.subtle) {
-    console.warn('Web Crypto API not available, content will not be encrypted');
-    return content;
+    // SECURITY: Throw error instead of returning plaintext silently
+    throw new Error('Web Crypto API not available - encryption required');
   }
-  
+
   try {
     // Generate fresh salt for each encryption (embedded in output)
     const salt = generateRandomBytes(SALT_LENGTH);
     const iv = generateRandomBytes(IV_LENGTH);
-    
-    // Derive key from userId
+
+    // Derive key from userId + fresh salt
     const key = await deriveKey(userId, salt);
-    
+
     // Encrypt content
     const encoder = new TextEncoder();
     const encrypted = await crypto.subtle.encrypt(
@@ -113,61 +95,73 @@ export async function encryptContent(content: string, userId: string): Promise<s
       key,
       encoder.encode(content)
     );
-    
+
     // Format: enc2:{salt}:{iv}:{encrypted}
     const saltBase64 = toBase64(salt);
     const ivBase64 = toBase64(iv);
     const encryptedBase64 = toBase64(new Uint8Array(encrypted));
-    
+
     return `enc2:${saltBase64}:${ivBase64}:${encryptedBase64}`;
   } catch (error) {
-    console.error('Encryption failed:', error);
-    return content; // Return unencrypted on failure
+    // SECURITY: Throw error instead of silently returning plaintext
+    throw new Error('Encryption failed - cannot save unencrypted content');
   }
 }
 
 /**
  * Decrypt content encrypted with enc2 format
+ * Tries 600k iterations first (web default), falls back to 210k (old Flutter default)
  */
 export async function decryptContent(content: string, userId: string): Promise<string> {
   if (!content || !userId) return content;
-  
+
   // Check if content is encrypted
   if (!content.startsWith('enc2:')) {
     return content; // Not encrypted
   }
-  
+
   // Check if Web Crypto API is available
   if (typeof crypto === 'undefined' || !crypto.subtle) {
     console.warn('Web Crypto API not available, cannot decrypt');
     return '[Encrypted content - cannot decrypt in this environment]';
   }
-  
+
+  const parts = content.split(':');
+  if (parts.length !== 4) {
+    console.warn('Invalid encrypted format');
+    return content;
+  }
+
+  const salt = fromBase64(parts[1]);
+  const iv = fromBase64(parts[2]);
+  const encryptedData = fromBase64(parts[3]);
+
+  // Try with primary iterations (600k - web standard)
   try {
-    const parts = content.split(':');
-    if (parts.length !== 4) {
-      console.warn('Invalid encrypted format');
-      return content;
-    }
-    
-    const salt = fromBase64(parts[1]);
-    const iv = fromBase64(parts[2]);
-    const encryptedData = fromBase64(parts[3]);
-    
-    // Derive key from userId using the salt from the content
-    const key = await deriveKey(userId, salt);
-    
-    // Decrypt
+    const key = await deriveKey(userId, salt, PBKDF2_ITERATIONS);
     const decrypted = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
       key,
       encryptedData.buffer as ArrayBuffer
     );
-    
+    const decoder = new TextDecoder();
+    return decoder.decode(decrypted);
+  } catch {
+    // Primary decryption failed - try legacy mobile iterations (210k)
+  }
+
+  // Fallback: try with old Flutter mobile iterations (210k) for entries created before the fix
+  try {
+    const key = await deriveKey(userId, salt, PBKDF2_ITERATIONS_LEGACY_MOBILE);
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+      key,
+      encryptedData.buffer as ArrayBuffer
+    );
     const decoder = new TextDecoder();
     return decoder.decode(decrypted);
   } catch (error) {
-    console.error('Decryption failed:', error);
+    console.error('Decryption failed with both iteration counts:', error);
     return '[Encrypted content - decryption failed]';
   }
 }
@@ -205,15 +199,15 @@ export async function migrateToEncryption(
 ): Promise<{ entriesUpdated: number; tasksUpdated: number }> {
   // Find unencrypted entries
   const unencryptedEntries = entries.filter(e => e.content && !isEncrypted(e.content));
-  const unencryptedTasks = tasks.filter(t => 
-    (t.title && !isEncrypted(t.title)) || 
+  const unencryptedTasks = tasks.filter(t =>
+    (t.title && !isEncrypted(t.title)) ||
     (t.description && !isEncrypted(t.description))
   );
-  
+
   if (unencryptedEntries.length === 0 && unencryptedTasks.length === 0) {
     return { entriesUpdated: 0, tasksUpdated: 0 };
   }
-  
+
   // Encrypt entries
   const encryptedEntries = await Promise.all(
     unencryptedEntries.map(async (entry) => ({
@@ -221,7 +215,7 @@ export async function migrateToEncryption(
       content: await encryptContent(entry.content, userId)
     }))
   );
-  
+
   // Encrypt tasks
   const encryptedTasks = await Promise.all(
     unencryptedTasks.map(async (task) => ({
@@ -230,7 +224,7 @@ export async function migrateToEncryption(
       description: task.description ? await encryptContent(task.description, userId) : undefined
     }))
   );
-  
+
   // Send to server
   try {
     const res = await fetch('/api/migrate-encryption', {
@@ -244,7 +238,7 @@ export async function migrateToEncryption(
         tasks: encryptedTasks
       })
     });
-    
+
     if (res.ok) {
       const result = await res.json();
       return {
@@ -255,6 +249,6 @@ export async function migrateToEncryption(
   } catch (e) {
     console.error('Migration failed:', e);
   }
-  
+
   return { entriesUpdated: 0, tasksUpdated: 0 };
 }

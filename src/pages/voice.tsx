@@ -264,17 +264,17 @@ export default function VoiceEntriesPage() {
   return (
     <>
       <Nav />
-      <main className="container" style={{ padding: '2rem 1rem', maxWidth: '800px', margin: '0 auto' }}>
+      <main className="container" style={{ padding: '2rem 1rem 4rem', maxWidth: '720px', margin: '0 auto' }}>
         <h1 style={{ marginBottom: '1.5rem' }}>Voice Entries</h1>
 
         {/* Recording Control */}
         <div style={{
-          padding: '2rem',
-          background: 'var(--card-bg)',
-          borderRadius: '12px',
+          padding: '1.5rem',
+          background: 'var(--bg-card)',
+          borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border)',
           textAlign: 'center',
-          marginBottom: '2rem'
+          marginBottom: '1.5rem'
         }}>
           {recording && (
             <div style={{ marginBottom: '1rem' }}>
@@ -298,32 +298,11 @@ export default function VoiceEntriesPage() {
               <span>Saving...</span>
             </div>
           ) : recording ? (
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <button
-                onClick={saveRecording}
-                style={{
-                  padding: '1rem 2rem',
-                  background: 'var(--accent)',
-                  color: 'black',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button onClick={saveRecording} className="btn btn-primary">
                 ✓ Save
               </button>
-              <button
-                onClick={cancelRecording}
-                style={{
-                  padding: '1rem 2rem',
-                  background: 'transparent',
-                  color: 'var(--fg)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
+              <button onClick={cancelRecording} className="btn">
                 ✕ Cancel
               </button>
             </div>
@@ -360,11 +339,11 @@ export default function VoiceEntriesPage() {
 
         {/* Entries List */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '2rem' }}>
-            <p>Loading entries...</p>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
+            <div className="spinner" />
           </div>
         ) : entries.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--muted)' }}>
+          <div style={{ textAlign: 'center', padding: '3rem 1.5rem', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--muted)' }}>
             <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.3 }}>
               <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
               <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
@@ -373,14 +352,14 @@ export default function VoiceEntriesPage() {
             <p style={{ fontSize: '0.875rem' }}>Tap the microphone to start recording</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {entries.map(entry => (
               <div
                 key={entry.id}
                 style={{
-                  padding: '1rem',
-                  background: 'var(--card-bg)',
-                  borderRadius: '8px',
+                  padding: '1.25rem',
+                  background: 'var(--bg-card)',
+                  borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--border)',
                   display: 'flex',
                   alignItems: 'center',
