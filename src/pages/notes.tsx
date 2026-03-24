@@ -24,7 +24,7 @@ interface NoteDetail extends NoteListItem {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function NotesPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, token, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [notes, setNotes] = useState<NoteListItem[]>([]);
@@ -45,10 +45,10 @@ export default function NotesPage() {
 
   // ── Load notes list ───────────────────────────────────────────────────────
   const loadNotes = useCallback(async () => {
-    if (!user) return;
+    if (!user || !token) return;
     try {
       const res = await fetch('/api/notes?parent_id=null', {
-        headers: { Authorization: `Bearer ${(user as any).access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const { notes } = await res.json();
@@ -57,7 +57,7 @@ export default function NotesPage() {
     } finally {
       setLoadingList(false);
     }
-  }, [user]);
+  }, [user, token]);
 
   useEffect(() => {
     if (user) loadNotes();
@@ -65,11 +65,11 @@ export default function NotesPage() {
 
   // ── Open a note ───────────────────────────────────────────────────────────
   const openNote = useCallback(async (id: string) => {
-    if (!user) return;
+    if (!user || !token) return;
     setLoadingNote(true);
     try {
       const res = await fetch(`/api/notes/${id}`, {
-        headers: { Authorization: `Bearer ${(user as any).access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const { note } = await res.json();
@@ -78,16 +78,16 @@ export default function NotesPage() {
     } finally {
       setLoadingNote(false);
     }
-  }, [user]);
+  }, [user, token]);
 
   // ── Create note ───────────────────────────────────────────────────────────
   const createNote = useCallback(async () => {
-    if (!user) return;
+    if (!user || !token) return;
     const res = await fetch('/api/notes', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${(user as any).access_token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ title: 'Untitled', blocks: [] }),
     });
@@ -96,34 +96,34 @@ export default function NotesPage() {
       setNotes(prev => [note, ...prev]);
       await openNote(note.id);
     }
-  }, [user, openNote]);
+  }, [user, token, openNote]);
 
   // ── Delete note ───────────────────────────────────────────────────────────
   const deleteNote = useCallback(async (id: string) => {
-    if (!user || !confirm('Delete this note?')) return;
+    if (!user || !token || !confirm('Delete this note?')) return;
     const res = await fetch(`/api/notes/${id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${(user as any).access_token}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
       setNotes(prev => prev.filter(n => n.id !== id));
       if (selectedNote?.id === id) setSelectedNote(null);
     }
-  }, [user, selectedNote]);
+  }, [user, token, selectedNote]);
 
   // ── Pin/unpin note ────────────────────────────────────────────────────────
   const togglePin = useCallback(async (id: string, pinned: boolean) => {
-    if (!user) return;
+    if (!user || !token) return;
     await fetch(`/api/notes/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${(user as any).access_token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ is_pinned: !pinned }),
     });
     setNotes(prev => prev.map(n => n.id === id ? { ...n, is_pinned: !pinned } : n));
-  }, [user]);
+  }, [user, token]);
 
   // ── Auto-save ─────────────────────────────────────────────────────────────
   const handleEditorChange = useCallback((
@@ -131,20 +131,20 @@ export default function NotesPage() {
     icon: string | null,
     blocks: Block[]
   ) => {
-    if (!selectedNote) return;
+    if (!selectedNote || !user || !token) return;
     pendingChange.current = { title, icon, blocks };
     setSaving('saving');
 
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       const change = pendingChange.current;
-      if (!change || !selectedNote) return;
+      if (!change || !selectedNote || !user || !token) return;
       try {
         const res = await fetch(`/api/notes/${selectedNote.id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${(user as any).access_token}`,
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ title: change.title, icon: change.icon, blocks: change.blocks }),
         });
@@ -163,7 +163,7 @@ export default function NotesPage() {
         setSaving('error');
       }
     }, 1500);
-  }, [selectedNote, user]);
+  }, [selectedNote, user, token]);
 
   // ── Filtered notes ────────────────────────────────────────────────────────
   const filtered = notes.filter(n =>
