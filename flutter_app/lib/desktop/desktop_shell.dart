@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 import '../providers/theme_provider.dart';
 import '../screens/home/home_screen.dart';
+import '../screens/notes/notes_screen.dart';
 import '../screens/voice/voice_entries_screen.dart';
 import '../screens/brainstorm/brainstorm_screen.dart';
 import '../screens/tasks/tasks_screen.dart';
@@ -24,6 +25,7 @@ class _DesktopShellState extends State<DesktopShell> with WindowListener {
   // Ordered list of top-level destinations
   static const _destinations = [
     _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Journal'),
+    _NavItem(icon: Icons.article_outlined, activeIcon: Icons.article_rounded, label: 'Notes'),
     _NavItem(icon: Icons.mic_none_rounded, activeIcon: Icons.mic_rounded, label: 'Voice'),
     _NavItem(icon: Icons.lightbulb_outline_rounded, activeIcon: Icons.lightbulb_rounded, label: 'Brainstorm'),
     _NavItem(icon: Icons.check_box_outline_blank_rounded, activeIcon: Icons.check_box_rounded, label: 'Tasks'),
@@ -44,9 +46,10 @@ class _DesktopShellState extends State<DesktopShell> with WindowListener {
   Widget _buildPage(int index) {
     switch (index) {
       case 0: return const HomeScreen();
-      case 1: return const VoiceEntriesScreen();
-      case 2: return const BrainstormScreen();
-      case 3: return const TasksScreen();
+      case 1: return const NotesScreen();
+      case 2: return const VoiceEntriesScreen();
+      case 3: return const BrainstormScreen();
+      case 4: return const TasksScreen();
       default: return const HomeScreen();
     }
   }
@@ -58,10 +61,11 @@ class _DesktopShellState extends State<DesktopShell> with WindowListener {
     // Keyboard shortcut handler
     return CallbackShortcuts(
       bindings: {
-        SingleActivator(LogicalKeyboardKey.digit1, control: true): () => setState(() => _selectedIndex = 0),
-        SingleActivator(LogicalKeyboardKey.digit2, control: true): () => setState(() => _selectedIndex = 1),
-        SingleActivator(LogicalKeyboardKey.digit3, control: true): () => setState(() => _selectedIndex = 2),
-        SingleActivator(LogicalKeyboardKey.digit4, control: true): () => setState(() => _selectedIndex = 3),
+        const SingleActivator(LogicalKeyboardKey.digit1, control: true): () => setState(() => _selectedIndex = 0),
+        const SingleActivator(LogicalKeyboardKey.digit2, control: true): () => setState(() => _selectedIndex = 1),
+        const SingleActivator(LogicalKeyboardKey.digit3, control: true): () => setState(() => _selectedIndex = 2),
+        const SingleActivator(LogicalKeyboardKey.digit4, control: true): () => setState(() => _selectedIndex = 3),
+        const SingleActivator(LogicalKeyboardKey.digit5, control: true): () => setState(() => _selectedIndex = 4),
       },
       child: Focus(
         autofocus: true,
@@ -131,7 +135,7 @@ class _Sidebar extends StatelessWidget {
     final sidebarBg = isDark
         ? Colors.black.withValues(alpha: 0.4)
         : Colors.white.withValues(alpha: 0.55);
-    final accentCyan = const Color(0xFF00ffd5);
+    const accentCyan = Color(0xFF00ffd5);
 
     return SizedBox(
       width: 220,

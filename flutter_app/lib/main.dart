@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:justwrite_mobile/providers/auth_provider.dart';
 import 'package:justwrite_mobile/providers/entry_provider.dart';
+import 'package:justwrite_mobile/providers/note_provider.dart';
 import 'package:justwrite_mobile/providers/task_provider.dart';
 import 'package:justwrite_mobile/providers/theme_provider.dart';
 import 'package:justwrite_mobile/screens/auth/login_screen.dart';
@@ -129,6 +130,7 @@ class JustWriteApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => EntryProvider()),
+        ChangeNotifierProvider(create: (_) => NoteProvider()),
         ChangeNotifierProvider(create: (_) => TaskProvider()),
       ],
       child: Consumer<ThemeProvider>(
