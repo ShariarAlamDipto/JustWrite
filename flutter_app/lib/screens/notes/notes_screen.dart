@@ -327,7 +327,18 @@ class _NotesSidebarState extends State<_NotesSidebar> {
   }
 
   Future<void> _createNote(BuildContext context) async {
-    await context.read<NoteProvider>().createNote();
+    final provider = context.read<NoteProvider>();
+    final note = await provider.createNote();
+    if (!context.mounted) return;
+
+    if (note == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.error ?? 'Failed to create note.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context, Note note) async {

@@ -135,6 +135,18 @@ class Note {
         }
       } catch (_) {}
     }
+    final now = DateTime.now();
+    DateTime parseDate(dynamic raw, DateTime fallback) {
+      if (raw is String && raw.isNotEmpty) {
+        try {
+          return DateTime.parse(raw);
+        } catch (_) {
+          return fallback;
+        }
+      }
+      return fallback;
+    }
+
     return Note(
       id: json['id'] as String,
       userId: json['user_id'] as String,
@@ -143,8 +155,8 @@ class Note {
       blocks: blocks,
       isPinned: json['is_pinned'] as bool? ?? false,
       isLocked: json['is_locked'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: parseDate(json['created_at'], now),
+      updatedAt: parseDate(json['updated_at'], now),
     );
   }
 

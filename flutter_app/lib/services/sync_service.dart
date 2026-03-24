@@ -26,7 +26,7 @@ class SyncService {
 
   Database? _db;
   Timer? _syncTimer;
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  StreamSubscription<ConnectivityResult>? _connectivitySub;
 
   final _statusController = StreamController<SyncStatus>.broadcast();
   Stream<SyncStatus> get status => _statusController.stream;
@@ -42,7 +42,7 @@ class SyncService {
     _connectivitySub = Connectivity().onConnectivityChanged.listen(_onConnectivityChanged);
 
     final result = await Connectivity().checkConnectivity();
-    _isOnline = !result.contains(ConnectivityResult.none);
+    _isOnline = result != ConnectivityResult.none;
 
     // Kick off initial sync when online
     if (_isOnline) {
@@ -114,15 +114,15 @@ class SyncService {
       var entriesQuery = supabase
           .from('entries')
           .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false)
-          .limit(500);
+          .eq('user_id', userId);
 
       if (since != null) {
-        entriesQuery = entriesQuery.gte('updated_at', since) as dynamic;
+        entriesQuery = entriesQuery.gte('updated_at', since);
       }
 
-      final entries = await entriesQuery as List<dynamic>;
+      final entries = await entriesQuery
+          .order('created_at', ascending: false)
+          .limit(500) as List<dynamic>;
       final db = await _getDb();
 
       for (final row in entries) {
@@ -141,15 +141,15 @@ class SyncService {
       var notesQuery = supabase
           .from('notes')
           .select()
-          .eq('user_id', userId)
-          .order('updated_at', ascending: false)
-          .limit(200);
+          .eq('user_id', userId);
 
       if (since != null) {
-        notesQuery = notesQuery.gte('updated_at', since) as dynamic;
+        notesQuery = notesQuery.gte('updated_at', since);
       }
 
-      final notes = await notesQuery as List<dynamic>;
+      final notes = await notesQuery
+          .order('updated_at', ascending: false)
+          .limit(200) as List<dynamic>;
       for (final row in notes) {
         await db.insert(
           'notes_cache',
@@ -261,9 +261,9 @@ class SyncService {
 
   // ── Connectivity ────────────────────────────────────────────────────────
 
-  void _onConnectivityChanged(List<ConnectivityResult> results) {
+  void _onConnectivityChanged(ConnectivityResult result) {
     final wasOnline = _isOnline;
-    _isOnline = !results.contains(ConnectivityResult.none);
+    _isOnline = result != ConnectivityResult.none;
     if (!wasOnline && _isOnline) {
       debugPrint('[SyncService] Back online — running sync');
       unawaited(_runSync());

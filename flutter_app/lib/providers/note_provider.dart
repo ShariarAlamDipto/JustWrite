@@ -160,13 +160,25 @@ class NoteProvider extends ChangeNotifier {
   // ── Create ────────────────────────────────────────────────────────────────
 
   Future<Note?> createNote({String title = 'Untitled', String icon = '📝'}) async {
-    final note = await _service.createNote(title: title, icon: icon);
-    if (note != null) {
+    try {
+      _error = null;
+      final note = await _service.createNote(title: title, icon: icon);
+      if (note == null) {
+        _error = 'Failed to create note. Check your connection and auth session.';
+        notifyListeners();
+        return null;
+      }
+
       _notes.insert(0, note);
       _selectedNote = note;
       notifyListeners();
+      return note;
+    } catch (e) {
+      debugPrint('[NoteProvider] createNote error: $e');
+      _error = 'Failed to create note. Please try again.';
+      notifyListeners();
+      return null;
     }
-    return note;
   }
 
   // ── Update (with debounced save) ──────────────────────────────────────────
@@ -202,9 +214,14 @@ class NoteProvider extends ChangeNotifier {
         _selectedNote = updated;
         final idx = _notes.indexWhere((n) => n.id == updated.id);
         if (idx >= 0) _notes[idx] = updated;
+        _error = null;
+        _saveStatus = SaveStatus.saved;
+      } else {
+        _error = 'Failed to save note changes.';
+        _saveStatus = SaveStatus.error;
       }
-      _saveStatus = SaveStatus.saved;
     } catch (_) {
+      _error = 'Failed to save note changes.';
       _saveStatus = SaveStatus.error;
     }
     notifyListeners();
@@ -221,6 +238,7 @@ class NoteProvider extends ChangeNotifier {
     final idx = _notes.indexWhere((n) => n.id == id);
     if (idx < 0) return;
     final note = _notes[idx];
+    _error = null;
     final updated = await _service.updateNote(id, isPinned: !note.isPinned);
     if (updated != null) {
       _notes[idx] = updated;
@@ -231,13 +249,23 @@ class NoteProvider extends ChangeNotifier {
         return b.updatedAt.compareTo(a.updatedAt);
       });
       notifyListeners();
+    } else {
+      _error = 'Failed to update note pin status.';
+      notifyListeners();
     }
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────
 
   Future<void> deleteNote(String id) async {
-    await _service.deleteNote(id);
+    _error = null;
+    final ok = await _service.deleteNote(id);
+    if (!ok) {
+      _error = 'Failed to delete note.';
+      notifyListeners();
+      return;
+    }
+
     _notes.removeWhere((n) => n.id == id);
     if (_selectedNote?.id == id) _selectedNote = null;
     notifyListeners();
