@@ -23,18 +23,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'POST') {
-      const { title, icon, cover_url, blocks, parent_id } = req.body;
+      try {
+        const { title, icon, cover_url, blocks, parent_id } = req.body;
 
-      const note = await createNote({
-        user_id: userId,
-        title: title ? sanitizeInput(String(title)).slice(0, 500) : 'Untitled',
-        icon: icon ? sanitizeInput(String(icon)).slice(0, 50) : null,
-        cover_url: cover_url ? sanitizeInput(String(cover_url)).slice(0, 1000) : null,
-        blocks: Array.isArray(blocks) ? blocks : [],
-        parent_id: parent_id || null,
-      });
+        const note = await createNote({
+          user_id: userId,
+          title: title ? sanitizeInput(String(title)).slice(0, 500) : 'Untitled',
+          icon: icon ? sanitizeInput(String(icon)).slice(0, 50) : null,
+          cover_url: cover_url ? sanitizeInput(String(cover_url)).slice(0, 1000) : null,
+          blocks: Array.isArray(blocks) ? blocks : [],
+          parent_id: parent_id || null,
+        });
 
-      return res.status(201).json({ note });
+        return res.status(201).json({ note });
+      } catch (error) {
+        console.error('Create note failed:', error);
+        return res.status(500).json({ error: 'Failed to create note' });
+      }
     }
 
     res.setHeader('Allow', 'GET,POST');

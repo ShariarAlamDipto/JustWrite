@@ -475,6 +475,20 @@ export async function deleteCustomPrompt(id: string, userId: string) {
 
 let memoryNotes: any[] = [];
 
+function extractMissingColumnFromMessage(message: string): string | null {
+  const quoted = message.match(/column\s+"([^"]+)"\s+does not exist/i);
+  if (quoted?.[1]) return quoted[1];
+
+  const bare = message.match(/column\s+([a-zA-Z0-9_]+)\s+does not exist/i);
+  if (bare?.[1]) return bare[1];
+
+  return null;
+}
+
+function isMissingColumnErrorMessage(message: string): boolean {
+  return /column\s+.*\s+does not exist/i.test(message);
+}
+
 export async function listNotes(userId: string, parentId?: string | null) {
   if (supabase) {
     let query = supabase
@@ -535,13 +549,40 @@ export async function createNote({ user_id, title = 'Untitled', icon, cover_url,
   };
 
   if (supabase) {
-    const { data, error } = await supabase
-      .from('notes')
-      .insert(note)
-      .select()
-      .single();
-    if (error) throw new Error(error.message);
-    return data;
+    let payload: Record<string, unknown> = { ...note };
+    let triedPortableFallback = false;
+
+    for (let i = 0; i < 10; i++) {
+      const { data, error } = await supabase
+        .from('notes')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (!error) return data;
+
+      const message = String(error.message || 'Unknown notes insert error');
+      const missingColumn = extractMissingColumnFromMessage(message);
+
+      if (missingColumn && missingColumn in payload) {
+        const { [missingColumn]: _removed, ...rest } = payload;
+        payload = rest;
+        continue;
+      }
+
+      if (!triedPortableFallback && isMissingColumnErrorMessage(message)) {
+        triedPortableFallback = true;
+        payload = {
+          user_id,
+          title,
+        };
+        continue;
+      }
+
+      throw new Error(message);
+    }
+
+    throw new Error('Unable to create note with current database schema');
   }
 
   memoryNotes.unshift(note);

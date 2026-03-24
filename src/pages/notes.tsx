@@ -83,18 +83,27 @@ export default function NotesPage() {
   // ── Create note ───────────────────────────────────────────────────────────
   const createNote = useCallback(async () => {
     if (!user || !token) return;
-    const res = await fetch('/api/notes', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ title: 'Untitled', blocks: [] }),
-    });
-    if (res.ok) {
+    try {
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title: 'Untitled', blocks: [] }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({ error: 'Failed to create note' }));
+        alert(payload.error || 'Failed to create note');
+        return;
+      }
+
       const { note } = await res.json();
       setNotes(prev => [note, ...prev]);
       await openNote(note.id);
+    } catch {
+      alert('Failed to create note. Please try again.');
     }
   }, [user, token, openNote]);
 
