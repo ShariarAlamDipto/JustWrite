@@ -26,7 +26,7 @@ function extractKeywords(title: string, blocks: any[]): string[] {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  return withAuth(req, res, async (req, res, userId) => {
+  return withAuth(req, res, async (req, res, userId, accessToken) => {
     const rateLimit = checkRateLimit(userId, 120, 60000);
     if (!rateLimit.allowed) {
       return res.status(429).json({ error: 'Too many requests. Please try again later.' });
@@ -38,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'GET') {
-      const note = await getNoteById(id, userId);
+      const note = await getNoteById(id, userId, accessToken);
       if (!note) return res.status(404).json({ error: 'Note not found' });
       return res.status(200).json({ note });
     }
@@ -56,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (is_pinned !== undefined) updates.is_pinned = Boolean(is_pinned);
 
       try {
-        const note = await updateNote(id, updates, userId);
+        const note = await updateNote(id, updates, userId, accessToken);
 
         // Background keyword extraction (non-blocking)
         if (blocks !== undefined || title !== undefined) {
@@ -78,7 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (req.method === 'DELETE') {
       try {
-        await deleteNote(id, userId);
+        await deleteNote(id, userId, accessToken);
         return res.status(200).json({ success: true });
       } catch {
         return res.status(404).json({ error: 'Note not found or access denied' });

@@ -23,6 +23,28 @@ const supabase = supabaseUrl && supabaseKey
     })
   : null;
 
+function getUserScopedClient(accessToken?: string) {
+  if (!supabaseUrl) return null;
+
+  // Service role bypasses RLS and is preferred for server-side jobs.
+  if (supabaseServiceKey) return supabase;
+
+  if (!supabaseAnonKey) return null;
+  if (!accessToken) return supabase;
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+}
+
 // In-memory fallback for development without Supabase
 let memoryDb: { entries: any[]; tasks: any[] } = { entries: [], tasks: [] };
 
@@ -489,9 +511,10 @@ function isMissingColumnErrorMessage(message: string): boolean {
   return /column\s+.*\s+does not exist/i.test(message);
 }
 
-export async function listNotes(userId: string, parentId?: string | null) {
-  if (supabase) {
-    let query = supabase
+export async function listNotes(userId: string, parentId?: string | null, accessToken?: string) {
+  const client = getUserScopedClient(accessToken);
+  if (client) {
+    let query = client
       .from('notes')
       .select('id, title, icon, cover_url, parent_id, is_locked, is_pinned, created_at, updated_at')
       .eq('user_id', userId)
@@ -519,9 +542,10 @@ export async function listNotes(userId: string, parentId?: string | null) {
     .map(({ blocks: _b, ...rest }) => rest);
 }
 
-export async function getNoteById(id: string, userId: string) {
-  if (supabase) {
-    const { data, error } = await supabase
+export async function getNoteById(id: string, userId: string, accessToken?: string) {
+  const client = getUserScopedClient(accessToken);
+  if (client) {
+    const { data, error } = await client
       .from('notes')
       .select('*')
       .eq('id', id)
@@ -533,7 +557,7 @@ export async function getNoteById(id: string, userId: string) {
   return memoryNotes.find(n => n.id === id && n.user_id === userId) || null;
 }
 
-export async function createNote({ user_id, title = 'Untitled', icon, cover_url, blocks = [], parent_id }: any) {
+export async function createNote({ user_id, title = 'Untitled', icon, cover_url, blocks = [], parent_id, accessToken }: any) {
   const note = {
     id: crypto.randomUUID(),
     user_id,
@@ -548,12 +572,13 @@ export async function createNote({ user_id, title = 'Untitled', icon, cover_url,
     updated_at: new Date().toISOString(),
   };
 
-  if (supabase) {
+  const client = getUserScopedClient(accessToken);
+  if (client) {
     let payload: Record<string, unknown> = { ...note };
     let triedPortableFallback = false;
 
     for (let i = 0; i < 10; i++) {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('notes')
         .insert(payload)
         .select()
@@ -589,15 +614,16 @@ export async function createNote({ user_id, title = 'Untitled', icon, cover_url,
   return note;
 }
 
-export async function updateNote(id: string, updates: any, userId: string) {
+export async function updateNote(id: string, updates: any, userId: string, accessToken?: string) {
   const allowed = ['title', 'icon', 'cover_url', 'blocks', 'parent_id', 'is_locked', 'is_pinned'];
   const patch: any = {};
   for (const key of allowed) {
     if (key in updates) patch[key] = updates[key];
   }
 
-  if (supabase) {
-    const { data, error } = await supabase
+  const client = getUserScopedClient(accessToken);
+  if (client) {
+    const { data, error } = await client
       .from('notes')
       .update({ ...patch, updated_at: new Date().toISOString() })
       .eq('id', id)
@@ -614,9 +640,10 @@ export async function updateNote(id: string, updates: any, userId: string) {
   return memoryNotes[idx];
 }
 
-export async function deleteNote(id: string, userId: string) {
-  if (supabase) {
-    const { error } = await supabase
+export async function deleteNote(id: string, userId: string, accessToken?: string) {
+  const client = getUserScopedClient(accessToken);
+  if (client) {
+    const { error } = await client
       .from('notes')
       .delete()
       .eq('id', id)

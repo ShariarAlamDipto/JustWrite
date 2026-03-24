@@ -4,7 +4,7 @@ import { withAuth } from '../../../lib/withAuth';
 import { sanitizeInput, checkRateLimit } from '../../../lib/security';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  return withAuth(req, res, async (req, res, userId) => {
+  return withAuth(req, res, async (req, res, userId, accessToken) => {
     const rateLimit = checkRateLimit(userId, 120, 60000);
     if (!rateLimit.allowed) {
       return res.status(429).json({ error: 'Too many requests. Please try again later.' });
@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : typeof parent_id === 'string' ? parent_id
         : undefined;
 
-      const notes = await listNotes(userId, parentId);
+      const notes = await listNotes(userId, parentId, accessToken);
       return res.status(200).json({ notes });
     }
 
@@ -33,6 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cover_url: cover_url ? sanitizeInput(String(cover_url)).slice(0, 1000) : null,
           blocks: Array.isArray(blocks) ? blocks : [],
           parent_id: parent_id || null,
+          accessToken,
         });
 
         return res.status(201).json({ note });

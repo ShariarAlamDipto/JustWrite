@@ -15,7 +15,7 @@ const isValidJWT = (token: string): boolean => {
 export async function withAuth(
   req: NextApiRequest,
   res: NextApiResponse,
-  handler: (req: NextApiRequest, res: NextApiResponse, userId: string) => Promise<void | NextApiResponse<any>>
+  handler: (req: NextApiRequest, res: NextApiResponse, userId: string, accessToken: string) => Promise<void | NextApiResponse<any>>
 ) {
   // SECURITY: Extract and validate token format
   const authHeader = req.headers.authorization;
@@ -48,5 +48,5 @@ export async function withAuth(
     return res.status(401).json({ error: 'Invalid user identity' });
   }
 
-  return handler(req, res, user.id);
+  return handler(req, res, user.id, token);
 }
