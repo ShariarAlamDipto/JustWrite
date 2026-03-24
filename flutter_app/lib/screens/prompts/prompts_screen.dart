@@ -277,7 +277,7 @@ class _PromptsScreenState extends State<PromptsScreen> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _newPromptCategory,
+                          initialValue: _newPromptCategory,
                           dropdownColor: isDark ? AppTheme.darkCard : Colors.white,
                           style: TextStyle(color: isDark ? Colors.white : Colors.black),
                           decoration: InputDecoration(

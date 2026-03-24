@@ -37,13 +37,13 @@ class _InsightsScreenState extends State<InsightsScreen> with AutomaticKeepAlive
         final stats = _cachedStats!;
         
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
               Text('Insights', style: Theme.of(context).textTheme.displaySmall),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
                 'Track your journaling journey',
                 style: Theme.of(context).textTheme.bodySmall,
@@ -608,8 +608,8 @@ class _LineChartPainter extends CustomPainter {
       ..strokeWidth = 0.5;
 
     final path = Path();
-    final maxMood = 10.0;
-    final padding = 20.0;
+    const maxMood = 10.0;
+    const padding = 20.0;
     final chartWidth = size.width - padding * 2;
     final chartHeight = size.height - padding;
 

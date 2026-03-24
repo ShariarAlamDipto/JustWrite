@@ -226,12 +226,12 @@ class _BrainstormScreenState extends State<BrainstormScreen> with AutomaticKeepA
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Brainstorm', style: Theme.of(context).textTheme.displaySmall),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             'Write freely. We\'ll help organize your thoughts.',
             style: Theme.of(context).textTheme.bodySmall,

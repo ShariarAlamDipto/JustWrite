@@ -68,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
           barrierDismissible: true,
           builder: (context) => AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
+            title: const Row(
               children: [
                 Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
                 SizedBox(width: 12),
@@ -79,20 +79,20 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('We sent a 6-digit code to:'),
-                SizedBox(height: 8),
+                const Text('We sent a 6-digit code to:'),
+                const SizedBox(height: 8),
                 Text(
                   email,
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF047857)),
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF047857)),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 Text('Enter the code below to sign in.', style: TextStyle(color: Colors.grey[600])),
               ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text('GOT IT', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
+                child: const Text('GOT IT', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
               ),
             ],
           ),

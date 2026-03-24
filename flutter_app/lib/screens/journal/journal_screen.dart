@@ -7,6 +7,7 @@ import '../../providers/entry_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../services/llm_service.dart';
 import '../../theme/app_theme.dart';
+import 'package:intl/intl.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -160,7 +161,7 @@ class _JournalScreenState extends State<JournalScreen> {
                 return RefreshIndicator(
                   onRefresh: () => provider.loadEntries(),
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                     itemCount: filteredEntries.length,
                     itemBuilder: (context, index) {
                       final entry = filteredEntries[index];
@@ -431,17 +432,18 @@ class _EntryCard extends StatelessWidget {
 
   String _formatDate(DateTime? date) {
     if (date == null) return '';
+    final localDate = date.toLocal();
     final now = DateTime.now();
-    final difference = now.difference(date);
+    final difference = now.difference(localDate);
 
-    if (difference.inDays == 0) {
-      return 'Today';
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
+    if (difference.inDays == 0 && localDate.day == now.day) {
+      return 'Today ${DateFormat.jm().format(localDate)}';
+    } else if (difference.inDays <= 1 && localDate.day == now.subtract(const Duration(days: 1)).day) {
+      return 'Yesterday ${DateFormat.jm().format(localDate)}';
     } else if (difference.inDays < 7) {
-      return '${difference.inDays} days ago';
+      return '${DateFormat.E().format(localDate)} ${DateFormat.jm().format(localDate)}';
     } else {
-      return '${date.day}/${date.month}/${date.year}';
+      return '${DateFormat.yMMMd().format(localDate)} ${DateFormat.jm().format(localDate)}';
     }
   }
 

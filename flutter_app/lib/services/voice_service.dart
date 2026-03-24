@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
@@ -40,6 +41,7 @@ class VoiceService {
   final _recordingDurationController = StreamController<Duration>.broadcast();
 
   Timer? _durationTimer;
+  StreamSubscription? _playerCompleteSubscription;
 
   // Getters
   bool get isRecording => _isRecording;
@@ -263,7 +265,7 @@ class VoiceService {
 
       final db = await _getDatabase();
       final id = _uuid.v4();
-      final now = DateTime.now();
+      final now = DateTime.now().toUtc();
       
       // Get file size for metadata
       final fileSize = await file.length();
@@ -336,24 +338,12 @@ class VoiceService {
     }
   }
 
-  /// Parse metadata JSON string
-  Map<String, dynamic> _parseMetadata(String json) {
+  /// Parse metadata JSON string using dart:convert
+  Map<String, dynamic> _parseMetadata(String jsonString) {
     try {
-      // Simple JSON parsing for metadata
-      final cleaned = json.replaceAll('{', '').replaceAll('}', '');
-      final pairs = cleaned.split(',');
-      final result = <String, dynamic>{};
-      for (final pair in pairs) {
-        final parts = pair.split(':');
-        if (parts.length == 2) {
-          final key = parts[0].trim().replaceAll('"', '');
-          final value = parts[1].trim().replaceAll('"', '');
-          // Try to parse as int
-          final intValue = int.tryParse(value);
-          result[key] = intValue ?? value;
-        }
-      }
-      return result;
+      final decoded = jsonDecode(jsonString);
+      if (decoded is Map<String, dynamic>) return decoded;
+      return {};
     } catch (e) {
       return {};
     }
@@ -414,8 +404,9 @@ class VoiceService {
       _currentPlayingId = entryId;
       _playbackStateController.add(PlaybackState(isPlaying: true, entryId: entryId));
 
-      // Listen for completion
-      _player.onPlayerComplete.listen((_) {
+      // Cancel any previous completion listener and create a new one
+      await _playerCompleteSubscription?.cancel();
+      _playerCompleteSubscription = _player.onPlayerComplete.listen((_) {
         _isPlaying = false;
         _currentPlayingId = null;
         _playbackStateController.add(PlaybackState(isPlaying: false, entryId: null));
@@ -484,6 +475,7 @@ class VoiceService {
   /// Dispose resources
   void dispose() {
     _durationTimer?.cancel();
+    _playerCompleteSubscription?.cancel();
     _recorder.closeRecorder();
     _player.dispose();
     _recordingStateController.close();

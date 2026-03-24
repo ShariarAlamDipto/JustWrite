@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import '../../models/voice_entry.dart';
 import '../../services/voice_service.dart';
 import '../../providers/theme_provider.dart';
-import '../../theme/app_theme.dart';
 
 // Accent color (consistent across themes)
 const Color _accentCyan = Color(0xFF00ffd5);

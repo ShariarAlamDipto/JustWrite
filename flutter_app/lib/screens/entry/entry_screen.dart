@@ -172,12 +172,13 @@ class _EntryScreenState extends State<EntryScreen> with AutomaticKeepAliveClient
     final textColor = isDark ? Colors.white : Colors.black;
     
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
           Text('New Entry', style: Theme.of(context).textTheme.displaySmall),
+          const SizedBox(height: 4),
           Text(
             DateTime.now().toString().split(' ')[0],
             style: Theme.of(context).textTheme.bodySmall,

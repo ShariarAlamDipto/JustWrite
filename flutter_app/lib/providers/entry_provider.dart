@@ -136,7 +136,7 @@ class EntryProvider extends ChangeNotifier {
         promptAnswers: promptAnswers,
         aiMetadata: aiMetadata,
         source: source,
-        createdAt: DateTime.now(),
+        createdAt: DateTime.now().toUtc(),
       );
       
       final created = await _supabaseService.createEntry(entry);
