@@ -460,13 +460,290 @@ export async function deleteCustomPrompt(id: string, userId: string) {
       .delete()
       .eq('id', id)
       .eq('user_id', userId);
-    
+
     if (error) throw new Error(error.message);
     return true;
   }
-  
+
   const idx = memoryPrompts.findIndex(p => p.id === id && p.user_id === userId);
   if (idx === -1) throw new Error('prompt not found or access denied');
   memoryPrompts.splice(idx, 1);
   return true;
+}
+
+// ============= NOTES (Notion-style second brain) =============
+
+let memoryNotes: any[] = [];
+
+export async function listNotes(userId: string, parentId?: string | null) {
+  if (supabase) {
+    let query = supabase
+      .from('notes')
+      .select('id, title, icon, cover_url, parent_id, is_locked, is_pinned, created_at, updated_at')
+      .eq('user_id', userId)
+      .order('is_pinned', { ascending: false })
+      .order('updated_at', { ascending: false });
+
+    if (parentId !== undefined) {
+      if (parentId === null) {
+        query = query.is('parent_id', null);
+      } else {
+        query = query.eq('parent_id', parentId);
+      }
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('Supabase listNotes error:', error.message);
+      return [];
+    }
+    return data || [];
+  }
+
+  return memoryNotes
+    .filter(n => n.user_id === userId && (parentId === undefined || n.parent_id === parentId))
+    .map(({ blocks: _b, ...rest }) => rest);
+}
+
+export async function getNoteById(id: string, userId: string) {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+    if (error) return null;
+    return data;
+  }
+  return memoryNotes.find(n => n.id === id && n.user_id === userId) || null;
+}
+
+export async function createNote({ user_id, title = 'Untitled', icon, cover_url, blocks = [], parent_id }: any) {
+  const note = {
+    id: crypto.randomUUID(),
+    user_id,
+    title,
+    icon: icon || null,
+    cover_url: cover_url || null,
+    blocks,
+    parent_id: parent_id || null,
+    is_locked: false,
+    is_pinned: false,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('notes')
+      .insert(note)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  memoryNotes.unshift(note);
+  return note;
+}
+
+export async function updateNote(id: string, updates: any, userId: string) {
+  const allowed = ['title', 'icon', 'cover_url', 'blocks', 'parent_id', 'is_locked', 'is_pinned'];
+  const patch: any = {};
+  for (const key of allowed) {
+    if (key in updates) patch[key] = updates[key];
+  }
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('notes')
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  const idx = memoryNotes.findIndex(n => n.id === id && n.user_id === userId);
+  if (idx === -1) throw new Error('note not found or access denied');
+  memoryNotes[idx] = { ...memoryNotes[idx], ...patch, updated_at: new Date().toISOString() };
+  return memoryNotes[idx];
+}
+
+export async function deleteNote(id: string, userId: string) {
+  if (supabase) {
+    const { error } = await supabase
+      .from('notes')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId);
+    if (error) throw new Error(error.message);
+    return true;
+  }
+
+  const idx = memoryNotes.findIndex(n => n.id === id && n.user_id === userId);
+  if (idx === -1) throw new Error('note not found or access denied');
+  memoryNotes.splice(idx, 1);
+  return true;
+}
+
+// ============= KEYWORDS =============
+
+export async function upsertKeywords(userId: string, words: string[]): Promise<string[]> {
+  if (!words.length) return [];
+  const normalized = [...new Set(words.map(w => w.toLowerCase().trim()).filter(w => w.length > 2))];
+
+  if (supabase) {
+    const rows = normalized.map(word => ({ user_id: userId, word }));
+    const { data, error } = await supabase
+      .from('keywords')
+      .upsert(rows, { onConflict: 'user_id,word', ignoreDuplicates: false })
+      .select('id');
+    if (error) {
+      console.error('upsertKeywords error:', error.message);
+      return [];
+    }
+    return (data || []).map((r: any) => r.id);
+  }
+  return [];
+}
+
+export async function linkEntryKeywords(entryId: string, keywordIds: string[]) {
+  if (!supabase || !keywordIds.length) return;
+  const rows = keywordIds.map(keyword_id => ({ entry_id: entryId, keyword_id }));
+  await supabase.from('entry_keywords').upsert(rows, { ignoreDuplicates: true });
+}
+
+export async function linkNoteKeywords(noteId: string, keywordIds: string[]) {
+  if (!supabase || !keywordIds.length) return;
+  const rows = keywordIds.map(keyword_id => ({ note_id: noteId, keyword_id }));
+  await supabase.from('note_keywords').upsert(rows, { ignoreDuplicates: true });
+}
+
+// ============= GRAPH DATA =============
+
+export async function getGraphData(userId: string) {
+  if (!supabase) return { nodes: [], links: [] };
+
+  const [entriesRes, notesRes, tasksRes, voiceRes, entryKwRes, noteKwRes, kwRes] = await Promise.all([
+    supabase
+      .from('entries')
+      .select('id, title, mood, source, created_at, content')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(500),
+    supabase
+      .from('notes')
+      .select('id, title, icon, created_at, updated_at, blocks')
+      .eq('user_id', userId)
+      .limit(300),
+    supabase
+      .from('tasks')
+      .select('id, title, status, priority, entry_id, created_at')
+      .eq('user_id', userId)
+      .limit(500),
+    supabase
+      .from('voice_entries')
+      .select('id, title, created_at, transcript, audio_duration')
+      .eq('user_id', userId)
+      .limit(200),
+    supabase
+      .from('entry_keywords')
+      .select('entry_id, keyword_id'),
+    supabase
+      .from('note_keywords')
+      .select('note_id, keyword_id'),
+    supabase
+      .from('keywords')
+      .select('id, word')
+      .eq('user_id', userId),
+  ]);
+
+  const entries  = entriesRes.data  || [];
+  const notes    = notesRes.data    || [];
+  const tasks    = tasksRes.data    || [];
+  const voices   = voiceRes.data    || [];
+  const entryKws = entryKwRes.data  || [];
+  const noteKws  = noteKwRes.data   || [];
+  const keywords = kwRes.data       || [];
+
+  // Find keywords that appear in 2+ entries/notes (worthy of a graph node)
+  const kwUsage: Record<string, number> = {};
+  for (const ek of entryKws) kwUsage[ek.keyword_id] = (kwUsage[ek.keyword_id] || 0) + 1;
+  for (const nk of noteKws)  kwUsage[nk.keyword_id] = (kwUsage[nk.keyword_id] || 0) + 1;
+  const sharedKwIds = new Set(Object.entries(kwUsage).filter(([, c]) => c >= 2).map(([id]) => id));
+
+  type Row = Record<string, any>;
+
+  const nodes: any[] = [
+    ...entries.map((e: Row) => ({
+      id: `entry-${e.id}`,
+      rawId: e.id,
+      type: 'entry',
+      label: e.title || new Date(e.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      mood: e.mood,
+      source: e.source,
+      wordCount: e.content ? (e.content as string).replace(/^enc2?:[^:]+:[^:]+:/, '').length : 0,
+      createdAt: e.created_at,
+      isEncrypted: (e.content as string | null)?.startsWith('enc') ?? false,
+    })),
+    ...notes.map((n: Row) => ({
+      id: `note-${n.id}`,
+      rawId: n.id,
+      type: 'note',
+      label: n.title || 'Untitled',
+      icon: n.icon,
+      blockCount: Array.isArray(n.blocks) ? (n.blocks as unknown[]).length : 0,
+      createdAt: n.created_at,
+      updatedAt: n.updated_at,
+    })),
+    ...tasks.map((t: Row) => ({
+      id: `task-${t.id}`,
+      rawId: t.id,
+      type: 'task',
+      label: t.title,
+      status: t.status,
+      priority: t.priority,
+      entryId: t.entry_id,
+      createdAt: t.created_at,
+    })),
+    ...voices.map((v: Row) => ({
+      id: `voice-${v.id}`,
+      rawId: v.id,
+      type: 'voice',
+      label: v.title || 'Voice Note',
+      hasTranscript: !!v.transcript,
+      duration: v.audio_duration,
+      createdAt: v.created_at,
+    })),
+    ...keywords
+      .filter((k: Row) => sharedKwIds.has(k.id))
+      .map((k: Row) => ({
+        id: `kw-${k.id}`,
+        rawId: k.id,
+        type: 'keyword',
+        label: k.word,
+        frequency: kwUsage[k.id] || 1,
+      })),
+  ];
+
+  const links: any[] = [
+    // Entry → Task (extracted)
+    ...tasks
+      .filter((t: Row) => t.entry_id)
+      .map((t: Row) => ({ source: `entry-${t.entry_id}`, target: `task-${t.id}`, type: 'extracted' })),
+    // Entry → Keyword
+    ...entryKws
+      .filter((ek: Row) => sharedKwIds.has(ek.keyword_id))
+      .map((ek: Row) => ({ source: `entry-${ek.entry_id}`, target: `kw-${ek.keyword_id}`, type: 'keyword' })),
+    // Note → Keyword
+    ...noteKws
+      .filter((nk: Row) => sharedKwIds.has(nk.keyword_id))
+      .map((nk: Row) => ({ source: `note-${nk.note_id}`, target: `kw-${nk.keyword_id}`, type: 'keyword' })),
+  ];
+
+  return { nodes, links };
 }

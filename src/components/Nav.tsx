@@ -73,8 +73,20 @@ export function Nav() {
           >
             Prompts
           </Link>
-          <Link 
-            href="/insights" 
+          <Link
+            href="/notes"
+            style={{...styles.navLink, ...(isActive('/notes') ? styles.navLinkActive : {})}}
+          >
+            Notes
+          </Link>
+          <Link
+            href="/graph"
+            style={{...styles.navLink, ...(isActive('/graph') ? styles.navLinkActive : {})}}
+          >
+            Graph
+          </Link>
+          <Link
+            href="/insights"
             style={{...styles.navLink, ...(isActive('/insights') ? styles.navLinkActive : {})}}
           >
             Insights
@@ -143,6 +155,12 @@ export function Nav() {
           </Link>
           <Link href="/prompts" style={{...styles.mobileLink, ...(isActive('/prompts') ? styles.mobileLinkActive : {})}}>
             Prompts
+          </Link>
+          <Link href="/notes" style={{...styles.mobileLink, ...(isActive('/notes') ? styles.mobileLinkActive : {})}}>
+            Notes
+          </Link>
+          <Link href="/graph" style={{...styles.mobileLink, ...(isActive('/graph') ? styles.mobileLinkActive : {})}}>
+            Graph
           </Link>
           <Link href="/insights" style={{...styles.mobileLink, ...(isActive('/insights') ? styles.mobileLinkActive : {})}}>
             Insights

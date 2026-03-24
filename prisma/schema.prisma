@@ -13,6 +13,7 @@ model User {
   name      String?
   entries   Entry[]
   tasks     Task[]
+  notes     Note[]
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("users")
@@ -35,6 +36,7 @@ model Entry {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime? @updatedAt @map("updated_at")
   tasks         Task[]
+  keywords      EntryKeyword[]
 
   @@index([userId])
   @@index([createdAt(sort: Desc)])
@@ -64,4 +66,81 @@ model Task {
   @@index([userId, status])
   @@index([userId, createdAt(sort: Desc)])
   @@map("tasks")
+}
+
+// ============ NOTES (Notion-style second brain) ============
+
+model Note {
+  id        String   @id @default(uuid())
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?  @map("user_id")
+  title     String   @default("Untitled")
+  icon      String?
+  coverUrl  String?  @map("cover_url")
+  blocks    Json     @default("[]") // Array of Block objects
+  parentId  String?  @map("parent_id") // Self-referencing for sub-pages
+  isLocked  Boolean  @default(false) @map("is_locked")
+  isPinned  Boolean  @default(false) @map("is_pinned")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  keywords  NoteKeyword[]
+
+  @@index([userId])
+  @@index([userId, parentId])
+  @@index([userId, isPinned])
+  @@index([createdAt(sort: Desc)])
+  @@map("notes")
+}
+
+// ============ GRAPH: Keywords ============
+
+model Keyword {
+  id           String         @id @default(uuid())
+  userId       String         @map("user_id")
+  word         String
+  entryLinks   EntryKeyword[]
+  noteLinks    NoteKeyword[]
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  @@unique([userId, word])
+  @@index([userId])
+  @@map("keywords")
+}
+
+model EntryKeyword {
+  entry     Entry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  entryId   String  @map("entry_id")
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  keywordId String  @map("keyword_id")
+
+  @@id([entryId, keywordId])
+  @@map("entry_keywords")
+}
+
+model NoteKeyword {
+  note      Note    @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  noteId    String  @map("note_id")
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  keywordId String  @map("keyword_id")
+
+  @@id([noteId, keywordId])
+  @@map("note_keywords")
+}
+
+// ============ GRAPH: Content similarity links ============
+
+model ContentLink {
+  id       String @id @default(uuid())
+  fromType String @map("from_type") // 'entry' | 'note' | 'voice'
+  fromId   String @map("from_id")
+  toType   String @map("to_type")
+  toId     String @map("to_id")
+  linkType String @map("link_type") // 'similar' | 'mention' | 'wikilink' | 'extracted'
+  weight   Float  @default(1.0)
+  userId   String @map("user_id")
+
+  @@index([userId])
+  @@index([fromId])
+  @@index([toId])
+  @@map("content_links")
 }
