@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:justwrite_mobile/providers/auth_provider.dart';
 import 'package:justwrite_mobile/providers/entry_provider.dart';
+import 'package:justwrite_mobile/providers/note_provider.dart';
 import 'package:justwrite_mobile/providers/task_provider.dart';
 import 'package:justwrite_mobile/providers/theme_provider.dart';
 import 'package:justwrite_mobile/screens/entry/entry_screen.dart';
@@ -9,6 +10,7 @@ import 'package:justwrite_mobile/screens/tasks/tasks_screen.dart';
 import 'package:justwrite_mobile/screens/journal/journal_screen.dart';
 import 'package:justwrite_mobile/screens/brainstorm/brainstorm_screen.dart';
 import 'package:justwrite_mobile/screens/insights/insights_screen.dart';
+import 'package:justwrite_mobile/screens/notes/notes_screen.dart';
 import 'package:justwrite_mobile/theme/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -31,15 +33,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _screens = const [
       JournalScreen(),
       EntryScreen(),
+      NotesScreen(),
       BrainstormScreen(),
       TasksScreen(),
       InsightsScreen(),
     ];
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.wait([
         context.read<EntryProvider>().loadEntries(),
         context.read<TaskProvider>().loadTasks(),
+        context.read<NoteProvider>().loadNotes(),
       ]);
     });
   }
@@ -169,6 +173,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icon(Icons.edit_outlined),
                   activeIcon: Icon(Icons.edit),
                   label: 'Write',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.article_outlined),
+                  activeIcon: Icon(Icons.article_rounded),
+                  label: 'Notes',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.lightbulb_outline),

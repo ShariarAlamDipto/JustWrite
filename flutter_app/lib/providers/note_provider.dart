@@ -21,14 +21,98 @@ class NoteProvider extends ChangeNotifier {
   SaveStatus get saveStatus => _saveStatus;
   String? get error => _error;
 
-  List<Note> filtered(String query) {
-    if (query.isEmpty) return _notes;
-    final q = query.toLowerCase();
-    return _notes
-        .where((n) =>
-            n.title.toLowerCase().contains(q) ||
-            n.snippet.toLowerCase().contains(q))
+  // ── Static helpers ────────────────────────────────────────────────────────
+
+  /// Extract all `#tags` from a note's block content.
+  static List<String> extractTags(Note note) {
+    final tags = <String>{};
+    for (final block in note.blocks) {
+      final matches = RegExp(r'#(\w+)').allMatches(block.content);
+      for (final m in matches) {
+        tags.add(m.group(1)!.toLowerCase());
+      }
+    }
+    return tags.toList()..sort();
+  }
+
+  /// Extract all `[[wikilinks]]` from a note's block content.
+  static List<String> extractWikilinks(Note note) {
+    final links = <String>{};
+    for (final block in note.blocks) {
+      final matches = RegExp(r'\[\[([^\]]+)\]\]').allMatches(block.content);
+      for (final m in matches) {
+        links.add(m.group(1)!.trim());
+      }
+    }
+    return links.toList();
+  }
+
+  // ── Computed getters ──────────────────────────────────────────────────────
+
+  /// All unique tags across all notes with their counts.
+  Map<String, int> get tagCounts {
+    final counts = <String, int>{};
+    for (final note in _notes) {
+      for (final tag in extractTags(note)) {
+        counts[tag] = (counts[tag] ?? 0) + 1;
+      }
+    }
+    return Map.fromEntries(
+      counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value)),
+    );
+  }
+
+  /// Notes that contain `[[current note title]]` as backlinks to [targetNote].
+  List<Note> getBacklinks(Note targetNote) {
+    final title = targetNote.title.toLowerCase().trim();
+    if (title.isEmpty) return [];
+    return _notes.where((n) {
+      if (n.id == targetNote.id) return false;
+      for (final block in n.blocks) {
+        if (block.content.toLowerCase().contains('[[$title]]')) return true;
+      }
+      return false;
+    }).toList();
+  }
+
+  /// Notes that the given note links to (outgoing links).
+  List<Note> getOutgoingLinks(Note source) {
+    final links = extractWikilinks(source);
+    return links
+        .map((title) {
+          try {
+            return _notes.firstWhere(
+              (n) => n.title.toLowerCase() == title.toLowerCase(),
+            );
+          } catch (_) {
+            return null;
+          }
+        })
+        .whereType<Note>()
         .toList();
+  }
+
+  // ── Search + filter ───────────────────────────────────────────────────────
+
+  /// Filter notes by query (title + block content) and optional tag.
+  List<Note> filtered(String query, {String? tagFilter}) {
+    var result = _notes.toList();
+
+    // Apply tag filter first
+    if (tagFilter != null && tagFilter.isNotEmpty) {
+      result = result.where((n) => extractTags(n).contains(tagFilter)).toList();
+    }
+
+    if (query.isEmpty) return result;
+
+    final q = query.toLowerCase();
+    return result.where((n) {
+      if (n.title.toLowerCase().contains(q)) return true;
+      for (final block in n.blocks) {
+        if (block.content.toLowerCase().contains(q)) return true;
+      }
+      return false;
+    }).toList();
   }
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -51,12 +135,14 @@ class NoteProvider extends ChangeNotifier {
   // ── Select ────────────────────────────────────────────────────────────────
 
   Future<void> selectNote(String id) async {
-    // Optimistic: show from list immediately
-    final cached = _notes.firstWhere((n) => n.id == id, orElse: () => _notes.first);
-    _selectedNote = cached;
-    notifyListeners();
+    // Optimistic: show cached note immediately (safe null-check)
+    final cached = _notes.where((n) => n.id == id).firstOrNull;
+    if (cached != null) {
+      _selectedNote = cached;
+      notifyListeners();
+    }
 
-    // Fetch full note with blocks
+    // Fetch full note with blocks from remote
     final full = await _service.getNoteById(id);
     if (full != null) {
       _selectedNote = full;
@@ -73,8 +159,8 @@ class NoteProvider extends ChangeNotifier {
 
   // ── Create ────────────────────────────────────────────────────────────────
 
-  Future<Note?> createNote() async {
-    final note = await _service.createNote();
+  Future<Note?> createNote({String title = 'Untitled', String icon = '📝'}) async {
+    final note = await _service.createNote(title: title, icon: icon);
     if (note != null) {
       _notes.insert(0, note);
       _selectedNote = note;
@@ -124,7 +210,6 @@ class NoteProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Force an immediate save (e.g. before navigating away).
   Future<void> saveNow() async {
     _saveTimer?.cancel();
     await _persistNote();

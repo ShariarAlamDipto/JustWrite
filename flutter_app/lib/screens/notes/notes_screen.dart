@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:justwrite_mobile/models/note.dart';
 import 'package:justwrite_mobile/providers/note_provider.dart';
 import 'package:justwrite_mobile/providers/theme_provider.dart';
+import 'package:justwrite_mobile/screens/notes/notes_reading_view.dart';
 
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
@@ -24,30 +25,51 @@ class _NotesScreenState extends State<NotesScreen> {
     });
   }
 
+  void _openCommandPalette() {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (_) => _CommandPalette(isDark: isDark),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final provider = context.watch<NoteProvider>();
 
-    return Row(
-      children: [
-        // Sidebar
-        _NotesSidebar(isDark: isDark),
-        // Divider
-        VerticalDivider(
-          width: 1,
-          thickness: 1,
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.07)
-              : Colors.black.withValues(alpha: 0.07),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+            _openCommandPalette,
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true):
+            _openCommandPalette,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Row(
+          children: [
+            // Sidebar
+            _NotesSidebar(isDark: isDark),
+            // Divider
+            VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.07)
+                  : Colors.black.withValues(alpha: 0.07),
+            ),
+            // Editor pane
+            Expanded(
+              child: provider.selectedNote == null
+                  ? _EmptyState(isDark: isDark)
+                  : _NoteEditorPane(
+                      key: ValueKey(provider.selectedNote!.id), isDark: isDark),
+            ),
+          ],
         ),
-        // Editor pane
-        Expanded(
-          child: provider.selectedNote == null
-              ? _EmptyState(isDark: isDark)
-              : _NoteEditorPane(key: ValueKey(provider.selectedNote!.id), isDark: isDark),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -89,6 +111,7 @@ class _NotesSidebar extends StatefulWidget {
 
 class _NotesSidebarState extends State<_NotesSidebar> {
   final _searchCtrl = TextEditingController();
+  String? _tagFilter;
 
   @override
   void dispose() {
@@ -103,7 +126,10 @@ class _NotesSidebarState extends State<_NotesSidebar> {
     final bg = isDark ? Colors.black.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.6);
     final textColor = isDark ? Colors.white : Colors.black87;
     final mutedColor = isDark ? Colors.grey[500]! : Colors.grey[500]!;
-    final notes = provider.filtered(_searchCtrl.text);
+    final notes = provider.filtered(_searchCtrl.text, tagFilter: _tagFilter);
+    final tagCounts = provider.tagCounts;
+    final selectedNote = provider.selectedNote;
+    final backlinks = selectedNote != null ? provider.getBacklinks(selectedNote) : <Note>[];
 
     return SizedBox(
       width: 240,
@@ -169,7 +195,54 @@ class _NotesSidebarState extends State<_NotesSidebar> {
               ),
             ),
 
-            const SizedBox(height: 4),
+            // Tag filter chips
+            if (tagCounts.isNotEmpty)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+                child: Row(
+                  children: tagCounts.entries.take(12).map((entry) {
+                    final isActive = _tagFilter == entry.key;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 5),
+                      child: GestureDetector(
+                        onTap: () => setState(
+                            () => _tagFilter = isActive ? null : entry.key),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 120),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? const Color(0xFF7C3AED).withValues(alpha: 0.18)
+                                : (isDark
+                                    ? Colors.white.withValues(alpha: 0.06)
+                                    : Colors.black.withValues(alpha: 0.04)),
+                            borderRadius: BorderRadius.circular(4),
+                            border: isActive
+                                ? Border.all(
+                                    color: const Color(0xFF7C3AED)
+                                        .withValues(alpha: 0.4))
+                                : null,
+                          ),
+                          child: Text(
+                            '#${entry.key}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isActive
+                                  ? const Color(0xFF7C3AED)
+                                  : mutedColor,
+                              fontWeight: isActive
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
 
             // Notes list
             Expanded(
@@ -208,6 +281,45 @@ class _NotesSidebarState extends State<_NotesSidebar> {
                           },
                         ),
             ),
+            // Backlinks section
+            if (backlinks.isNotEmpty) ...[
+              Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 8, 4),
+                child: Text(
+                  'LINKED FROM',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: mutedColor,
+                  ),
+                ),
+              ),
+              ...backlinks.take(5).map((note) => GestureDetector(
+                    onTap: () => context.read<NoteProvider>().selectNote(note.id),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      child: Row(
+                        children: [
+                          Text(note.icon,
+                              style: const TextStyle(fontSize: 13)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              note.title.isEmpty ? 'Untitled' : note.title,
+                              style: TextStyle(fontSize: 12, color: textColor),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )),
+              const SizedBox(height: 8),
+            ],
           ],
         ),
       ),
@@ -404,6 +516,15 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
   final LayerLink _slashLayerLink = LayerLink();
   OverlayEntry? _slashOverlay;
 
+  // Wikilink autocomplete state
+  int? _wikiBlockIdx;
+  String _wikiQuery = '';
+  final LayerLink _wikiLayerLink = LayerLink();
+  OverlayEntry? _wikiOverlay;
+
+  // View mode
+  bool _isReadMode = false;
+
   // Note id we're currently editing (to detect note switches)
   String? _noteId;
 
@@ -451,6 +572,7 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
   @override
   void dispose() {
     _closeSlashMenu();
+    _closeWikiMenu();
     _titleCtrl.dispose();
     _titleFocus.dispose();
     _scrollCtrl.dispose();
@@ -565,6 +687,52 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
     _slashOverlay = null;
     _slashBlockIdx = null;
     _slashQuery = '';
+  }
+
+  // ── Wiki menu ────────────────────────────────────────────────────────────
+
+  void _openWikiMenu(int blockIdx, String query) {
+    _closeWikiMenu();
+    _wikiBlockIdx = blockIdx;
+    _wikiQuery = query;
+    final notes = context.read<NoteProvider>().notes;
+    _wikiOverlay = OverlayEntry(
+      builder: (_) => _WikilinkMenuOverlay(
+        isDark: widget.isDark,
+        query: _wikiQuery,
+        notes: notes,
+        layerLink: _wikiLayerLink,
+        onSelect: (title) => _applyWikilink(blockIdx, title),
+        onClose: _closeWikiMenu,
+      ),
+    );
+    Overlay.of(context).insert(_wikiOverlay!);
+  }
+
+  void _updateWikiQuery(String query) {
+    _wikiQuery = query;
+    _wikiOverlay?.markNeedsBuild();
+  }
+
+  void _closeWikiMenu() {
+    _wikiOverlay?.remove();
+    _wikiOverlay = null;
+    _wikiBlockIdx = null;
+    _wikiQuery = '';
+  }
+
+  void _applyWikilink(int idx, String title) {
+    _closeWikiMenu();
+    if (idx >= _blockCtrl.length) return;
+    final ctrl = _blockCtrl[idx];
+    final text = ctrl.text;
+    final wikiStart = text.lastIndexOf('[[');
+    if (wikiStart < 0) return;
+    final newText = '${text.substring(0, wikiStart)}[[$title]]';
+    ctrl.text = newText;
+    ctrl.selection = TextSelection.collapsed(offset: newText.length);
+    _blocks[idx] = _blocks[idx].copyWith(content: newText);
+    _notifyChange();
   }
 
   // ── Keyboard handling ───────────────────────────────────────────────────
@@ -692,6 +860,23 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              // Reading mode toggle
+              Tooltip(
+                message: _isReadMode ? 'Edit mode' : 'Reading mode',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => setState(() => _isReadMode = !_isReadMode),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Icon(
+                      _isReadMode ? Icons.edit_outlined : Icons.visibility_outlined,
+                      size: 16,
+                      color: _isReadMode ? const Color(0xFF00ffd5) : mutedColor,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
               // Save status
               _SaveIndicator(status: provider.saveStatus, isDark: isDark),
               const SizedBox(width: 8),
@@ -730,68 +915,83 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
         ),
         // Editor body
         Expanded(
-          child: SingleChildScrollView(
-            controller: _scrollCtrl,
-            padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 40),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Note icon picker
-                _IconPicker(
-                  icon: note.icon,
-                  isDark: isDark,
-                  onChanged: (icon) {
-                    context.read<NoteProvider>().updateContent(icon: icon);
+          child: _isReadMode
+              ? NotesReadingView(
+                  blocks: _blocks,
+                  isDark: widget.isDark,
+                  onWikilinkTap: (title) {
+                    final p = context.read<NoteProvider>();
+                    final target = p.notes
+                        .where((n) => n.title.toLowerCase() == title.toLowerCase())
+                        .firstOrNull;
+                    if (target != null) p.selectNote(target.id);
                   },
-                ),
-                const SizedBox(height: 8),
-                // Title
-                TextField(
-                  controller: _titleCtrl,
-                  focusNode: _titleFocus,
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w700,
-                    color: textColor,
-                    height: 1.2,
+                  onTagTap: (_) {},
+                )
+              : SingleChildScrollView(
+                  controller: _scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 40),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Note icon picker
+                      _IconPicker(
+                        icon: note.icon,
+                        isDark: isDark,
+                        onChanged: (icon) {
+                          context.read<NoteProvider>().updateContent(icon: icon);
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      // Title
+                      TextField(
+                        controller: _titleCtrl,
+                        focusNode: _titleFocus,
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w700,
+                          color: textColor,
+                          height: 1.2,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Untitled',
+                          hintStyle: TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.w700,
+                            color: mutedColor.withValues(alpha: 0.4),
+                          ),
+                          border: InputBorder.none,
+                          filled: false,
+                          contentPadding: EdgeInsets.zero,
+                          isDense: true,
+                        ),
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
+                        onChanged: (v) => _notifyChange(),
+                        onSubmitted: (_) {
+                          if (_blockFocus.isNotEmpty) {
+                            _blockFocus[0].requestFocus();
+                          }
+                        },
+                      ),
+                      // Tag chips extracted from current blocks
+                      _buildTagsChips(mutedColor),
+                      const SizedBox(height: 16),
+                      // Blocks
+                      ..._buildBlocks(isDark, textColor, mutedColor),
+                      // Tap below to add block
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          if (_blockFocus.isNotEmpty) {
+                            _blockFocus.last.requestFocus();
+                          }
+                        },
+                        child: const SizedBox(height: 120, width: double.infinity),
+                      ),
+                    ],
                   ),
-                  decoration: InputDecoration(
-                    hintText: 'Untitled',
-                    hintStyle: TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w700,
-                      color: mutedColor.withValues(alpha: 0.4),
-                    ),
-                    border: InputBorder.none,
-                    filled: false,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                  ),
-                  maxLines: null,
-                  keyboardType: TextInputType.multiline,
-                  onChanged: (v) => _notifyChange(),
-                  onSubmitted: (_) {
-                    if (_blockFocus.isNotEmpty) {
-                      _blockFocus[0].requestFocus();
-                    }
-                  },
                 ),
-                const SizedBox(height: 24),
-                // Blocks
-                ..._buildBlocks(isDark, textColor, mutedColor),
-                // Tap below to add block
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (_blockFocus.isNotEmpty) {
-                      _blockFocus.last.requestFocus();
-                    }
-                  },
-                  child: const SizedBox(height: 120, width: double.infinity),
-                ),
-              ],
-            ),
-          ),
         ),
       ],
     );
@@ -812,7 +1012,9 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
           mutedColor: mutedColor,
           blockIndex: i,
           blockCount: _blocks.length,
-          layerLink: i == _slashBlockIdx ? _slashLayerLink : null,
+          layerLink: i == _slashBlockIdx
+              ? _slashLayerLink
+              : (i == _wikiBlockIdx ? _wikiLayerLink : null),
           onChanged: (text) {
             _blocks[i] = _blocks[i].copyWith(content: text);
             // Detect slash command
@@ -825,6 +1027,18 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
               }
             } else if (_slashBlockIdx == i) {
               _closeSlashMenu();
+            }
+            // Detect [[wikilink autocomplete
+            final wikiMatch = RegExp(r'\[\[([^\]]*)$').firstMatch(text);
+            if (wikiMatch != null) {
+              final query = wikiMatch.group(1) ?? '';
+              if (_wikiBlockIdx == i) {
+                _updateWikiQuery(query);
+              } else {
+                _openWikiMenu(i, query);
+              }
+            } else if (_wikiBlockIdx == i) {
+              _closeWikiMenu();
             }
             _notifyChange();
           },
@@ -840,6 +1054,40 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
       );
     }
     return widgets;
+  }
+
+  Widget _buildTagsChips(Color mutedColor) {
+    final tags = <String>{};
+    for (final block in _blocks) {
+      for (final m in RegExp(r'#(\w+)').allMatches(block.content)) {
+        tags.add(m.group(1)!.toLowerCase());
+      }
+    }
+    if (tags.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        children: tags.map((tag) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '#$tag',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF7C3AED),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 }
 
@@ -1320,6 +1568,106 @@ class _IconPicker extends StatelessWidget {
   }
 }
 
+// ─── Wikilink Autocomplete Overlay ────────────────────────────────────────────
+
+class _WikilinkMenuOverlay extends StatelessWidget {
+  final bool isDark;
+  final String query;
+  final List<Note> notes;
+  final LayerLink layerLink;
+  final ValueChanged<String> onSelect;
+  final VoidCallback onClose;
+
+  const _WikilinkMenuOverlay({
+    required this.isDark,
+    required this.query,
+    required this.notes,
+    required this.layerLink,
+    required this.onSelect,
+    required this.onClose,
+  });
+
+  List<Note> get _filtered {
+    if (query.isEmpty) return notes.take(8).toList();
+    final q = query.toLowerCase();
+    return notes.where((n) => n.title.toLowerCase().contains(q)).take(8).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _filtered;
+    final bg = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    final border = isDark ? Colors.white12 : Colors.black12;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final mutedColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: onClose,
+        child: CompositedTransformFollower(
+          link: layerLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 24),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(10),
+              color: bg,
+              child: Container(
+                width: 240,
+                constraints: const BoxConstraints(maxHeight: 240),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: border),
+                ),
+                child: items.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text('No notes found',
+                            style: TextStyle(fontSize: 12, color: mutedColor)),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        shrinkWrap: true,
+                        itemCount: items.length,
+                        itemBuilder: (_, i) {
+                          final note = items[i];
+                          return GestureDetector(
+                            onTap: () => onSelect(note.title),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 7),
+                              child: Row(
+                                children: [
+                                  Text(note.icon,
+                                      style: const TextStyle(fontSize: 14)),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      note.title.isEmpty ? 'Untitled' : note.title,
+                                      style: TextStyle(
+                                          fontSize: 13, color: textColor),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Save Indicator ───────────────────────────────────────────────────────────
 
 class _SaveIndicator extends StatelessWidget {
@@ -1407,5 +1755,226 @@ class _EditorOptionsMenu extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+// ─── Command Palette ──────────────────────────────────────────────────────────
+
+class _CommandPalette extends StatefulWidget {
+  final bool isDark;
+  const _CommandPalette({required this.isDark});
+
+  @override
+  State<_CommandPalette> createState() => _CommandPaletteState();
+}
+
+class _CommandPaletteState extends State<_CommandPalette> {
+  final _ctrl = TextEditingController();
+  final _focus = FocusNode();
+  int _selectedIdx = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  List<Note> get _results {
+    final provider = context.read<NoteProvider>();
+    return provider.filtered(_ctrl.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final bg = isDark ? const Color(0xFF1E1E2E) : Colors.white;
+    final border = isDark ? Colors.white12 : Colors.black12;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final mutedColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    final selectedBg = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.05);
+
+    final results = _results;
+    if (_selectedIdx >= results.length && results.isNotEmpty) {
+      _selectedIdx = results.length - 1;
+    }
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 120),
+      child: Material(
+        borderRadius: BorderRadius.circular(12),
+        color: bg,
+        elevation: 24,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 420),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Search field
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                child: Row(
+                  children: [
+                    Icon(Icons.search, size: 18, color: mutedColor),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Focus(
+                        onKeyEvent: (_, e) {
+                          if (e is! KeyDownEvent) return KeyEventResult.ignored;
+                          if (e.logicalKey == LogicalKeyboardKey.escape) {
+                            Navigator.pop(context);
+                            return KeyEventResult.handled;
+                          }
+                          if (results.isEmpty) return KeyEventResult.ignored;
+
+                          if (e.logicalKey == LogicalKeyboardKey.arrowDown) {
+                            setState(() => _selectedIdx =
+                                (_selectedIdx + 1).clamp(0, results.length - 1));
+                            return KeyEventResult.handled;
+                          }
+
+                          if (e.logicalKey == LogicalKeyboardKey.arrowUp) {
+                            setState(() => _selectedIdx =
+                                (_selectedIdx - 1).clamp(0, results.length - 1));
+                            return KeyEventResult.handled;
+                          }
+
+                          if (e.logicalKey == LogicalKeyboardKey.enter) {
+                            _select(results[_selectedIdx]);
+                            return KeyEventResult.handled;
+                          }
+
+                          return KeyEventResult.ignored;
+                        },
+                        child: TextField(
+                          controller: _ctrl,
+                          focusNode: _focus,
+                          style: TextStyle(fontSize: 15, color: textColor),
+                          decoration: InputDecoration(
+                            hintText: 'Search notes…',
+                            hintStyle:
+                                TextStyle(fontSize: 15, color: mutedColor),
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                          onChanged: (_) => setState(() => _selectedIdx = 0),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Text('esc',
+                          style: TextStyle(fontSize: 11, color: mutedColor)),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(
+                  height: 14,
+                  color: isDark ? Colors.white10 : Colors.black12),
+              // Results
+              Flexible(
+                child: results.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text('No notes found',
+                            style: TextStyle(color: mutedColor, fontSize: 13)),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                        shrinkWrap: true,
+                        itemCount: results.length,
+                        itemBuilder: (_, i) {
+                          final note = results[i];
+                          final isActive = i == _selectedIdx;
+                          return GestureDetector(
+                            onTap: () => _select(note),
+                            child: MouseRegion(
+                              onEnter: (_) =>
+                                  setState(() => _selectedIdx = i),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isActive
+                                      ? selectedBg
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: isActive
+                                      ? Border.all(
+                                          color: const Color(0xFF00ffd5)
+                                              .withValues(alpha: 0.3))
+                                      : null,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(note.icon,
+                                        style:
+                                            const TextStyle(fontSize: 16)),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            note.title.isEmpty
+                                                ? 'Untitled'
+                                                : note.title,
+                                            style: TextStyle(
+                                                fontSize: 14,
+                                                color: textColor,
+                                                fontWeight: isActive
+                                                    ? FontWeight.w600
+                                                    : FontWeight.w400),
+                                          ),
+                                          if (note.snippet !=
+                                              'No additional text')
+                                            Text(
+                                              note.snippet,
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: mutedColor),
+                                              maxLines: 1,
+                                              overflow:
+                                                  TextOverflow.ellipsis,
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isActive)
+                                      Icon(Icons.arrow_forward_rounded,
+                                          size: 14, color: mutedColor),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _select(Note note) {
+    Navigator.pop(context);
+    context.read<NoteProvider>().selectNote(note.id);
   }
 }
