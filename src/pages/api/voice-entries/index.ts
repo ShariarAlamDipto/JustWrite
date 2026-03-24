@@ -67,7 +67,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    res.setHeader('Allow', 'GET, POST');
+    if (req.method === 'PATCH') {
+      // Update transcript (and optionally title) for an existing voice entry
+      try {
+        const { id, transcript, title } = req.body;
+        if (!id || typeof id !== 'string') {
+          return res.status(400).json({ error: 'id is required' });
+        }
+
+        const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (typeof transcript === 'string') {
+          updates.transcript = sanitizeInput(transcript) || null;
+        }
+        if (typeof title === 'string' && title.trim()) {
+          updates.title = sanitizeInput(title);
+        }
+
+        const { data, error } = await supabase
+          .from('voice_entries')
+          .update(updates)
+          .eq('id', id)
+          .eq('user_id', userId)  // ensure ownership
+          .select()
+          .single();
+
+        if (error) throw error;
+        return res.status(200).json({ voiceEntry: data });
+      } catch {
+        return res.status(500).json({ error: 'Failed to update voice entry' });
+      }
+    }
+
+    res.setHeader('Allow', 'GET, POST, PATCH');
     return res.status(405).end('Method Not Allowed');
   });
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -468,6 +469,45 @@ class VoiceService {
       );
     } catch (e) {
       debugPrint('[VoiceService] Error updating voice entry: $e');
+      return null;
+    }
+  }
+
+  /// Transcribe a local audio file by sending it to Groq Whisper directly.
+  /// [groqApiKey] — from dotenv.env['GROQ_API_KEY']
+  /// Returns the transcript string, or null on failure.
+  Future<String?> transcribeAudio({
+    required String filePath,
+    required String groqApiKey,
+  }) async {
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) {
+        debugPrint('[VoiceService] Cannot transcribe — file not found: $filePath');
+        return null;
+      }
+
+      final uri = Uri.parse('https://api.groq.com/openai/v1/audio/transcriptions');
+      final request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer $groqApiKey'
+        ..fields['model'] = 'whisper-large-v3'
+        ..fields['response_format'] = 'json'
+        ..files.add(await http.MultipartFile.fromPath('file', filePath));
+
+      final streamed = await request.send().timeout(const Duration(seconds: 90));
+      final body = await streamed.stream.bytesToString();
+
+      if (streamed.statusCode != 200) {
+        debugPrint('[VoiceService] Groq transcription error ${streamed.statusCode}: $body');
+        return null;
+      }
+
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      final transcript = (json['text'] as String?)?.trim();
+      debugPrint('[VoiceService] Transcription success (${transcript?.length ?? 0} chars)');
+      return transcript;
+    } catch (e) {
+      debugPrint('[VoiceService] transcribeAudio error: $e');
       return null;
     }
   }

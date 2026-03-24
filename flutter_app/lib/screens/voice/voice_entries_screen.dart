@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import '../../models/voice_entry.dart';
@@ -25,7 +26,9 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
   StreamSubscription<Duration>? _durationSub;
   StreamSubscription<PlaybackState>? _playbackSub;
   String? _currentPlayingId;
-  
+  String? _transcribingId;
+  String? _expandedTranscriptId;
+
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -148,6 +151,36 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
           duration: const Duration(seconds: 1),
         ),
       );
+      // Auto-transcribe in background
+      _transcribeEntry(entry);
+    }
+  }
+
+  Future<void> _transcribeEntry(VoiceEntry entry) async {
+    final groqApiKey = dotenv.env['GROQ_API_KEY'];
+    if (groqApiKey == null || groqApiKey.isEmpty || entry.audioUrl == null) return;
+
+    if (mounted) setState(() => _transcribingId = entry.id);
+
+    final transcript = await _voiceService.transcribeAudio(
+      filePath: entry.audioUrl!,
+      groqApiKey: groqApiKey,
+    );
+
+    if (!mounted) return;
+
+    if (transcript != null) {
+      final updated = await _voiceService.updateVoiceEntry(entry.id, transcript: transcript);
+      if (updated != null && mounted) {
+        setState(() {
+          final idx = _entries.indexWhere((e) => e.id == entry.id);
+          if (idx != -1) _entries[idx] = updated;
+          _expandedTranscriptId = entry.id;
+          _transcribingId = null;
+        });
+      }
+    } else {
+      if (mounted) setState(() => _transcribingId = null);
     }
   }
 
@@ -299,6 +332,8 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
       itemBuilder: (context, index) {
         final entry = _entries[index];
         final isPlaying = _currentPlayingId == entry.id;
+        final isTranscribing = _transcribingId == entry.id;
+        final isExpanded = _expandedTranscriptId == entry.id;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -306,89 +341,148 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
             color: cardColor,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isPlaying ? _accentCyan.withOpacity(0.5) : (isDark ? Colors.transparent : Colors.grey[300]!),
+              color: isPlaying
+                  ? _accentCyan.withValues(alpha: 0.5)
+                  : (isDark ? Colors.transparent : Colors.grey[300]!),
               width: 1,
             ),
-            boxShadow: isDark ? null : [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            boxShadow: isDark
+                ? null
+                : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
           ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: entry.audioUrl != null
-                ? () => _voiceService.playAudio(entry.audioUrl!, entry.id)
-                : null,
-            onLongPress: () => _deleteEntry(entry),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Play button
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: isPlaying ? _accentCyan : (isDark ? const Color(0xFF1a1a1a) : Colors.grey[200]),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      color: isPlaying ? (isDark ? const Color(0xFF0a0a0a) : Colors.black87) : (isDark ? Colors.white : Colors.black87),
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  // Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          entry.title,
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Main row
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: entry.audioUrl != null
+                    ? () => _voiceService.playAudio(entry.audioUrl!, entry.id)
+                    : null,
+                onLongPress: () => _deleteEntry(entry),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
+                  child: Row(
+                    children: [
+                      // Play button
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: isPlaying
+                              ? _accentCyan
+                              : (isDark ? const Color(0xFF1a1a1a) : Colors.grey[200]),
+                          shape: BoxShape.circle,
                         ),
-                        const SizedBox(height: 4),
-                        Row(
+                        child: Icon(
+                          isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          color: isPlaying
+                              ? const Color(0xFF0a0a0a)
+                              : (isDark ? Colors.white : Colors.black87),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      // Title + meta
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              entry.formattedDuration,
-                              style: TextStyle(
-                                color: mutedColor,
-                                fontSize: 13,
-                              ),
+                              entry.title,
+                              style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w500),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(width: 12),
-                            Text(
-                              entry.formattedDate,
-                              style: TextStyle(
-                                color: mutedColor,
-                                fontSize: 13,
-                              ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(entry.formattedDuration, style: TextStyle(color: mutedColor, fontSize: 13)),
+                                const SizedBox(width: 10),
+                                Text(entry.formattedDate, style: TextStyle(color: mutedColor, fontSize: 13)),
+                                if (entry.transcript != null) ...[
+                                  const SizedBox(width: 10),
+                                  GestureDetector(
+                                    onTap: () => setState(() {
+                                      _expandedTranscriptId = isExpanded ? null : entry.id;
+                                    }),
+                                    child: Text(
+                                      isExpanded ? '▲ hide' : '▼ transcript',
+                                      style: const TextStyle(color: _accentCyan, fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                         ),
-                      ],
+                      ),
+                      // Action buttons
+                      if (isTranscribing)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: mutedColor,
+                            ),
+                          ),
+                        )
+                      else if (entry.transcript == null && entry.audioUrl != null)
+                        TextButton(
+                          onPressed: () => _transcribeEntry(entry),
+                          style: TextButton.styleFrom(
+                            foregroundColor: _accentCyan,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Transcribe', style: TextStyle(fontSize: 12)),
+                        ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: isDark ? Colors.grey[700] : Colors.grey[500], size: 20),
+                        onPressed: () => _deleteEntry(entry),
+                        splashRadius: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Transcript panel
+              if (isExpanded && entry.transcript != null)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0f0f0f) : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isDark ? Colors.grey[850]! : Colors.grey[300]!,
                     ),
                   ),
-                  // Delete
-                  IconButton(
-                    icon: Icon(Icons.close, color: isDark ? Colors.grey[700] : Colors.grey[500], size: 20),
-                    onPressed: () => _deleteEntry(entry),
-                    splashRadius: 20,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'TRANSCRIPT',
+                        style: TextStyle(
+                          color: mutedColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        entry.transcript!,
+                        style: TextStyle(color: textColor, fontSize: 14, height: 1.55),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+            ],
           ),
         );
       },
