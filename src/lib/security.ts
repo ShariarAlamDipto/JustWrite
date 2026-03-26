@@ -19,24 +19,27 @@ export function sanitizeHtml(input: string): string {
     .replace(/=/g, '&#x3D;');
 }
 
-// Sanitize user input for database storage (removes dangerous patterns)
+// Sanitize user input for database storage (removes dangerous patterns).
+// NOTE: Supabase uses parameterized queries so SQL injection is not a real
+// vector here — we only strip truly dangerous control characters and HTML/JS
+// injection patterns.  Do NOT strip apostrophes (') or semicolons (;) because
+// they appear in normal text ("I'm", "don't", sentence endings).
 export function sanitizeInput(input: string): string {
   if (!input || typeof input !== 'string') return '';
-  
-  // Remove null bytes and control characters (except newlines and tabs)
+
+  // Remove null bytes and non-printable control characters (keep \t \n \r)
   let sanitized = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-  
-  // SECURITY: Remove potential SQL injection patterns (defense in depth)
-  sanitized = sanitized.replace(/(['";\\])/g, '');
-  
-  // SECURITY: Remove potential script injection patterns
+
+  // SECURITY: Remove HTML/JS injection patterns
   sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   sanitized = sanitized.replace(/javascript:/gi, '');
   sanitized = sanitized.replace(/on\w+\s*=/gi, '');
-  
+  // Strip HTML tags (defense-in-depth; UI should always render as text)
+  sanitized = sanitized.replace(/<[^>]+>/g, '');
+
   // Limit length to prevent DoS
   sanitized = sanitized.slice(0, 50000);
-  
+
   return sanitized.trim();
 }
 

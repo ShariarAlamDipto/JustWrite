@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getEntryById, updateEntrySummary, createTasksBulk } from '../../lib/storage';
 import { withAuth } from '../../lib/withAuth';
 import { sanitizeInput, validateContentLength, isValidUUID, checkRateLimit } from '../../lib/security';
+import { withErrorHandler } from '../../lib/apiHelpers';
 import { randomUUID } from 'crypto';
 
 function extractTasksFromText(text: string) {
@@ -20,7 +21,7 @@ function extractTasksFromText(text: string) {
   return tasks; // No limit on heuristic extraction
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   // SECURITY: Wrap with authentication
   return withAuth(req, res, async (req, res, userId) => {
     if (req.method !== 'POST') {
@@ -209,3 +210,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   });
 }
+
+export default withErrorHandler(handler);

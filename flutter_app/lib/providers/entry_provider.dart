@@ -24,12 +24,16 @@ class EntryProvider extends ChangeNotifier {
 
   List<Entry> get entries => _entries;
   
-  /// Get only journal entries (source = 'text') - cached
+  /// Get only journal entries (source = 'text', not locked) - cached.
+  /// Locked entries are private/biometric-protected (created via web locked journal)
+  /// and must never appear in the main journal feed.
   List<Entry> get journalEntries {
-    _cachedJournal ??= _entries.where((e) => e.source == EntrySource.text).toList();
+    _cachedJournal ??= _entries
+        .where((e) => e.source == EntrySource.text && !e.isLocked)
+        .toList();
     return _cachedJournal!;
   }
-  
+
   /// Get only brainstorm sessions (source = 'brainstorm') - cached
   List<Entry> get brainstormEntries {
     _cachedBrainstorm ??= _entries.where((e) => e.source == EntrySource.brainstorm).toList();

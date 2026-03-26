@@ -254,10 +254,82 @@ class NotesService {
 
       final data = await _updateWithColumnFallback(id, userId, updates);
       if (data == null) return null;
+
+      // Keep backlinks table in sync whenever block content changes
+      if (blocks != null) {
+        saveWikilinks(id, blocks).catchError((_) {});
+      }
+
       return Note.fromJson(Map<String, dynamic>.from(data));
     } catch (e) {
       debugPrint('[NotesService] updateNote error: $e');
       return null;
+    }
+  }
+
+  // ── Wikilinks ─────────────────────────────────────────────────────────────
+
+  /// Extract [[wikilink]] titles from a list of note blocks.
+  List<String> _extractWikilinks(List<NoteBlock> blocks) {
+    final links = <String>{};
+    final pattern = RegExp(r'\[\[([^\]]+)\]\]');
+    for (final block in blocks) {
+      for (final m in pattern.allMatches(block.content)) {
+        final title = m.group(1)?.trim();
+        if (title != null && title.isNotEmpty) links.add(title);
+      }
+    }
+    return links.toList();
+  }
+
+  /// Save [[wikilink]] edges to the content_links table (mirrors web API logic).
+  /// Called after every note update that touches block content.
+  Future<void> saveWikilinks(String fromNoteId, List<NoteBlock> blocks) async {
+    final userId = _userId;
+    if (userId == null) return;
+
+    final targetTitles = _extractWikilinks(blocks);
+
+    // Always delete stale wikilinks from this note first
+    try {
+      await _supabase
+          .from('content_links')
+          .delete()
+          .eq('from_id', fromNoteId)
+          .eq('link_type', 'wikilink');
+    } catch (_) {
+      // content_links table may not exist yet; skip silently
+      return;
+    }
+
+    if (targetTitles.isEmpty) return;
+
+    try {
+      // Resolve target note IDs by title
+      final targets = await _supabase
+          .from('notes')
+          .select('id, title')
+          .eq('user_id', userId)
+          .in_('title', targetTitles) as List;
+
+      if (targets.isEmpty) return;
+
+      final rows = targets.map((t) {
+        final row = Map<String, dynamic>.from(t as Map);
+        return {
+          'user_id': userId,
+          'from_type': 'note',
+          'from_id': fromNoteId,
+          'to_type': 'note',
+          'to_id': row['id'] as String,
+          'link_type': 'wikilink',
+          'weight': 1.0,
+        };
+      }).toList();
+
+      await _supabase.from('content_links').insert(rows);
+    } catch (e) {
+      debugPrint('[NotesService] saveWikilinks error: $e');
     }
   }
 

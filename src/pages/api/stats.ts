@@ -3,9 +3,9 @@ import { listEntries } from '../../lib/storage';
 import { withAuth } from '../../lib/withAuth';
 import { calculateStats, getLevelFromPoints, getLevelProgress, BADGES, getBadgeById, getMotivationalMessage } from '../../lib/gamification';
 import { checkRateLimit } from '../../lib/security';
-import { setCacheHeaders } from '../../lib/apiHelpers';
+import { setCacheHeaders, withErrorHandler } from '../../lib/apiHelpers';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
     if (req.method !== 'GET') {
       res.setHeader('Allow', 'GET');
@@ -190,3 +190,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   });
 }
+
+export default withErrorHandler(handler);

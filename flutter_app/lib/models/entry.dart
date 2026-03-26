@@ -45,6 +45,11 @@ class Entry {
   @JsonKey(defaultValue: 'text')
   final String source;
 
+  /// Whether this entry is locked (private/biometric-protected on web).
+  /// Locked entries are excluded from the main journal list on mobile.
+  @JsonKey(name: 'is_locked', defaultValue: false)
+  final bool isLocked;
+
   Entry({
     required this.id,
     required this.userId,
@@ -59,6 +64,7 @@ class Entry {
     this.updatedAt,
     this.aiMetadata,
     this.source = 'text',
+    this.isLocked = false,
   });
 
   factory Entry.fromJson(Map<String, dynamic> json) => _$EntryFromJson(json);
@@ -78,6 +84,7 @@ class Entry {
     DateTime? updatedAt,
     Map<String, dynamic>? aiMetadata,
     String? source,
+    bool? isLocked,
   }) {
     return Entry(
       id: id ?? this.id,
@@ -93,6 +100,7 @@ class Entry {
       updatedAt: updatedAt ?? this.updatedAt,
       aiMetadata: aiMetadata ?? this.aiMetadata,
       source: source ?? this.source,
+      isLocked: isLocked ?? this.isLocked,
     );
   }
   

@@ -1,9 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { withErrorHandler } from '../../../lib/apiHelpers';
 import { getEntryById, updateEntry, deleteEntry } from '../../../lib/storage';
 import { withAuth } from '../../../lib/withAuth';
 import { sanitizeInput, validateContentLength, isValidUUID, checkRateLimit } from '../../../lib/security';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
     // SECURITY: Rate limiting
     const rateLimit = checkRateLimit(userId, 100, 60000);
@@ -76,3 +77,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(405).end('Method Not Allowed');
   });
 }
+
+export default withErrorHandler(handler);

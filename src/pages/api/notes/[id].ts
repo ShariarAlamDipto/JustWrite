@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getNoteById, updateNote, deleteNote, upsertKeywords, linkNoteKeywords, saveNoteWikilinks, extractWikilinksFromBlocks, getBacklinksForNote } from '../../../lib/storage';
 import { withAuth } from '../../../lib/withAuth';
 import { sanitizeInput, isValidUUID, checkRateLimit } from '../../../lib/security';
+import { withErrorHandler } from '../../../lib/apiHelpers';
 
 const STOP_WORDS = new Set([
   'the','a','an','and','or','but','in','on','at','to','for','of','with','by',
@@ -25,7 +26,7 @@ function extractKeywords(title: string, blocks: any[]): string[] {
   )].slice(0, 30);
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId, accessToken) => {
     const rateLimit = checkRateLimit(userId, 120, 60000);
     if (!rateLimit.allowed) {
@@ -96,3 +97,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(405).end('Method Not Allowed');
   });
 }
+
+export default withErrorHandler(handler);

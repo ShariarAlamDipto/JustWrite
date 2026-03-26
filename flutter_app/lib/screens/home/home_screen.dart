@@ -11,6 +11,8 @@ import 'package:justwrite_mobile/screens/journal/journal_screen.dart';
 import 'package:justwrite_mobile/screens/brainstorm/brainstorm_screen.dart';
 import 'package:justwrite_mobile/screens/insights/insights_screen.dart';
 import 'package:justwrite_mobile/screens/notes/notes_screen.dart';
+import 'package:justwrite_mobile/screens/voice/voice_entries_screen.dart';
+import 'package:justwrite_mobile/screens/prompts/prompts_screen.dart';
 import 'package:justwrite_mobile/theme/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -36,6 +38,8 @@ class _HomeScreenState extends State<HomeScreen> {
       NotesScreen(),
       BrainstormScreen(),
       TasksScreen(),
+      VoiceEntriesScreen(),
+      PromptsScreen(),
       InsightsScreen(),
     ];
 
@@ -188,6 +192,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icon(Icons.check_circle_outline),
                   activeIcon: Icon(Icons.check_circle),
                   label: 'Tasks',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.mic_none_outlined),
+                  activeIcon: Icon(Icons.mic),
+                  label: 'Voice',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.auto_awesome_outlined),
+                  activeIcon: Icon(Icons.auto_awesome),
+                  label: 'Prompts',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.insights_outlined),

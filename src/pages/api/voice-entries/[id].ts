@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { withErrorHandler } from '../../../lib/apiHelpers';
 import { withAuth } from '../../../lib/withAuth';
 import { createClient } from '@supabase/supabase-js';
 import { isValidUUID, sanitizeInput } from '../../../lib/security';
@@ -10,7 +11,7 @@ const supabase = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
     if (!supabase) {
       return res.status(500).json({ error: 'Database not configured' });
@@ -102,3 +103,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end('Method Not Allowed');
   });
 }
+
+export default withErrorHandler(handler);

@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { withAuth } from '../../../lib/withAuth';
 import { checkRateLimit } from '../../../lib/security';
+import { withErrorHandler } from '../../../lib/apiHelpers';
 import { createClient } from '@supabase/supabase-js';
 
 // Disable default body parser — we receive multipart form data
@@ -43,7 +44,7 @@ async function parseMultipart(req: NextApiRequest): Promise<{ audioBuffer: Buffe
   });
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST');
@@ -116,3 +117,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   });
 }
+
+export default withErrorHandler(handler);

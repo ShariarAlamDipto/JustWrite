@@ -1,8 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { withAuth } from '../../lib/withAuth';
 import { sanitizeInput, validateContentLength, checkRateLimit } from '../../lib/security';
+import { withErrorHandler } from '../../lib/apiHelpers';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST');
@@ -151,3 +152,5 @@ function extractTasksHeuristic(text: string): any[] {
 
   return tasks.slice(0, 10); // Limit to 10 tasks
 }
+
+export default withErrorHandler(handler);
