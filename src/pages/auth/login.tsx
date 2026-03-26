@@ -74,11 +74,48 @@ export default function LoginPage() {
     setLoading(false);
   };
 
+  const handleGoogleSignIn = async () => {
+    if (!supabase) {
+      setError('Supabase not configured.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    const { error: err } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (err) {
+      setError(`Google sign-in failed: ${err.message}`);
+      setLoading(false);
+    }
+    // On success the browser redirects to Google — no further action needed here
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.title}>JustWrite</h1>
         <p style={styles.subtitle}>Sign in to continue</p>
+
+        <button
+          type="button"
+          style={styles.googleButton}
+          onClick={handleGoogleSignIn}
+          disabled={loading}
+        >
+          <svg width="18" height="18" viewBox="0 0 48 48" style={{ marginRight: '10px', flexShrink: 0 }}>
+            <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.1 17.8 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.9 7.2l7.6 5.9c4.5-4.1 7.1-10.2 7.1-17.1z"/>
+            <path fill="#FBBC05" d="M10.6 28.6A14.9 14.9 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l8-6.1z"/>
+            <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.6-5.9c-2 1.4-4.7 2.2-7.6 2.2-6.2 0-11.5-4.2-13.4-9.8l-8 6.1C6.6 42.6 14.6 48 24 48z"/>
+          </svg>
+          {loading ? 'Redirecting...' : 'Continue with Google'}
+        </button>
+
+        <div style={styles.divider}>
+          <span style={styles.dividerText}>or</span>
+        </div>
 
         <form onSubmit={handleSignIn} style={styles.form}>
           <input
@@ -99,7 +136,7 @@ export default function LoginPage() {
         {message && <p style={styles.success}>{message}</p>}
 
         <p style={styles.hint}>
-          No password needed — we'll email you a magic link to sign in instantly.
+          No password needed — sign in with Google or get a magic link by email.
         </p>
       </div>
     </div>
@@ -177,5 +214,33 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--muted)',
     marginTop: '1.5rem',
     lineHeight: '1.5',
+  },
+  googleButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    padding: '0.75rem',
+    background: '#fff',
+    color: '#333',
+    border: '2px solid var(--accent)',
+    fontFamily: 'monospace',
+    fontSize: '0.75rem',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    fontWeight: '600',
+  },
+  divider: {
+    display: 'flex',
+    alignItems: 'center',
+    margin: '1rem 0',
+    gap: '0.5rem',
+  },
+  dividerText: {
+    color: 'var(--muted)',
+    fontSize: '0.65rem',
+    whiteSpace: 'nowrap' as const,
+    flex: 1,
+    textAlign: 'center' as const,
   },
 };
