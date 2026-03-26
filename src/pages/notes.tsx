@@ -1,25 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import { Nav } from '@/components/Nav';
-import { BlockEditor, Block } from '@/components/notes/BlockEditor';
+import { BlockEditor } from '@/components/notes/BlockEditor';
 import { useAuth } from '@/lib/useAuth';
 import { useRouter } from 'next/router';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface NoteListItem {
-  id: string;
-  title: string;
-  icon: string | null;
-  parent_id: string | null;
-  is_pinned: boolean;
-  is_locked: boolean;
-  updated_at: string;
-}
-
-interface NoteDetail extends NoteListItem {
-  blocks: Block[];
-  cover_url: string | null;
-}
+import { useNotes, type NoteListItem } from '@/hooks/useNotes';
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -27,159 +11,57 @@ export default function NotesPage() {
   const { user, token, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [notes, setNotes] = useState<NoteListItem[]>([]);
-  const [selectedNote, setSelectedNote] = useState<NoteDetail | null>(null);
-  const [loadingList, setLoadingList] = useState(true);
-  const [loadingNote, setLoadingNote] = useState(false);
-  const [saving, setSaving] = useState<'saved' | 'saving' | 'error'>('saved');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [search, setSearch] = useState('');
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingChange = useRef<{ title: string; icon: string | null; blocks: Block[] } | null>(null);
+  const {
+    notes,
+    selectedNote,
+    loadingList,
+    loadingNote,
+    saving,
+    loadNotes,
+    openNote,
+    createNote,
+    deleteNote,
+    togglePin,
+    handleEditorChange,
+  } = useNotes(user, token);
 
   // ── Auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!authLoading && !user) router.replace('/auth/login');
   }, [authLoading, user, router]);
 
-  // ── Load notes list ───────────────────────────────────────────────────────
-  const loadNotes = useCallback(async () => {
-    if (!user || !token) return;
-    try {
-      const res = await fetch('/api/notes?parent_id=null', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const { notes } = await res.json();
-        setNotes(notes || []);
-      }
-    } finally {
-      setLoadingList(false);
-    }
-  }, [user, token]);
-
   useEffect(() => {
     if (user) loadNotes();
   }, [user, loadNotes]);
 
-  // ── Open a note ───────────────────────────────────────────────────────────
-  const openNote = useCallback(async (id: string) => {
-    if (!user || !token) return;
-    setLoadingNote(true);
-    try {
-      const res = await fetch(`/api/notes/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const { note } = await res.json();
-        setSelectedNote(note);
-      }
-    } finally {
-      setLoadingNote(false);
+  // ── Derived: all tags across notes ────────────────────────────────────────
+  const allTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const note of notes) {
+      const m = note.title.matchAll(/#(\w+)/g);
+      for (const match of m) counts.set(match[1].toLowerCase(), (counts.get(match[1].toLowerCase()) ?? 0) + 1);
     }
-  }, [user, token]);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([tag]) => tag);
+  }, [notes]);
 
-  // ── Create note ───────────────────────────────────────────────────────────
-  const createNote = useCallback(async () => {
-    if (!user || !token) return;
-    try {
-      const res = await fetch('/api/notes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ title: 'Untitled', blocks: [] }),
-      });
-
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({ error: 'Failed to create note' }));
-        alert(payload.error || 'Failed to create note');
-        return;
-      }
-
-      const { note } = await res.json();
-      setNotes(prev => [note, ...prev]);
-      await openNote(note.id);
-    } catch {
-      alert('Failed to create note. Please try again.');
-    }
-  }, [user, token, openNote]);
-
-  // ── Delete note ───────────────────────────────────────────────────────────
-  const deleteNote = useCallback(async (id: string) => {
-    if (!user || !token || !confirm('Delete this note?')) return;
-    const res = await fetch(`/api/notes/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+  // ── Filtered notes (memoized) ─────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    return notes.filter(n => {
+      const matchesSearch = !search || n.title.toLowerCase().includes(search.toLowerCase());
+      const matchesTag = !tagFilter || n.title.toLowerCase().includes(`#${tagFilter}`);
+      return matchesSearch && matchesTag;
     });
-    if (res.ok) {
-      setNotes(prev => prev.filter(n => n.id !== id));
-      if (selectedNote?.id === id) setSelectedNote(null);
-    }
-  }, [user, token, selectedNote]);
+  }, [notes, search, tagFilter]);
 
-  // ── Pin/unpin note ────────────────────────────────────────────────────────
-  const togglePin = useCallback(async (id: string, pinned: boolean) => {
-    if (!user || !token) return;
-    await fetch(`/api/notes/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ is_pinned: !pinned }),
-    });
-    setNotes(prev => prev.map(n => n.id === id ? { ...n, is_pinned: !pinned } : n));
-  }, [user, token]);
+  const pinned = useMemo(() => filtered.filter(n => n.is_pinned), [filtered]);
+  const unpinned = useMemo(() => filtered.filter(n => !n.is_pinned), [filtered]);
 
-  // ── Auto-save ─────────────────────────────────────────────────────────────
-  const handleEditorChange = useCallback((
-    title: string,
-    icon: string | null,
-    blocks: Block[]
-  ) => {
-    if (!selectedNote || !user || !token) return;
-    pendingChange.current = { title, icon, blocks };
-    setSaving('saving');
-
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      const change = pendingChange.current;
-      if (!change || !selectedNote || !user || !token) return;
-      try {
-        const res = await fetch(`/api/notes/${selectedNote.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ title: change.title, icon: change.icon, blocks: change.blocks }),
-        });
-        if (res.ok) {
-          setSaving('saved');
-          // Update sidebar title/icon without re-fetching
-          setNotes(prev => prev.map(n =>
-            n.id === selectedNote.id
-              ? { ...n, title: change.title || 'Untitled', icon: change.icon }
-              : n
-          ));
-        } else {
-          setSaving('error');
-        }
-      } catch {
-        setSaving('error');
-      }
-    }, 1500);
-  }, [selectedNote, user, token]);
-
-  // ── Filtered notes ────────────────────────────────────────────────────────
-  const filtered = notes.filter(n =>
-    !search || n.title.toLowerCase().includes(search.toLowerCase())
-  );
-  const pinned = filtered.filter(n => n.is_pinned);
-  const unpinned = filtered.filter(n => !n.is_pinned);
+  // Backlinks come from the note detail (fetched by API when note is opened)
+  const backlinks = selectedNote?.backlinks ?? [];
 
   if (authLoading || !user) return null;
 
@@ -203,6 +85,20 @@ export default function NotesPage() {
               style={searchInput}
             />
           </div>
+
+          {allTags.length > 0 && (
+            <div style={tagChipRow}>
+              {allTags.slice(0, 12).map(tag => (
+                <button
+                  key={tag}
+                  style={{ ...tagChip, ...(tagFilter === tag ? tagChipActive : {}) }}
+                  onClick={() => setTagFilter(t => t === tag ? null : tag)}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div style={noteList}>
             {loadingList ? (
@@ -278,7 +174,24 @@ export default function NotesPage() {
                   icon={selectedNote.icon}
                   blocks={selectedNote.blocks || []}
                   onChange={handleEditorChange}
+                  noteTitles={notes.filter(n => n.id !== selectedNote.id)}
                 />
+
+                {backlinks.length > 0 && (
+                  <div style={backlinksPanel}>
+                    <div style={backlinksTitle}>Linked from</div>
+                    {backlinks.map(bl => (
+                      <div
+                        key={bl.id}
+                        style={backlinkRow}
+                        onClick={() => openNote(bl.id)}
+                      >
+                        <span style={{ fontSize: '13px', marginRight: '0.375rem' }}>{bl.icon || '📄'}</span>
+                        <span style={{ fontSize: '13px', color: 'var(--accent-bright)' }}>{bl.title || 'Untitled'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -303,6 +216,7 @@ export default function NotesPage() {
         .note-row-actions { opacity: 0 !important; }
         .note-row:hover .note-row-actions { opacity: 1 !important; }
         .note-row:hover { background: var(--bg-card) !important; }
+        .backlink-row:hover { background: var(--bg-card) !important; }
         textarea::placeholder { color: var(--muted); }
         textarea:focus { outline: none; }
         .note-row.active-note { background: var(--bg-card) !important; }
@@ -313,7 +227,7 @@ export default function NotesPage() {
 
 // ─── Note row in sidebar ──────────────────────────────────────────────────────
 
-function NoteRow({
+const NoteRow = memo(function NoteRow({
   note, active, onOpen, onDelete, onPin,
 }: {
   note: NoteListItem;
@@ -340,7 +254,7 @@ function NoteRow({
       </span>
     </div>
   );
-}
+});
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -587,4 +501,58 @@ const emptyEditorBtn: React.CSSProperties = {
   fontWeight: 600,
   cursor: 'pointer',
   fontFamily: 'inherit',
+};
+
+const backlinksPanel: React.CSSProperties = {
+  maxWidth: '720px',
+  margin: '0 auto',
+  padding: '1.5rem 2rem 3rem',
+  borderTop: '1px solid var(--border)',
+};
+
+const backlinksTitle: React.CSSProperties = {
+  fontSize: '11px',
+  fontWeight: 600,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: 'var(--muted)',
+  marginBottom: '0.75rem',
+};
+
+const backlinkRow: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  padding: '0.375rem 0.5rem',
+  borderRadius: 'var(--radius-md)',
+  cursor: 'pointer',
+  transition: 'background 0.1s ease',
+};
+
+const tagChipRow: React.CSSProperties = {
+  display: 'flex',
+  gap: '0.25rem',
+  padding: '0 0.75rem 0.5rem',
+  overflowX: 'auto',
+  flexShrink: 0,
+  scrollbarWidth: 'none',
+};
+
+const tagChip: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid var(--border)',
+  color: 'var(--muted)',
+  borderRadius: '999px',
+  padding: '2px 8px',
+  fontSize: '11px',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+  fontFamily: 'inherit',
+  flexShrink: 0,
+  transition: 'all 0.1s ease',
+};
+
+const tagChipActive: React.CSSProperties = {
+  background: 'var(--accent)',
+  borderColor: 'var(--accent)',
+  color: '#fff',
 };

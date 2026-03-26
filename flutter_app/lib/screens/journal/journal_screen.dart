@@ -216,7 +216,7 @@ class _JournalScreenState extends State<JournalScreen> {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
       await context.read<EntryProvider>().deleteEntry(entry.id);
     }
   }
@@ -292,7 +292,7 @@ class _EntryCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getSourceColor(entry.source).withOpacity(0.2),
+                      color: _getSourceColor(entry.source).withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(

@@ -815,3 +815,81 @@ export async function getGraphData(userId: string) {
 
   return { nodes, links };
 }
+
+// ============= WIKILINKS / BACKLINKS =============
+
+/** Extract [[title]] patterns from note blocks */
+export function extractWikilinksFromBlocks(blocks: any[]): string[] {
+  const titles: string[] = [];
+  const pattern = /\[\[([^\]]+)\]\]/g;
+  for (const block of blocks) {
+    if (typeof block.content !== 'string') continue;
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(block.content)) !== null) {
+      titles.push(m[1].trim());
+    }
+  }
+  return [...new Set(titles)];
+}
+
+/** Save [[wikilink]] edges from a note into content_links */
+export async function saveNoteWikilinks(
+  fromNoteId: string,
+  userId: string,
+  targetTitles: string[]
+): Promise<void> {
+  if (!supabase || !targetTitles.length) return;
+
+  // Look up target note IDs by title
+  const { data: targets } = await supabase
+    .from('notes')
+    .select('id, title')
+    .eq('user_id', userId)
+    .in('title', targetTitles);
+
+  if (!targets?.length) return;
+
+  // Delete old wikilinks from this note, then insert fresh
+  await supabase
+    .from('content_links')
+    .delete()
+    .eq('from_id', fromNoteId)
+    .eq('link_type', 'wikilink');
+
+  const rows = targets.map((t: any) => ({
+    user_id: userId,
+    from_type: 'note',
+    from_id: fromNoteId,
+    to_type: 'note',
+    to_id: t.id,
+    link_type: 'wikilink',
+    weight: 1.0,
+  }));
+
+  await supabase.from('content_links').insert(rows);
+}
+
+/** Get notes that wikilink TO the given noteId */
+export async function getBacklinksForNote(
+  noteId: string,
+  userId: string
+): Promise<{ id: string; title: string; icon: string | null }[]> {
+  if (!supabase) return [];
+
+  const { data: links } = await supabase
+    .from('content_links')
+    .select('from_id')
+    .eq('to_id', noteId)
+    .eq('link_type', 'wikilink')
+    .eq('user_id', userId);
+
+  if (!links?.length) return [];
+
+  const fromIds = links.map((l: any) => l.from_id);
+  const { data: notes } = await supabase
+    .from('notes')
+    .select('id, title, icon')
+    .in('id', fromIds);
+
+  return (notes || []).map((n: any) => ({ id: n.id, title: n.title, icon: n.icon }));
+}

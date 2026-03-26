@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getNoteById, updateNote, deleteNote, upsertKeywords, linkNoteKeywords } from '../../../lib/storage';
+import { getNoteById, updateNote, deleteNote, upsertKeywords, linkNoteKeywords, saveNoteWikilinks, extractWikilinksFromBlocks, getBacklinksForNote } from '../../../lib/storage';
 import { withAuth } from '../../../lib/withAuth';
 import { sanitizeInput, isValidUUID, checkRateLimit } from '../../../lib/security';
 
@@ -38,9 +38,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'GET') {
-      const note = await getNoteById(id, userId, accessToken);
+      const [note, backlinks] = await Promise.all([
+        getNoteById(id, userId, accessToken),
+        getBacklinksForNote(id, userId),
+      ]);
       if (!note) return res.status(404).json({ error: 'Note not found' });
-      return res.status(200).json({ note });
+      return res.status(200).json({ note: { ...note, backlinks } });
     }
 
     if (req.method === 'PATCH' || req.method === 'PUT') {
@@ -58,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         const note = await updateNote(id, updates, userId, accessToken);
 
-        // Background keyword extraction (non-blocking)
+        // Background keyword + wikilink extraction (non-blocking)
         if (blocks !== undefined || title !== undefined) {
           const finalTitle = (updates.title as string) || '';
           const finalBlocks = Array.isArray(updates.blocks) ? updates.blocks : [];
@@ -66,7 +69,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (words.length > 0) {
             upsertKeywords(userId, words)
               .then(kwIds => linkNoteKeywords(id, kwIds))
-              .catch(() => {}); // never fail the request
+              .catch(() => {});
+          }
+          if (blocks !== undefined) {
+            const wikilinkTitles = extractWikilinksFromBlocks(finalBlocks);
+            saveNoteWikilinks(id, userId, wikilinkTitles).catch(() => {});
           }
         }
 

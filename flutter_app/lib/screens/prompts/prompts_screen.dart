@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:justwrite_mobile/providers/auth_provider.dart';
 import 'package:justwrite_mobile/providers/theme_provider.dart';
 import 'package:justwrite_mobile/theme/app_theme.dart';
 import 'package:justwrite_mobile/services/supabase_service.dart';

@@ -16,6 +16,7 @@ class _InsightsScreenState extends State<InsightsScreen> with AutomaticKeepAlive
   // Cache stats to avoid recomputing on every build
   Map<String, dynamic>? _cachedStats;
   int _lastEntriesLength = 0;
+  bool _showLineChart = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -342,12 +343,40 @@ class _InsightsScreenState extends State<InsightsScreen> with AutomaticKeepAlive
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('MOOD DISTRIBUTION', style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 16),
-          _MoodPieChart(
-            distribution: stats['moodDistribution'] as Map<String, int>,
-            isDark: isDark,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('MOOD', style: Theme.of(context).textTheme.labelLarge),
+              Row(
+                children: [
+                  _ChartToggle(
+                    icon: Icons.pie_chart_outline_rounded,
+                    isSelected: !_showLineChart,
+                    onTap: () => setState(() => _showLineChart = false),
+                    isDark: isDark,
+                  ),
+                  const SizedBox(width: 6),
+                  _ChartToggle(
+                    icon: Icons.show_chart_rounded,
+                    isSelected: _showLineChart,
+                    onTap: () => setState(() => _showLineChart = true),
+                    isDark: isDark,
+                  ),
+                ],
+              ),
+            ],
           ),
+          const SizedBox(height: 16),
+          if (_showLineChart)
+            _MoodLineChart(
+              moodHistory: stats['moodHistory'] as List<Map<String, dynamic>>,
+              isDark: isDark,
+            )
+          else
+            _MoodPieChart(
+              distribution: stats['moodDistribution'] as Map<String, int>,
+              isDark: isDark,
+            ),
           const SizedBox(height: 12),
           Center(
             child: Text(

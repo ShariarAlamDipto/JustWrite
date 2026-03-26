@@ -74,7 +74,12 @@ class EntryProvider extends ChangeNotifier {
           content = _encryptionService.decrypt(content, e.userId);
           content = _compressionService.decompress(content);
         } else {
-          // Ideas/Brainstorm: only decompress (not encrypted)
+          // Ideas/Brainstorm: decrypt if web-encrypted, then decompress
+          // Web app encrypts all entry types; Flutter only compressed them.
+          // Handle both cases for cross-platform sync.
+          if (_encryptionService.isEncrypted(content)) {
+            content = _encryptionService.decrypt(content, e.userId);
+          }
           content = _compressionService.decompress(content);
         }
         return e.copyWith(content: content);

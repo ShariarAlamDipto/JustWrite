@@ -3,6 +3,7 @@ import { listEntries } from '../../lib/storage';
 import { withAuth } from '../../lib/withAuth';
 import { calculateStats, getLevelFromPoints, getLevelProgress, BADGES, getBadgeById, getMotivationalMessage } from '../../lib/gamification';
 import { checkRateLimit } from '../../lib/security';
+import { setCacheHeaders } from '../../lib/apiHelpers';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
@@ -19,6 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
+      setCacheHeaders(res, 60); // stats: cache 60s, stale-while-revalidate 120s
       const entries = await listEntries(userId);
       const stats = calculateStats(entries);
       const level = getLevelFromPoints(stats.totalPoints);

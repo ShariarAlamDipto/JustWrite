@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:justwrite_mobile/models/note.dart';
 import 'package:justwrite_mobile/providers/note_provider.dart';
 import 'package:justwrite_mobile/providers/theme_provider.dart';
+import 'package:justwrite_mobile/screens/notes/notes_graph_view.dart';
 import 'package:justwrite_mobile/screens/notes/notes_reading_view.dart';
 
 
@@ -17,6 +18,8 @@ class NotesScreen extends StatefulWidget {
 }
 
 class _NotesScreenState extends State<NotesScreen> {
+  bool _showGraph = false;
+
   @override
   void initState() {
     super.initState();
@@ -45,13 +48,19 @@ class _NotesScreenState extends State<NotesScreen> {
             _openCommandPalette,
         const SingleActivator(LogicalKeyboardKey.keyP, meta: true):
             _openCommandPalette,
+        const SingleActivator(LogicalKeyboardKey.keyG, control: true): () =>
+            setState(() => _showGraph = !_showGraph),
       },
       child: Focus(
         autofocus: true,
         child: Row(
           children: [
             // Sidebar
-            _NotesSidebar(isDark: isDark),
+            _NotesSidebar(
+              isDark: isDark,
+              showGraph: _showGraph,
+              onToggleGraph: () => setState(() => _showGraph = !_showGraph),
+            ),
             // Divider
             VerticalDivider(
               width: 1,
@@ -60,12 +69,15 @@ class _NotesScreenState extends State<NotesScreen> {
                   ? Colors.white.withValues(alpha: 0.07)
                   : Colors.black.withValues(alpha: 0.07),
             ),
-            // Editor pane
+            // Right pane: graph view or editor
             Expanded(
-              child: provider.selectedNote == null
-                  ? _EmptyState(isDark: isDark)
-                  : _NoteEditorPane(
-                      key: ValueKey(provider.selectedNote!.id), isDark: isDark),
+              child: _showGraph
+                  ? NotesGraphView(isDark: isDark, provider: provider)
+                  : (provider.selectedNote == null
+                      ? _EmptyState(isDark: isDark)
+                      : _NoteEditorPane(
+                          key: ValueKey(provider.selectedNote!.id),
+                          isDark: isDark)),
             ),
           ],
         ),
@@ -103,7 +115,13 @@ class _EmptyState extends StatelessWidget {
 
 class _NotesSidebar extends StatefulWidget {
   final bool isDark;
-  const _NotesSidebar({required this.isDark});
+  final bool showGraph;
+  final VoidCallback onToggleGraph;
+  const _NotesSidebar({
+    required this.isDark,
+    required this.showGraph,
+    required this.onToggleGraph,
+  });
 
   @override
   State<_NotesSidebar> createState() => _NotesSidebarState();
@@ -153,6 +171,30 @@ class _NotesSidebarState extends State<_NotesSidebar> {
                     ),
                   ),
                   const Spacer(),
+                  // Graph toggle
+                  Tooltip(
+                    message: widget.showGraph ? 'List view (Ctrl+G)' : 'Graph view (Ctrl+G)',
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: widget.onToggleGraph,
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(
+                            widget.showGraph
+                                ? Icons.list_rounded
+                                : Icons.hub_outlined,
+                            size: 16,
+                            color: widget.showGraph
+                                ? const Color(0xFF00ffd5)
+                                : mutedColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                   // New note button
                   Material(
                     color: Colors.transparent,
@@ -754,6 +796,13 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
     final ctrl = _blockCtrl[idx];
     final text = ctrl.text;
     final sel = ctrl.selection;
+
+    // Ctrl+E: toggle reading mode (Obsidian standard)
+    if (event.logicalKey == LogicalKeyboardKey.keyE &&
+        HardwareKeyboard.instance.isControlPressed) {
+      setState(() => _isReadMode = !_isReadMode);
+      return KeyEventResult.handled;
+    }
 
     // Escape: close slash menu
     if (event.logicalKey == LogicalKeyboardKey.escape) {

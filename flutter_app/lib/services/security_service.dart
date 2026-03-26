@@ -62,23 +62,6 @@ class SecurityService {
       '/data/user_de/0/com.topjohnwu.magisk',
     ];
 
-    // Check for dangerous apps
-    final dangerousApps = [
-      'com.topjohnwu.magisk',
-      'com.koushikdutta.superuser',
-      'com.thirdparty.superuser',
-      'eu.chainfire.supersu',
-      'com.noshufou.android.su',
-      'com.yellowes.su',
-      'com.zachspong.temprootremovejb',
-      'com.ramdroid.appquarantine',
-      'com.devadvance.rootcloak',
-      'de.robv.android.xposed.installer',
-      'com.saurik.substrate',
-      'com.amphoras.hidemyroot',
-      'com.formyhm.hideroot',
-    ];
-
     for (final path in suspiciousPaths) {
       if (await File(path).exists()) {
         if (kDebugMode) debugPrint('[Security] Root indicator found: $path');

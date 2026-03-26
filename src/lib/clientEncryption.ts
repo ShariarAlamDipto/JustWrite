@@ -109,15 +109,52 @@ export async function encryptContent(content: string, userId: string): Promise<s
 }
 
 /**
- * Decrypt content encrypted with enc2 format
- * Tries 600k iterations first (web default), falls back to 210k (old Flutter default)
+ * Decompress gz: prefixed content produced by Flutter's CompressionService.
+ * Flutter compresses text before encrypting: compress(text) → encrypt.
+ * So after web decrypts, the plaintext may still be gzip-compressed.
+ * Format: gz:{base64_gzip_bytes}
+ */
+async function decompressGzip(base64Data: string): Promise<string> {
+  try {
+    const bytes = fromBase64(base64Data);
+    // DecompressionStream is available in modern browsers (Chrome 80+, Firefox 113+) and Node 18+
+    const ds = new DecompressionStream('gzip');
+    const writer = ds.writable.getWriter();
+    const reader = ds.readable.getReader();
+    writer.write(bytes);
+    writer.close();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const total = chunks.reduce((acc, c) => acc + c.length, 0);
+    const result = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.length; }
+    return new TextDecoder().decode(result);
+  } catch {
+    // If decompression fails, return the raw base64 rather than crashing
+    return `gz:${base64Data}`;
+  }
+}
+
+/**
+ * Decrypt content encrypted with enc2 format.
+ * Tries 600k iterations first (web default), falls back to 210k (old Flutter default).
+ * After decryption, decompresses gz: content written by Flutter's CompressionService.
  */
 export async function decryptContent(content: string, userId: string): Promise<string> {
   if (!content || !userId) return content;
 
   // Check if content is encrypted
   if (!content.startsWith('enc2:')) {
-    return content; // Not encrypted
+    // Handle unencrypted but compressed content (Flutter brainstorm/ideas entries)
+    if (content.startsWith('gz:')) {
+      return decompressGzip(content.substring(3));
+    }
+    return content;
   }
 
   // Check if Web Crypto API is available
@@ -136,6 +173,8 @@ export async function decryptContent(content: string, userId: string): Promise<s
   const iv = fromBase64(parts[2]);
   const encryptedData = fromBase64(parts[3]);
 
+  const decoder = new TextDecoder();
+
   // Try with primary iterations (600k - web standard)
   try {
     const key = await deriveKey(userId, salt, PBKDF2_ITERATIONS);
@@ -144,8 +183,12 @@ export async function decryptContent(content: string, userId: string): Promise<s
       key,
       encryptedData.buffer as ArrayBuffer
     );
-    const decoder = new TextDecoder();
-    return decoder.decode(decrypted);
+    const plaintext = decoder.decode(decrypted);
+    // Flutter compresses before encrypting — decompress if needed
+    if (plaintext.startsWith('gz:')) {
+      return decompressGzip(plaintext.substring(3));
+    }
+    return plaintext;
   } catch {
     // Primary decryption failed - try legacy mobile iterations (210k)
   }
@@ -158,8 +201,11 @@ export async function decryptContent(content: string, userId: string): Promise<s
       key,
       encryptedData.buffer as ArrayBuffer
     );
-    const decoder = new TextDecoder();
-    return decoder.decode(decrypted);
+    const plaintext = decoder.decode(decrypted);
+    if (plaintext.startsWith('gz:')) {
+      return decompressGzip(plaintext.substring(3));
+    }
+    return plaintext;
   } catch (error) {
     console.error('Decryption failed with both iteration counts:', error);
     return '[Encrypted content - decryption failed]';

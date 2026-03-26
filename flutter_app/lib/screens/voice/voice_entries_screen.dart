@@ -144,7 +144,7 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Saved'),
-          backgroundColor: _accentCyan.withOpacity(0.9),
+          backgroundColor: _accentCyan.withValues(alpha: 0.9),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -500,7 +500,7 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: _accentCyan.withOpacity(0.4),
+              color: _accentCyan.withValues(alpha: 0.4),
               blurRadius: 20,
               spreadRadius: 2,
             ),
@@ -521,7 +521,7 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
     final mutedColor = isDark ? const Color(0xFF666666) : Colors.grey[600]!;
     
     return Container(
-      color: bgColor.withOpacity(0.95),
+      color: bgColor.withValues(alpha: 0.95),
       child: SafeArea(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -538,7 +538,7 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
                     height: 120,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.red.withOpacity(0.15),
+                      color: Colors.red.withValues(alpha: 0.15),
                     ),
                     child: Center(
                       child: Container(
@@ -615,7 +615,7 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
                         color: _accentCyan,
                         boxShadow: [
                           BoxShadow(
-                            color: _accentCyan.withOpacity(0.4),
+                            color: _accentCyan.withValues(alpha: 0.4),
                             blurRadius: 20,
                             spreadRadius: 2,
                           ),

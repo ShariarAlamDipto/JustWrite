@@ -23,6 +23,7 @@ interface BlockEditorProps {
   blocks: Block[];
   onChange: (title: string, icon: string | null, blocks: Block[]) => void;
   readOnly?: boolean;
+  noteTitles?: { id: string; title: string; icon: string | null }[];
 }
 
 // ─── Slash menu items ─────────────────────────────────────────────────────────
@@ -101,6 +102,54 @@ function SlashMenu({ query, onSelect, onClose }: SlashMenuProps) {
   );
 }
 
+// ─── Wikilink Menu ────────────────────────────────────────────────────────────
+
+interface WikilinkMenuProps {
+  query: string;
+  notes: { id: string; title: string; icon: string | null }[];
+  onSelect: (title: string) => void;
+  onClose: () => void;
+}
+
+function WikilinkMenu({ query, notes, onSelect, onClose }: WikilinkMenuProps) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const filtered = notes.filter(
+    n => !query || n.title.toLowerCase().includes(query.toLowerCase())
+  ).slice(0, 8);
+
+  useEffect(() => { setActiveIdx(0); }, [query]);
+
+  useEffect(() => {
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, filtered.length - 1)); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
+      if (e.key === 'Enter')     { e.preventDefault(); e.stopPropagation(); if (filtered[activeIdx]) onSelect(filtered[activeIdx].title); }
+      if (e.key === 'Escape')    { onClose(); }
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [filtered, activeIdx, onSelect, onClose]);
+
+  if (!filtered.length) return null;
+
+  return (
+    <div style={slashStyles.menu} onMouseDown={e => e.preventDefault()}>
+      <div style={slashStyles.hint}>Link to note</div>
+      {filtered.map((note, idx) => (
+        <div
+          key={note.id}
+          style={{ ...slashStyles.item, ...(idx === activeIdx ? slashStyles.itemActive : {}) }}
+          onMouseEnter={() => setActiveIdx(idx)}
+          onMouseDown={() => onSelect(note.title)}
+        >
+          <span style={slashStyles.symbol}>{note.icon || '📄'}</span>
+          <span style={slashStyles.label}>{note.title || 'Untitled'}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Individual block ─────────────────────────────────────────────────────────
 
 interface BlockItemProps {
@@ -115,6 +164,11 @@ interface BlockItemProps {
   onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => void;
   onSlashSelect: (type: BlockType) => void;
   onSlashClose: () => void;
+  showWiki: boolean;
+  wikiQuery: string;
+  wikiNotes: { id: string; title: string; icon: string | null }[];
+  onWikiSelect: (title: string) => void;
+  onWikiClose: () => void;
   onToggle: () => void;
   onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
@@ -127,6 +181,7 @@ function BlockItem({
   showSlash, slashQuery,
   onFocus, onChange, onKeyDown,
   onSlashSelect, onSlashClose,
+  showWiki, wikiQuery, wikiNotes, onWikiSelect, onWikiClose,
   onToggle, onDragStart, onDragOver, onDrop,
   autoFocus,
 }: BlockItemProps) {
@@ -215,6 +270,16 @@ function BlockItem({
             />
           </div>
         )}
+        {showWiki && (
+          <div style={slashStyles.anchor}>
+            <WikilinkMenu
+              query={wikiQuery}
+              notes={wikiNotes}
+              onSelect={onWikiSelect}
+              onClose={onWikiClose}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -222,7 +287,7 @@ function BlockItem({
 
 // ─── Main BlockEditor ─────────────────────────────────────────────────────────
 
-export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChange, readOnly }: BlockEditorProps) {
+export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChange, readOnly, noteTitles = [] }: BlockEditorProps) {
   const [blocks, setBlocks] = useState<Block[]>(
     initialBlocks.length > 0 ? initialBlocks : [newBlock()]
   );
@@ -231,6 +296,8 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [slashBlockId, setSlashBlockId] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState('');
+  const [wikiBlockId, setWikiBlockId] = useState<string | null>(null);
+  const [wikiQuery, setWikiQuery] = useState('');
   const [dragSourceId, setDragSourceId] = useState<string | null>(null);
   const [newBlockId, setNewBlockId] = useState<string | null>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
@@ -322,11 +389,24 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
     }
   }, [blocks, slashBlockId]);
 
+  const applyWikilink = useCallback((blockId: string, selectedTitle: string) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId) return b;
+      const lastOpen = b.content.lastIndexOf('[[');
+      if (lastOpen === -1) return b;
+      return { ...b, content: b.content.slice(0, lastOpen) + `[[${selectedTitle}]] ` };
+    }));
+    setWikiBlockId(null);
+    setWikiQuery('');
+    setFocusedId(blockId);
+  }, []);
+
   const handleChange = useCallback((block: Block, value: string) => {
     // Slash command detection
     if (value === '/') {
       setSlashBlockId(block.id);
       setSlashQuery('');
+      setWikiBlockId(null);
     } else if (slashBlockId === block.id) {
       if (value.startsWith('/')) {
         setSlashQuery(value.slice(1));
@@ -335,8 +415,21 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
         setSlashQuery('');
       }
     }
+
+    // Wikilink detection: find last `[[` in value
+    const lastOpen = value.lastIndexOf('[[');
+    if (lastOpen !== -1 && !value.slice(lastOpen).includes(']]')) {
+      const query = value.slice(lastOpen + 2);
+      setWikiBlockId(block.id);
+      setWikiQuery(query);
+      setSlashBlockId(null);
+    } else if (wikiBlockId === block.id) {
+      setWikiBlockId(null);
+      setWikiQuery('');
+    }
+
     updateBlock(block.id, value);
-  }, [slashBlockId, updateBlock]);
+  }, [slashBlockId, wikiBlockId, updateBlock]);
 
   const handleDrop = useCallback((targetId: string) => {
     if (!dragSourceId || dragSourceId === targetId) return;
@@ -406,6 +499,11 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
               onKeyDown={e => handleKeyDown(e, block, index)}
               onSlashSelect={type => changeBlockType(block.id, type)}
               onSlashClose={() => { setSlashBlockId(null); setSlashQuery(''); }}
+              showWiki={wikiBlockId === block.id}
+              wikiQuery={wikiQuery}
+              wikiNotes={noteTitles}
+              onWikiSelect={selectedTitle => applyWikilink(block.id, selectedTitle)}
+              onWikiClose={() => { setWikiBlockId(null); setWikiQuery(''); }}
               onToggle={() => setBlocks(prev => prev.map(b => b.id === block.id ? { ...b, open: !b.open } : b))}
               onDragStart={() => setDragSourceId(block.id)}
               onDragOver={e => { e.preventDefault(); }}
