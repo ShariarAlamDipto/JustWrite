@@ -53,20 +53,21 @@ void main() async {
     debug: false,
   );
 
-  // Initialize offline sync service
-  await SyncService().initialize();
-
-  // Mobile-only: device security check
-  if (!isDesktop && !kIsWeb) {
-    final securityService = SecurityService();
-    final isCompromised = await securityService.isDeviceCompromised();
-    if (isCompromised && !kDebugMode) {
-      runApp(const SecurityWarningApp());
-      return;
-    }
-  }
-
+  // Run the app immediately — do NOT await heavy background services.
+  // SyncService and SecurityService run after first frame so the UI renders fast.
   runApp(JustWriteApp(isDesktop: isDesktop));
+
+  // Deferred: offline sync (database setup, connectivity listener)
+  SyncService().initialize().catchError((e) {
+    debugPrint('[Startup] SyncService init error: $e');
+  });
+
+  // Deferred: root/jailbreak check — show dialog after app is visible
+  if (!isDesktop && !kIsWeb && !kDebugMode) {
+    SecurityService().isDeviceCompromised().then((compromised) {
+      if (compromised) runApp(const SecurityWarningApp());
+    }).catchError((_) {});
+  }
 }
 
 /// SECURITY: App shown when device is detected as compromised (rooted/jailbroken)

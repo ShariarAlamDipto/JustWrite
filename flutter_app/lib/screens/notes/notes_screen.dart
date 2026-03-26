@@ -19,6 +19,7 @@ class NotesScreen extends StatefulWidget {
 
 class _NotesScreenState extends State<NotesScreen> {
   bool _showGraph = false;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -41,7 +42,51 @@ class _NotesScreenState extends State<NotesScreen> {
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final provider = context.watch<NoteProvider>();
+    final isNarrow = MediaQuery.of(context).size.width < 700;
 
+    // ── Mobile layout: drawer + full-screen editor ─────────────────────────
+    if (isNarrow) {
+      final mainPane = _showGraph
+          ? NotesGraphView(isDark: isDark, provider: provider)
+          : (provider.selectedNote == null
+              ? _EmptyState(
+                  isDark: isDark,
+                  onOpenSidebar: () =>
+                      _scaffoldKey.currentState?.openDrawer(),
+                )
+              : _NoteEditorPane(
+                  key: ValueKey(provider.selectedNote!.id),
+                  isDark: isDark,
+                  onOpenSidebar: () =>
+                      _scaffoldKey.currentState?.openDrawer(),
+                ));
+
+      return Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: Colors.transparent,
+        drawer: Drawer(
+          width: 280,
+          backgroundColor: isDark
+              ? const Color(0xFF0D0D0D)
+              : Colors.white,
+          child: SafeArea(
+            child: _NotesSidebar(
+              isDark: isDark,
+              showGraph: _showGraph,
+              onToggleGraph: () {
+                setState(() => _showGraph = !_showGraph);
+                _scaffoldKey.currentState?.closeDrawer();
+              },
+              onNoteSelected: () =>
+                  _scaffoldKey.currentState?.closeDrawer(),
+            ),
+          ),
+        ),
+        body: mainPane,
+      );
+    }
+
+    // ── Desktop / tablet layout: side-by-side ──────────────────────────────
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyP, control: true):
@@ -55,13 +100,12 @@ class _NotesScreenState extends State<NotesScreen> {
         autofocus: true,
         child: Row(
           children: [
-            // Sidebar
             _NotesSidebar(
               isDark: isDark,
               showGraph: _showGraph,
-              onToggleGraph: () => setState(() => _showGraph = !_showGraph),
+              onToggleGraph: () =>
+                  setState(() => _showGraph = !_showGraph),
             ),
-            // Divider
             VerticalDivider(
               width: 1,
               thickness: 1,
@@ -69,7 +113,6 @@ class _NotesScreenState extends State<NotesScreen> {
                   ? Colors.white.withValues(alpha: 0.07)
                   : Colors.black.withValues(alpha: 0.07),
             ),
-            // Right pane: graph view or editor
             Expanded(
               child: _showGraph
                   ? NotesGraphView(isDark: isDark, provider: provider)
@@ -90,11 +133,13 @@ class _NotesScreenState extends State<NotesScreen> {
 
 class _EmptyState extends StatelessWidget {
   final bool isDark;
-  const _EmptyState({required this.isDark});
+  final VoidCallback? onOpenSidebar;
+  const _EmptyState({required this.isDark, this.onOpenSidebar});
 
   @override
   Widget build(BuildContext context) {
     final faded = isDark ? Colors.white30 : Colors.black26;
+    final isNarrow = MediaQuery.of(context).size.width < 700;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -105,6 +150,18 @@ class _EmptyState extends StatelessWidget {
             'Select a note or create one',
             style: TextStyle(fontSize: 16, color: faded),
           ),
+          if (isNarrow && onOpenSidebar != null) ...[
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: onOpenSidebar,
+              icon: const Icon(Icons.menu_rounded, size: 18),
+              label: const Text('Open notes'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF00ffd5),
+                foregroundColor: Colors.black,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -117,10 +174,12 @@ class _NotesSidebar extends StatefulWidget {
   final bool isDark;
   final bool showGraph;
   final VoidCallback onToggleGraph;
+  final VoidCallback? onNoteSelected;
   const _NotesSidebar({
     required this.isDark,
     required this.showGraph,
     required this.onToggleGraph,
+    this.onNoteSelected,
   });
 
   @override
@@ -316,7 +375,10 @@ class _NotesSidebarState extends State<_NotesSidebar> {
                               note: note,
                               isSelected: isSelected,
                               isDark: isDark,
-                              onTap: () => context.read<NoteProvider>().selectNote(note.id),
+                              onTap: () {
+                                context.read<NoteProvider>().selectNote(note.id);
+                                widget.onNoteSelected?.call();
+                              },
                               onPin: () => context.read<NoteProvider>().togglePin(note.id),
                               onDelete: () => _confirmDelete(context, note),
                             );
@@ -547,7 +609,8 @@ class _TileAction extends StatelessWidget {
 
 class _NoteEditorPane extends StatefulWidget {
   final bool isDark;
-  const _NoteEditorPane({super.key, required this.isDark});
+  final VoidCallback? onOpenSidebar;
+  const _NoteEditorPane({super.key, required this.isDark, this.onOpenSidebar});
 
   @override
   State<_NoteEditorPane> createState() => _NoteEditorPaneState();
@@ -895,14 +958,25 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
       });
     }
 
+    final isNarrow = MediaQuery.of(context).size.width < 700;
+
     return Column(
       children: [
         // Top bar: breadcrumb + save status
         Container(
           height: 42,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
+              // Mobile: hamburger to open note list drawer
+              if (isNarrow && widget.onOpenSidebar != null)
+                IconButton(
+                  icon: const Icon(Icons.menu_rounded, size: 20),
+                  onPressed: widget.onOpenSidebar,
+                  tooltip: 'All notes',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
               if (note.isPinned)
                 const Padding(
                   padding: EdgeInsets.only(right: 6),

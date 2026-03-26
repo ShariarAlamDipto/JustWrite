@@ -158,7 +158,22 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
 
   Future<void> _transcribeEntry(VoiceEntry entry) async {
     final groqApiKey = dotenv.env['GROQ_API_KEY'];
-    if (groqApiKey == null || groqApiKey.isEmpty || entry.audioUrl == null) return;
+    if (entry.audioUrl == null) return;
+
+    if (groqApiKey == null || groqApiKey.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Transcription not configured — add GROQ_API_KEY to .env'),
+            backgroundColor: Colors.orange[700],
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+      return;
+    }
 
     if (mounted) setState(() => _transcribingId = entry.id);
 
@@ -180,7 +195,23 @@ class _VoiceEntriesScreenState extends State<VoiceEntriesScreen>
         });
       }
     } else {
-      if (mounted) setState(() => _transcribingId = null);
+      if (mounted) {
+        setState(() => _transcribingId = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Transcription failed — check your connection and try again'),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _transcribeEntry(entry),
+            ),
+          ),
+        );
+      }
     }
   }
 

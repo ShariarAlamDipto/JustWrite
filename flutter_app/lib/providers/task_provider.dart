@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:justwrite_mobile/models/task.dart';
 import 'package:justwrite_mobile/services/supabase_service.dart';
+import 'package:justwrite_mobile/services/encryption_service.dart';
+import 'package:justwrite_mobile/services/compression_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 class TaskProvider extends ChangeNotifier {
   final _supabaseService = SupabaseService();
+  final _encryption = EncryptionService();
+  final _compression = CompressionService();
   List<Task> _tasks = [];
   bool _isLoading = false;
   String? _error;
@@ -59,9 +64,33 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _tasks = await _supabaseService.getTasks();
+      final rawTasks = await _supabaseService.getTasks();
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      _tasks = rawTasks.map((task) {
+        if (userId == null) return task;
+        String title = task.title;
+        String description = task.description;
+        // Decrypt + decompress if task content was encrypted (e.g. via web migration)
+        if (_encryption.isEncrypted(title)) {
+          try {
+            title = _encryption.decrypt(title, userId);
+            title = _compression.decompress(title);
+          } catch (_) {}
+        } else if (title.startsWith('gz:')) {
+          try { title = _compression.decompress(title); } catch (_) {}
+        }
+        if (_encryption.isEncrypted(description)) {
+          try {
+            description = _encryption.decrypt(description, userId);
+            description = _compression.decompress(description);
+          } catch (_) {}
+        } else if (description.startsWith('gz:')) {
+          try { description = _compression.decompress(description); } catch (_) {}
+        }
+        return task.copyWith(title: title, description: description);
+      }).toList();
       _lastFetch = DateTime.now();
-      _invalidateCache(); // Clear cached filtered lists
+      _invalidateCache();
     } catch (e) {
       _error = e.toString();
     } finally {

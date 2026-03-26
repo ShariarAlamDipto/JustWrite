@@ -654,34 +654,18 @@ export async function linkNoteKeywords(noteId: string, keywordIds: string[]) {
 
 // ============= GRAPH DATA =============
 
+// Knowledge graph — Notes-only second brain view.
+// Includes: note nodes, shared keyword nodes, wikilink edges, keyword edges.
+// Intentionally excludes journal entries, tasks, and voice entries.
 export async function getGraphData(userId: string) {
   if (!supabase) return { nodes: [], links: [] };
 
-  const [entriesRes, notesRes, tasksRes, voiceRes, entryKwRes, noteKwRes, kwRes] = await Promise.all([
-    supabase
-      .from('entries')
-      .select('id, title, mood, source, created_at, content')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(500),
+  const [notesRes, noteKwRes, kwRes, wikilinksRes] = await Promise.all([
     supabase
       .from('notes')
       .select('id, title, icon, created_at, updated_at, blocks')
       .eq('user_id', userId)
-      .limit(300),
-    supabase
-      .from('tasks')
-      .select('id, title, status, priority, entry_id, created_at')
-      .eq('user_id', userId)
       .limit(500),
-    supabase
-      .from('voice_entries')
-      .select('id, title, created_at, transcript, audio_duration')
-      .eq('user_id', userId)
-      .limit(200),
-    supabase
-      .from('entry_keywords')
-      .select('entry_id, keyword_id'),
     supabase
       .from('note_keywords')
       .select('note_id, keyword_id'),
@@ -689,36 +673,32 @@ export async function getGraphData(userId: string) {
       .from('keywords')
       .select('id, word')
       .eq('user_id', userId),
+    // Wikilink edges between notes
+    supabase
+      .from('content_links')
+      .select('from_id, to_id')
+      .eq('user_id', userId)
+      .eq('link_type', 'wikilink'),
   ]);
 
-  const entries  = entriesRes.data  || [];
   const notes    = notesRes.data    || [];
-  const tasks    = tasksRes.data    || [];
-  const voices   = voiceRes.data    || [];
-  const entryKws = entryKwRes.data  || [];
   const noteKws  = noteKwRes.data   || [];
   const keywords = kwRes.data       || [];
+  const wikilinks = wikilinksRes.data || [];
 
-  // Find keywords that appear in 2+ entries/notes (worthy of a graph node)
+  // Only surface keywords shared by 2+ notes
   const kwUsage: Record<string, number> = {};
-  for (const ek of entryKws) kwUsage[ek.keyword_id] = (kwUsage[ek.keyword_id] || 0) + 1;
-  for (const nk of noteKws)  kwUsage[nk.keyword_id] = (kwUsage[nk.keyword_id] || 0) + 1;
-  const sharedKwIds = new Set(Object.entries(kwUsage).filter(([, c]) => c >= 2).map(([id]) => id));
+  for (const nk of noteKws) kwUsage[nk.keyword_id] = (kwUsage[nk.keyword_id] || 0) + 1;
+  const sharedKwIds = new Set(
+    Object.entries(kwUsage).filter(([, c]) => c >= 2).map(([id]) => id)
+  );
+
+  // Build a note id set for link validation
+  const noteIds = new Set(notes.map((n: Record<string, any>) => n.id as string));
 
   type Row = Record<string, any>;
 
   const nodes: any[] = [
-    ...entries.map((e: Row) => ({
-      id: `entry-${e.id}`,
-      rawId: e.id,
-      type: 'entry',
-      label: e.title || new Date(e.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      mood: e.mood,
-      source: e.source,
-      wordCount: e.content ? (e.content as string).replace(/^enc2?:[^:]+:[^:]+:/, '').length : 0,
-      createdAt: e.created_at,
-      isEncrypted: (e.content as string | null)?.startsWith('enc') ?? false,
-    })),
     ...notes.map((n: Row) => ({
       id: `note-${n.id}`,
       rawId: n.id,
@@ -728,25 +708,6 @@ export async function getGraphData(userId: string) {
       blockCount: Array.isArray(n.blocks) ? (n.blocks as unknown[]).length : 0,
       createdAt: n.created_at,
       updatedAt: n.updated_at,
-    })),
-    ...tasks.map((t: Row) => ({
-      id: `task-${t.id}`,
-      rawId: t.id,
-      type: 'task',
-      label: t.title,
-      status: t.status,
-      priority: t.priority,
-      entryId: t.entry_id,
-      createdAt: t.created_at,
-    })),
-    ...voices.map((v: Row) => ({
-      id: `voice-${v.id}`,
-      rawId: v.id,
-      type: 'voice',
-      label: v.title || 'Voice Note',
-      hasTranscript: !!v.transcript,
-      duration: v.audio_duration,
-      createdAt: v.created_at,
     })),
     ...keywords
       .filter((k: Row) => sharedKwIds.has(k.id))
@@ -760,18 +721,22 @@ export async function getGraphData(userId: string) {
   ];
 
   const links: any[] = [
-    // Entry → Task (extracted)
-    ...tasks
-      .filter((t: Row) => t.entry_id)
-      .map((t: Row) => ({ source: `entry-${t.entry_id}`, target: `task-${t.id}`, type: 'extracted' })),
-    // Entry → Keyword
-    ...entryKws
-      .filter((ek: Row) => sharedKwIds.has(ek.keyword_id))
-      .map((ek: Row) => ({ source: `entry-${ek.entry_id}`, target: `kw-${ek.keyword_id}`, type: 'keyword' })),
-    // Note → Keyword
+    // Note → Keyword (shared concepts)
     ...noteKws
       .filter((nk: Row) => sharedKwIds.has(nk.keyword_id))
-      .map((nk: Row) => ({ source: `note-${nk.note_id}`, target: `kw-${nk.keyword_id}`, type: 'keyword' })),
+      .map((nk: Row) => ({
+        source: `note-${nk.note_id}`,
+        target: `kw-${nk.keyword_id}`,
+        type: 'keyword',
+      })),
+    // Note → Note (wikilinks: [[title]] references)
+    ...wikilinks
+      .filter((w: Row) => noteIds.has(w.from_id) && noteIds.has(w.to_id))
+      .map((w: Row) => ({
+        source: `note-${w.from_id}`,
+        target: `note-${w.to_id}`,
+        type: 'wikilink',
+      })),
   ];
 
   return { nodes, links };
