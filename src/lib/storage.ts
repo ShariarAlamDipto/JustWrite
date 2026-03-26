@@ -9,9 +9,9 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 // Prefer service role key which bypasses RLS
 const supabaseKey = supabaseServiceKey || supabaseAnonKey;
 
-// Log which key is being used (for debugging)
-if (supabaseUrl && supabaseKey) {
-  console.log(`Supabase initialized with ${supabaseServiceKey ? 'SERVICE ROLE' : 'ANON'} key`);
+// Fail fast if Supabase is not configured (avoids silent null-client errors)
+if (!supabaseUrl || !supabaseKey) {
+  console.error('[storage] Supabase URL or key is missing — database calls will fail');
 }
 
 const supabase = supabaseUrl && supabaseKey 
@@ -226,56 +226,17 @@ export async function updateEntry(id: string, updates: any, userId?: string) {
 
 // SECURITY: Delete entry with ownership verification
 export async function deleteEntry(id: string, userId?: string) {
-  console.log(`deleteEntry called: id=${id}, userId=${userId}`);
-  
   if (supabase) {
-    // First verify the entry exists and belongs to user
-    const { data: existingEntry, error: fetchError } = await supabase
-      .from('entries')
-      .select('id, user_id')
-      .eq('id', id)
-      .single();
-    
-    if (fetchError) {
-      console.error('Error fetching entry before delete:', fetchError);
-      throw new Error('Entry not found');
-    }
-    
-    console.log('Entry to delete:', existingEntry);
-    console.log(`Comparing user_id: DB="${existingEntry?.user_id}" vs Auth="${userId}"`);
-    
-    // Check if user_id matches (or if entry has no user_id)
-    if (existingEntry?.user_id && existingEntry.user_id !== userId) {
-      console.error('User ID mismatch - not authorized to delete');
-      throw new Error('Not authorized to delete this entry');
-    }
-    
-    // Now delete - use only id since we've already verified ownership
+    // Delete with user_id scope — never rely on a pre-fetch ownership check alone
     const { error } = await supabase
       .from('entries')
       .delete()
-      .eq('id', id);
-    
+      .eq('id', id)
+      .eq('user_id', userId as string);
+
     if (error) {
-      console.error('Supabase deleteEntry error:', error.message, error);
       throw new Error(error.message);
     }
-    
-    // Verify deletion
-    const { data: checkDeleted } = await supabase
-      .from('entries')
-      .select('id')
-      .eq('id', id)
-      .single();
-    
-    console.log(`Delete verification - still exists: ${!!checkDeleted}`);
-    
-    if (checkDeleted) {
-      console.error('Entry still exists after delete!');
-      throw new Error('Delete operation failed - entry still exists');
-    }
-    
-    console.log('Entry deleted successfully');
     return true;
   }
   
@@ -889,7 +850,8 @@ export async function getBacklinksForNote(
   const { data: notes } = await supabase
     .from('notes')
     .select('id, title, icon')
-    .in('id', fromIds);
+    .in('id', fromIds)
+    .eq('user_id', userId);
 
   return (notes || []).map((n: any) => ({ id: n.id, title: n.title, icon: n.icon }));
 }

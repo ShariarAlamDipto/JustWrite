@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { withErrorHandler } from '../../../lib/apiHelpers';
 import { withAuth } from '../../../lib/withAuth';
 import { createClient } from '@supabase/supabase-js';
-import { sanitizeInput } from '../../../lib/security';
+import { sanitizeInput, checkRateLimit } from '../../../lib/security';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -13,6 +13,11 @@ const supabase = supabaseUrl && supabaseServiceKey
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
+    const rateLimit = checkRateLimit(userId, 120, 60000);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+    }
+
     if (!supabase) {
       return res.status(500).json({ error: 'Database not configured' });
     }

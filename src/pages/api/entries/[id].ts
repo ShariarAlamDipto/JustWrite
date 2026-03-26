@@ -48,7 +48,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
       
       if (mood !== undefined) {
-        updates.mood = Number(mood);
+        const moodNum = Number(mood);
+        updates.mood = Number.isFinite(moodNum) ? Math.min(100, Math.max(0, Math.round(moodNum))) : 5;
       }
       
       if (activities !== undefined) {

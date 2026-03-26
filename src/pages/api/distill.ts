@@ -190,12 +190,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       await updateEntrySummary(entryId, summary, ai_metadata, userId);
       // OPTIMIZED: Use bulk insert with userId
       const created = await createTasksBulk(
-        tasks.map(t => ({ 
-          title: (t.title || t).slice(0, 500), 
-          description: (t.description || '').slice(0, 5000), 
-          priority: t.priority || 'medium', 
-          status: 'todo'
-        })), 
+        tasks.map(t => ({
+          title: sanitizeInput(String(t.title || t)).slice(0, 500),
+          description: sanitizeInput(String(t.description || '')).slice(0, 5000),
+          priority: ['low', 'medium', 'high'].includes(t.priority) ? t.priority : 'medium',
+          status: 'todo',
+        })),
         entryId,
         userId
       );
