@@ -1,9 +1,33 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:justwrite_mobile/models/entry.dart';
 import 'package:justwrite_mobile/services/supabase_service.dart';
 import 'package:justwrite_mobile/services/compression_service.dart';
 import 'package:justwrite_mobile/services/encryption_service.dart';
 import 'package:uuid/uuid.dart';
+
+// Top-level function required by compute() — runs in a background isolate.
+// Decrypts and decompresses all entry content without blocking the UI thread.
+List<Map<String, dynamic>> _decryptEntriesBatch(Map<String, dynamic> params) {
+  final entries = (params['entries'] as List).cast<Map<String, dynamic>>();
+  final userId = params['userId'] as String;
+  final encryption = EncryptionService();
+  final compression = CompressionService();
+
+  return entries.map((json) {
+    String content = (json['content'] as String?) ?? '';
+
+    try {
+      if (encryption.isEncrypted(content)) {
+        content = encryption.decrypt(content, userId);
+      }
+      content = compression.decompress(content);
+    } catch (_) {
+      // Keep original content on failure — avoids data loss
+    }
+
+    return Map<String, dynamic>.from(json)..['content'] = content;
+  }).toList();
+}
 
 class EntryProvider extends ChangeNotifier {
   final _supabaseService = SupabaseService();
@@ -58,36 +82,35 @@ class EntryProvider extends ChangeNotifier {
     if (!forceRefresh && _isCacheValid && _entries.isNotEmpty) {
       return;
     }
-    
+
     // Prevent duplicate loading
     if (_isLoading) return;
-    
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final rawEntries = await _supabaseService.getEntries();
-      // Decrypt and decompress content when loading
-      _entries = rawEntries.map((e) {
-        String content = e.content;
-        final isJournal = e.source == EntrySource.text || e.source.toString() == 'text';
-        
-        if (isJournal) {
-          // Journal entries: decrypt then decompress
-          content = _encryptionService.decrypt(content, e.userId);
-          content = _compressionService.decompress(content);
-        } else {
-          // Ideas/Brainstorm: decrypt if web-encrypted, then decompress
-          // Web app encrypts all entry types; Flutter only compressed them.
-          // Handle both cases for cross-platform sync.
-          if (_encryptionService.isEncrypted(content)) {
-            content = _encryptionService.decrypt(content, e.userId);
-          }
-          content = _compressionService.decompress(content);
-        }
-        return e.copyWith(content: content);
-      }).toList();
+      // Fetch raw JSON (avoids double-parse) — limited to 50 most-recent entries
+      final rawMaps = await _supabaseService.getRawEntries();
+      if (rawMaps.isEmpty) {
+        _entries = [];
+        _lastFetch = DateTime.now();
+        _invalidateFilterCache();
+        return;
+      }
+
+      // userId is embedded in every row — grab from first entry
+      final userId = rawMaps.first['user_id'] as String? ?? '';
+
+      // Offload all PBKDF2+AES-GCM work to a background isolate.
+      // This is critical: 600k PBKDF2 iterations per entry would freeze
+      // the UI thread for seconds if run on the main isolate.
+      final decryptedMaps = userId.isNotEmpty
+          ? await compute(_decryptEntriesBatch, {'entries': rawMaps, 'userId': userId})
+          : rawMaps;
+
+      _entries = decryptedMaps.map((m) => Entry.fromJson(m)).toList();
       _invalidateFilterCache();
       _lastFetch = DateTime.now();
     } catch (e) {

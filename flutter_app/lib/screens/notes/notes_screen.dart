@@ -83,6 +83,37 @@ class _NotesScreenState extends State<NotesScreen> {
           ),
         ),
         body: mainPane,
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Graph / List toggle — always visible on mobile
+            FloatingActionButton.small(
+              heroTag: 'notes_graph_toggle',
+              onPressed: () => setState(() => _showGraph = !_showGraph),
+              backgroundColor: _showGraph
+                  ? const Color(0xFF00ffd5)
+                  : (isDark ? const Color(0xFF1C1C1C) : Colors.white),
+              foregroundColor: _showGraph
+                  ? Colors.black
+                  : (isDark ? Colors.white70 : Colors.black54),
+              elevation: 2,
+              child: Icon(
+                _showGraph ? Icons.list_rounded : Icons.hub_outlined,
+                size: 18,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Create new note
+            FloatingActionButton(
+              heroTag: 'notes_create',
+              onPressed: () => context.read<NoteProvider>().createNote(),
+              backgroundColor: const Color(0xFF00ffd5),
+              foregroundColor: Colors.black,
+              child: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       );
     }
 
