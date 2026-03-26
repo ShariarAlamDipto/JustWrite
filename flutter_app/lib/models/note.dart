@@ -98,6 +98,8 @@ class Note {
   final String userId;
   final String title;
   final String icon;
+  final String? coverUrl;
+  final String? parentId;
   final List<NoteBlock> blocks;
   final bool isPinned;
   final bool isLocked;
@@ -109,6 +111,8 @@ class Note {
     required this.userId,
     required this.title,
     this.icon = '📝',
+    this.coverUrl,
+    this.parentId,
     required this.blocks,
     this.isPinned = false,
     this.isLocked = false,
@@ -152,6 +156,8 @@ class Note {
       userId: json['user_id'] as String,
       title: json['title'] as String? ?? 'Untitled',
       icon: json['icon'] as String? ?? '📝',
+      coverUrl: json['cover_url'] as String?,
+      parentId: json['parent_id'] as String?,
       blocks: blocks,
       isPinned: json['is_pinned'] as bool? ?? false,
       isLocked: json['is_locked'] as bool? ?? false,
@@ -165,6 +171,8 @@ class Note {
         'user_id': userId,
         'title': title,
         'icon': icon,
+        'cover_url': coverUrl,
+        'parent_id': parentId,
         'blocks': blocks.map((b) => b.toJson()).toList(),
         'is_pinned': isPinned,
         'is_locked': isLocked,
@@ -177,6 +185,8 @@ class Note {
     String? userId,
     String? title,
     String? icon,
+    String? coverUrl,
+    String? parentId,
     List<NoteBlock>? blocks,
     bool? isPinned,
     bool? isLocked,
@@ -188,6 +198,8 @@ class Note {
         userId: userId ?? this.userId,
         title: title ?? this.title,
         icon: icon ?? this.icon,
+        coverUrl: coverUrl ?? this.coverUrl,
+        parentId: parentId ?? this.parentId,
         blocks: blocks ?? this.blocks,
         isPinned: isPinned ?? this.isPinned,
         isLocked: isLocked ?? this.isLocked,

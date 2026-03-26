@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/voice_entry.dart';
 
 /// Service for recording, playing, and managing voice entries locally
@@ -22,7 +23,10 @@ class VoiceService {
   final AudioPlayer _player = AudioPlayer();
   final _uuid = const Uuid();
   bool _recorderInitialized = false;
-  
+
+  final _supabase = Supabase.instance.client;
+  String? get _userId => _supabase.auth.currentUser?.id;
+
   // Local database
   Database? _database;
   String? _voiceStorageDir;
@@ -251,6 +255,29 @@ class VoiceService {
     return DateTime.now().difference(_recordingStartTime!);
   }
 
+  /// Sync a voice entry's metadata to Supabase (fire-and-forget).
+  /// Audio files are device-local and not uploaded; only title, duration,
+  /// transcript, and metadata are synced so web can see the entry.
+  Future<void> _syncToSupabase(VoiceEntry entry) async {
+    final userId = _userId;
+    if (userId == null) return;
+    try {
+      await _supabase.from('voice_entries').upsert({
+        'id': entry.id,
+        'user_id': userId,
+        'title': entry.title,
+        'audio_duration': entry.audioDuration,
+        'transcript': entry.transcript,
+        'metadata': entry.metadata,
+        'created_at': entry.createdAt.toIso8601String(),
+        if (entry.updatedAt != null)
+          'updated_at': entry.updatedAt!.toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('[VoiceService] Supabase sync error: $e');
+    }
+  }
+
   /// Save voice entry locally
   Future<VoiceEntry?> saveVoiceEntry({
     required String title,
@@ -267,13 +294,14 @@ class VoiceService {
       final db = await _getDatabase();
       final id = _uuid.v4();
       final now = DateTime.now().toUtc();
-      
+      final userId = _userId ?? 'local_user';
+
       // Get file size for metadata
       final fileSize = await file.length();
 
       final entryMap = {
         'id': id,
-        'user_id': 'local_user', // Local storage doesn't need real user
+        'user_id': userId,
         'title': title,
         'audio_path': filePath,
         'audio_duration': duration,
@@ -286,18 +314,22 @@ class VoiceService {
       await db.insert('voice_entries', entryMap);
       debugPrint('[VoiceService] Voice entry saved locally: $id');
 
-      // Convert to VoiceEntry model
-      return VoiceEntry(
+      final entry = VoiceEntry(
         id: id,
-        userId: 'local_user',
+        userId: userId,
         title: title,
-        audioUrl: filePath, // Use local path as URL
+        audioUrl: filePath,
         audioDuration: duration,
         transcript: null,
         createdAt: now,
         updatedAt: null,
         metadata: {'file_size': fileSize, 'format': 'aac'},
       );
+
+      // Sync metadata to Supabase (non-blocking)
+      _syncToSupabase(entry).catchError((_) {});
+
+      return entry;
     } catch (e) {
       debugPrint('[VoiceService] Error saving voice entry: $e');
       return null;
@@ -454,7 +486,7 @@ class VoiceService {
       if (results.isEmpty) return null;
 
       final row = results.first;
-      return VoiceEntry(
+      final updated = VoiceEntry(
         id: row['id'] as String,
         userId: row['user_id'] as String,
         title: row['title'] as String,
@@ -467,6 +499,11 @@ class VoiceService {
             : null,
         metadata: null,
       );
+
+      // Sync updated metadata/transcript to Supabase (non-blocking)
+      _syncToSupabase(updated).catchError((_) {});
+
+      return updated;
     } catch (e) {
       debugPrint('[VoiceService] Error updating voice entry: $e');
       return null;
