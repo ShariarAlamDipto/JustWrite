@@ -94,7 +94,7 @@ export default function VoiceCapture({ isDark, onTranscript, compact = false, cl
           width: 36,
           height: 36,
           background: isRecording
-            ? '#D47878'
+            ? '#e53e3e'
             : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
           color: isRecording ? '#fff' : isDark ? '#8A8882' : '#9E9B96',
         }}
@@ -169,7 +169,7 @@ export default function VoiceCapture({ isDark, onTranscript, compact = false, cl
             className="w-16 h-16 rounded-full flex items-center justify-center"
             style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }}
           >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D47878"
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e53e3e"
                  strokeWidth="2" strokeLinecap="round" className="animate-spin">
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
@@ -185,15 +185,15 @@ export default function VoiceCapture({ isDark, onTranscript, compact = false, cl
         <>
           <div
             className="w-16 h-16 rounded-full flex items-center justify-center"
-            style={{ background: 'rgba(126,184,160,0.15)' }}
+            style={{ background: 'rgba(56,161,105,0.15)' }}
           >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7EB8A0"
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#38a169"
                  strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12"/>
             </svg>
           </div>
           <div className="text-center max-w-xs px-4">
-            <p className="text-sm font-medium mb-1" style={{ color: isDark ? '#7EB8A0' : '#4F8F78' }}>
+            <p className="text-sm font-medium mb-1" style={{ color: isDark ? '#38a169' : '#276749' }}>
               Transcribed · {formatDuration(state.durationSec)}
             </p>
             <p className="text-sm leading-relaxed" style={{ color: isDark ? '#BDBAB4' : '#4A4845' }}>
@@ -218,16 +218,16 @@ export default function VoiceCapture({ isDark, onTranscript, compact = false, cl
         <>
           <div
             className="w-16 h-16 rounded-full flex items-center justify-center"
-            style={{ background: 'rgba(212,120,120,0.12)' }}
+            style={{ background: 'rgba(229,62,62,0.12)' }}
           >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D47878"
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e53e3e"
                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/>
               <line x1="12" y1="8" x2="12" y2="12"/>
               <line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
           </div>
-          <p className="text-sm text-center px-6" style={{ color: '#D47878' }}>
+          <p className="text-sm text-center px-6" style={{ color: '#e53e3e' }}>
             {state.message}
           </p>
           <button
@@ -257,7 +257,7 @@ function RecordButton({
       className="flex items-center justify-center w-16 h-16 rounded-full
                  transition-all duration-200 active:scale-90"
       style={{
-        background: isRecording ? '#D47878' : isDark ? '#F2F0EB' : '#1A1A1A',
+        background: isRecording ? '#e53e3e' : isDark ? '#F2F0EB' : '#1A1A1A',
         color: isRecording ? '#fff' : isDark ? '#1A1A1A' : '#F2F0EB',
       }}
     >

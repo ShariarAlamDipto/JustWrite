@@ -40,14 +40,21 @@ export default function IdeasPage() {
   const [startWithVoice, setStartWithVoice] = useState(false)
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
 
-  // Handle ?voice=1 from creation sheet
+  // Handle ?new=1, ?voice=1 (from FAB) and ?id=<uuid> (from Connect deep link)
   useEffect(() => {
-    if (router.query.voice === '1') {
-      setStartWithVoice(true)
+    if (router.query.new === '1') {
+      setStartWithVoice(router.query.voice === '1')
       setActiveIdea(null)
       setView('editor')
     }
-  }, [router.query.voice])
+  }, [router.query.new, router.query.voice])
+
+  useEffect(() => {
+    if (router.query.id && ideas.length) {
+      const found = ideas.find((i) => i.id === router.query.id)
+      if (found) { setActiveIdea(found); setView('editor') }
+    }
+  }, [router.query.id, ideas])
 
   useEffect(() => {
     if (!user || !token) return
@@ -164,9 +171,9 @@ export default function IdeasPage() {
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <div
                 className="w-16 h-16 rounded-3xl flex items-center justify-center"
-                style={{ background: isDark ? 'rgba(126,184,160,0.1)' : 'rgba(126,184,160,0.08)' }}
+                style={{ background: isDark ? 'rgba(49,130,206,0.1)' : 'rgba(49,130,206,0.06)' }}
               >
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7EB8A0"
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3182ce"
                      strokeWidth="1.5" strokeLinecap="round">
                   <path d="M9 18V5l12-2v13"/>
                   <circle cx="6" cy="18" r="3"/>

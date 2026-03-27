@@ -9,6 +9,30 @@ import type { Note, NoteBlock } from '@/lib/jw-types'
 
 type View = 'list' | 'editor'
 
+// ── Map raw snake_case DB row → Note camelCase ─────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toNote(raw: any): Note {
+  return {
+    id:            raw.id,
+    userId:        raw.user_id ?? '',
+    createdAt:     raw.created_at ?? '',
+    updatedAt:     raw.updated_at ?? '',
+    isPrivate:     raw.is_locked ?? false,
+    isLocked:      raw.is_locked ?? false,
+    isPinned:      raw.is_pinned ?? false,
+    source:        raw.source ?? 'typed',
+    tags:          raw.tags ?? [],
+    title:         raw.title ?? 'Untitled',
+    icon:          raw.icon ?? '',
+    blocks:        raw.blocks ?? [],
+    coverUrl:      raw.cover_url ?? undefined,
+    parentId:      raw.parent_id ?? undefined,
+    linkedNoteIds: raw.linked_note_ids ?? [],
+    wordCount:     raw.word_count ?? 0,
+    segment:       'notes',
+  }
+}
+
 export default function NotesPage() {
   const { user, token } = useAuth()
   const { isDark } = useTheme()
@@ -20,10 +44,10 @@ export default function NotesPage() {
   const [startWithVoice, setStartWithVoice] = useState(false)
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
 
-  // Handle ?voice=1 and ?id=... from routing
+  // Handle ?new=1, ?voice=1 (from FAB) and ?id=<uuid> (from Connect deep link)
   useEffect(() => {
-    if (router.query.voice === '1') {
-      setStartWithVoice(true)
+    if (router.query.new === '1') {
+      setStartWithVoice(router.query.voice === '1')
       setActiveNote(null)
       setView('editor')
     }
@@ -34,16 +58,16 @@ export default function NotesPage() {
   }, [router.query, notes])
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !token) return
     setLoading(true)
     fetch('/api/notes', {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.ok ? r.json() : { notes: [] })
-      .then((data) => setNotes(data.notes ?? []))
+      .then((data) => setNotes((data.notes ?? []).map(toNote)))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [user])
+  }, [user, token])
 
   const handleSave = async (data: {
     title: string
@@ -61,8 +85,8 @@ export default function NotesPage() {
         body: JSON.stringify(data),
       })
       if (res.ok) {
-        const updated = await res.json()
-        setNotes((prev) => prev.map((n) => n.id === activeNote.id ? { ...n, ...updated } : n))
+        const { note: updated } = await res.json()
+        setNotes((prev) => prev.map((n) => n.id === activeNote.id ? toNote(updated) : n))
       }
     } else {
       const res = await fetch('/api/notes', {
@@ -71,9 +95,10 @@ export default function NotesPage() {
         body: JSON.stringify({ ...data, source: startWithVoice ? 'voice' : 'typed' }),
       })
       if (res.ok) {
-        const created = await res.json()
-        setNotes((prev) => [created, ...prev])
-        setActiveNote(created)
+        const { note: created } = await res.json()
+        const mapped = toNote(created)
+        setNotes((prev) => [mapped, ...prev])
+        setActiveNote(mapped)
         setStartWithVoice(false)
       }
     }

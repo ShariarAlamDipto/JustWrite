@@ -80,7 +80,8 @@ export default function ConnectPage() {
           degree: n.degree ?? 1,
         }))
 
-        const edges: GraphEdge[] = (graphData.edges ?? []).map((e: any) => ({
+        // API returns `links` not `edges`
+        const edges: GraphEdge[] = (graphData.links ?? graphData.edges ?? []).map((e: any) => ({
           source: e.source,
           target: e.target,
           type: (e.type ?? 'link') as GraphEdge['type'],
@@ -102,7 +103,7 @@ export default function ConnectPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [user])
+  }, [user, token])
 
   const handleNodeClick = (id: string, segment: Segment) => {
     switch (segment) {
@@ -127,7 +128,7 @@ export default function ConnectPage() {
         <div className="flex items-center justify-center py-20">
           <div
             className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
-            style={{ borderColor: '#B47EA8', borderTopColor: 'transparent' }}
+            style={{ borderColor: '#3182ce', borderTopColor: 'transparent' }}
           />
         </div>
       ) : (

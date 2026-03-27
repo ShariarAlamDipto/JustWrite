@@ -83,19 +83,19 @@ export const SEGMENT_CONFIG: Record<Segment, {
   journal: {
     label: 'Journal',
     dotClass: 'jw-dot-journal',
-    accentColor: '#C9A97A',
+    accentColor: '#3182ce',
     bgClass: 'bg-journal-bg dark:bg-journal-dark/10',
   },
   ideas: {
     label: 'Ideas',
     dotClass: 'jw-dot-ideas',
-    accentColor: '#7EB8A0',
+    accentColor: '#3182ce',
     bgClass: 'bg-ideas-bg dark:bg-ideas-dark/10',
   },
   notes: {
     label: 'Notes',
     dotClass: 'jw-dot-notes',
-    accentColor: '#7EA8C4',
+    accentColor: '#3182ce',
     bgClass: 'bg-notes-bg dark:bg-notes-dark/10',
   },
 }

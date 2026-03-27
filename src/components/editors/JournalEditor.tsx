@@ -68,13 +68,13 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
   return (
     <div
       className="flex flex-col min-h-dvh"
-      style={{ background: isDark ? '#131313' : '#F7F6F2' }}
+      style={{ background: isDark ? '#0d0d0d' : '#fafafa' }}
     >
       {/* ── Editor header ──────────────────────────────────────────────── */}
       <header
         className="flex items-center justify-between px-4 py-3 gap-2 sticky top-0 z-10"
         style={{
-          background: isDark ? 'rgba(19,19,19,0.95)' : 'rgba(247,246,242,0.95)',
+          background: isDark ? 'rgba(13,13,13,0.95)' : 'rgba(250,250,250,0.95)',
           backdropFilter: 'blur(10px)',
           WebkitBackdropFilter: 'blur(10px)',
           borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'}`,
@@ -84,7 +84,7 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
         <button
           onClick={handleDone}
           className="flex items-center gap-1 text-sm font-medium transition-opacity active:opacity-60"
-          style={{ color: '#C9A97A' }}
+          style={{ color: '#3182ce' }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -105,7 +105,7 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
             onClick={() => setShowMood((v) => !v)}
             className="w-8 h-8 flex items-center justify-center rounded-xl text-base
                        transition-all active:scale-90"
-            style={{ background: showMood ? 'rgba(201,169,122,0.15)' : 'transparent' }}
+            style={{ background: showMood ? 'rgba(49,130,206,0.15)' : 'transparent' }}
             aria-label="Set mood"
           >
             {mood ? moodEmoji(mood) : (
@@ -124,8 +124,8 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
             onClick={() => setShowVoice((v) => !v)}
             className="w-8 h-8 flex items-center justify-center rounded-xl transition-all active:scale-90"
             style={{
-              background: showVoice ? 'rgba(212,120,120,0.15)' : 'transparent',
-              color: showVoice ? '#D47878' : isDark ? '#636060' : '#C8C5C0',
+              background: showVoice ? 'rgba(229,62,62,0.15)' : 'transparent',
+              color: showVoice ? '#e53e3e' : isDark ? '#636060' : '#C8C5C0',
             }}
             aria-label="Voice input"
           >
@@ -162,7 +162,7 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
               onClick={() => { setMood(m); setShowMood(false) }}
               className="flex flex-col items-center gap-1 p-2 rounded-xl transition-all active:scale-90"
               style={{
-                background: mood === m ? 'rgba(201,169,122,0.15)' : 'transparent',
+                background: mood === m ? 'rgba(49,130,206,0.15)' : 'transparent',
                 transform: mood === m ? 'scale(1.1)' : undefined,
               }}
             >
@@ -211,7 +211,7 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
       <div
         className="sticky bottom-0 flex items-center justify-between px-5 py-3"
         style={{
-          background: isDark ? 'rgba(19,19,19,0.9)' : 'rgba(247,246,242,0.9)',
+          background: isDark ? 'rgba(13,13,13,0.9)' : 'rgba(250,250,250,0.9)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',

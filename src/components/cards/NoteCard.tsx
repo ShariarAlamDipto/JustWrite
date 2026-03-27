@@ -15,7 +15,9 @@ interface NoteCardProps {
 
 export default function NoteCard({ note, isDark, onClick, onUnlock, isUnlocked = false }: NoteCardProps) {
   const isBlurred = note.isPrivate && !isUnlocked
-  const preview = note.blocks.find((b) => b.type === 'paragraph' && b.content.trim())?.content ?? ''
+  const blocks = note.blocks ?? []
+  const tags = note.tags ?? []
+  const preview = blocks.find((b) => b.type === 'paragraph' && b.content.trim())?.content ?? ''
 
   return (
     <article
@@ -44,7 +46,7 @@ export default function NoteCard({ note, isDark, onClick, onUnlock, isUnlocked =
 
           <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
             {note.isPinned && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="#C9A97A" stroke="none">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="#3182ce" stroke="none">
                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
               </svg>
             )}
@@ -78,14 +80,14 @@ export default function NoteCard({ note, isDark, onClick, onUnlock, isUnlocked =
             expandable
           />
 
-          {note.tags.length > 0 && (
+          {tags.length > 0 && (
             <div className="flex gap-1 overflow-hidden">
-              {note.tags.slice(0, 2).map((tag) => (
+              {tags.slice(0, 2).map((tag) => (
                 <TagChip key={tag} tag={tag} isDark={isDark} />
               ))}
-              {note.tags.length > 2 && (
+              {tags.length > 2 && (
                 <span className="text-2xs" style={{ color: isDark ? '#636060' : '#9E9B96' }}>
-                  +{note.tags.length - 2}
+                  +{tags.length - 2}
                 </span>
               )}
             </div>
@@ -93,8 +95,6 @@ export default function NoteCard({ note, isDark, onClick, onUnlock, isUnlocked =
         </div>
       </div>
 
-      {/* Left accent strip */}
-      <span className="absolute left-0 top-3 bottom-3 w-0.5 rounded-r-full" style={{ background: '#7EA8C4' }} />
     </article>
   )
 }
@@ -105,9 +105,9 @@ export function NotesEmpty({ isDark, onCreate }: { isDark: boolean; onCreate: ()
     <div className="flex flex-col items-center justify-center py-20 px-8 gap-4">
       <div
         className="w-16 h-16 rounded-3xl flex items-center justify-center"
-        style={{ background: isDark ? 'rgba(126,168,196,0.1)' : 'rgba(126,168,196,0.08)' }}
+        style={{ background: isDark ? 'rgba(49,130,206,0.1)' : 'rgba(49,130,206,0.06)' }}
       >
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7EA8C4"
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3182ce"
              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
@@ -126,7 +126,7 @@ export function NotesEmpty({ isDark, onCreate }: { isDark: boolean; onCreate: ()
       <button
         onClick={onCreate}
         className="px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all active:scale-95 mt-1"
-        style={{ background: '#7EA8C4', color: '#fff' }}
+        style={{ background: '#3182ce', color: '#fff' }}
       >
         Create first note
       </button>

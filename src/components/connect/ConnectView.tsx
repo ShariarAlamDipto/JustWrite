@@ -13,9 +13,9 @@ interface ConnectViewProps {
 type Section = 'related' | 'patterns' | 'map'
 
 const SEGMENT_COLOR: Record<Segment, string> = {
-  journal: '#C9A97A',
-  ideas: '#7EB8A0',
-  notes: '#7EA8C4',
+  journal: '#3182ce',
+  ideas: '#4299e1',
+  notes: '#63b3ed',
 }
 
 // ── Force-directed graph (simple spring layout) ────────────────────────────────
@@ -201,7 +201,7 @@ function GraphMap({ nodes, edges, isDark, onNodeClick }: {
               background: color,
               opacity: isSelected ? 1 : 0.7,
               boxShadow: isSelected
-                ? `0 0 0 3px ${isDark ? '#131313' : '#F7F6F2'}, 0 0 0 5px ${color}`
+                ? `0 0 0 3px ${isDark ? '#0d0d0d' : '#fafafa'}, 0 0 0 5px ${color}`
                 : 'none',
               border: 'none',
               cursor: 'pointer',
@@ -255,7 +255,7 @@ export default function ConnectView({
   return (
     <div
       className="flex flex-col min-h-dvh"
-      style={{ background: isDark ? '#131313' : '#F7F6F2' }}
+      style={{ background: isDark ? '#0d0d0d' : '#fafafa' }}
     >
       {/* Section tabs */}
       <div
@@ -269,10 +269,10 @@ export default function ConnectView({
             className="px-4 py-1.5 rounded-xl text-sm font-medium transition-all"
             style={{
               background: section === tab.id
-                ? (isDark ? 'rgba(180,126,168,0.15)' : 'rgba(180,126,168,0.1)')
+                ? (isDark ? 'rgba(49,130,206,0.15)' : 'rgba(49,130,206,0.1)')
                 : 'transparent',
               color: section === tab.id
-                ? '#B47EA8'
+                ? '#3182ce'
                 : (isDark ? '#636060' : '#9E9B96'),
             }}
           >
@@ -314,11 +314,6 @@ export default function ConnectView({
                 >
                   {bl.excerpt}
                 </p>
-                {/* Accent strip */}
-                <span
-                  className="absolute left-0 top-3 bottom-3 w-0.5 rounded-r-full"
-                  style={{ background: '#B47EA8' }}
-                />
               </button>
             ))
           )}

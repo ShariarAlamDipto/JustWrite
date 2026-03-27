@@ -68,13 +68,13 @@ export default function IdeaEditor({
   return (
     <div
       className="flex flex-col min-h-dvh"
-      style={{ background: isDark ? '#131313' : '#F7F6F2' }}
+      style={{ background: isDark ? '#0d0d0d' : '#fafafa' }}
     >
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <header
         className="flex items-center justify-between px-4 py-3 gap-2 sticky top-0 z-10"
         style={{
-          background: isDark ? 'rgba(19,19,19,0.95)' : 'rgba(247,246,242,0.95)',
+          background: isDark ? 'rgba(13,13,13,0.95)' : 'rgba(250,250,250,0.95)',
           backdropFilter: 'blur(10px)',
           WebkitBackdropFilter: 'blur(10px)',
           borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'}`,
@@ -83,7 +83,7 @@ export default function IdeaEditor({
         <button
           onClick={handleDone}
           className="flex items-center gap-1 text-sm font-medium active:opacity-60"
-          style={{ color: '#7EB8A0' }}
+          style={{ color: '#3182ce' }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -103,7 +103,7 @@ export default function IdeaEditor({
               onClick={onConvertToNote}
               className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-medium
                          transition-all active:scale-90"
-              style={{ background: 'rgba(126,168,196,0.12)', color: '#7EA8C4' }}
+              style={{ background: 'rgba(49,130,206,0.12)', color: '#3182ce' }}
               title="Convert to Note"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -120,8 +120,8 @@ export default function IdeaEditor({
             onClick={() => setShowVoice((v) => !v)}
             className="w-8 h-8 flex items-center justify-center rounded-xl transition-all active:scale-90"
             style={{
-              background: showVoice ? 'rgba(212,120,120,0.15)' : 'transparent',
-              color: showVoice ? '#D47878' : isDark ? '#636060' : '#C8C5C0',
+              background: showVoice ? 'rgba(229,62,62,0.15)' : 'transparent',
+              color: showVoice ? '#e53e3e' : isDark ? '#636060' : '#C8C5C0',
             }}
             aria-label="Voice input"
           >
@@ -154,7 +154,7 @@ export default function IdeaEditor({
         {derivedTitle && body.length > 20 && (
           <p
             className="text-xs mb-3 animate-fade-in"
-            style={{ color: '#7EB8A0', letterSpacing: '0.04em' }}
+            style={{ color: '#3182ce', letterSpacing: '0.04em' }}
           >
             IDEA · {derivedTitle}
           </p>
@@ -180,7 +180,7 @@ export default function IdeaEditor({
             tags={tags}
             onChange={setTags}
             isDark={isDark}
-            accent="#7EB8A0"
+            accent="#3182ce"
             placeholder="Add tags…"
           />
         </div>
@@ -190,7 +190,7 @@ export default function IdeaEditor({
       <div
         className="sticky bottom-0 px-5 py-3"
         style={{
-          background: isDark ? 'rgba(19,19,19,0.9)' : 'rgba(247,246,242,0.9)',
+          background: isDark ? 'rgba(13,13,13,0.9)' : 'rgba(250,250,250,0.9)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',

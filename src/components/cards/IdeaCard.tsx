@@ -39,7 +39,7 @@ export default function IdeaCard({ idea, isDark, onClick, onUnlock, isUnlocked =
             {idea.source === 'voice' && (
               <span
                 className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-2xs font-medium"
-                style={{ background: 'rgba(212,120,120,0.12)', color: '#D47878' }}
+                style={{ background: 'rgba(229,62,62,0.12)', color: '#e53e3e' }}
               >
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      strokeWidth="2.5" strokeLinecap="round">
@@ -53,7 +53,7 @@ export default function IdeaCard({ idea, isDark, onClick, onUnlock, isUnlocked =
             {idea.convertedToNoteId && (
               <span
                 className="px-2 py-0.5 rounded-lg text-2xs font-medium"
-                style={{ background: 'rgba(126,168,196,0.12)', color: '#7EA8C4' }}
+                style={{ background: 'rgba(49,130,206,0.12)', color: '#3182ce' }}
               >
                 → Note
               </span>
@@ -102,8 +102,6 @@ export default function IdeaCard({ idea, isDark, onClick, onUnlock, isUnlocked =
         )}
       </div>
 
-      {/* Left accent strip */}
-      <span className="absolute left-0 top-3 bottom-3 w-0.5 rounded-r-full" style={{ background: '#7EB8A0' }} />
     </article>
   )
 }
@@ -184,7 +182,7 @@ export function QuickCapture({ isDark, onSubmit, onVoice }: QuickCaptureProps) {
           className="px-3 py-1 rounded-xl text-xs font-semibold
                      transition-all duration-150 active:scale-95 disabled:opacity-30"
           style={{
-            background: text.trim() ? '#7EB8A0' : (isDark ? '#242424' : '#F0EDE8'),
+            background: text.trim() ? '#3182ce' : (isDark ? '#242424' : '#F0EDE8'),
             color: text.trim() ? '#fff' : (isDark ? '#636060' : '#9E9B96'),
           }}
         >

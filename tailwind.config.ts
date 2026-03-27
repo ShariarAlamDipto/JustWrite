@@ -13,50 +13,50 @@ const config: Config = {
       colors: {
         // Canvas — main background surfaces
         canvas: {
-          light: '#F7F6F2',   // warm off-white
-          dark:  '#131313',   // graphite black
+          light: '#fafafa',
+          dark:  '#0d0d0d',
         },
         surface: {
           light: '#EFEDE8',   // elevated surface (light)
           dark:  '#1C1C1C',   // elevated surface (dark)
         },
         card: {
-          light: '#FFFFFF',
-          dark:  '#242424',
+          light: '#ffffff',
+          dark:  '#1a1a1a',
         },
         border: {
-          light: '#E8E5DF',
-          dark:  '#2E2E2E',
+          light: '#e5e5e5',
+          dark:  '#2a2a2a',
         },
         ink: {
-          DEFAULT: '#1A1A1A',
-          light:   '#F2F0EB',
-          dim:     { light: '#6B6962', dark: '#8A8882' },
+          DEFAULT: '#1a1a1a',
+          light:   '#f5f5f5',
+          dim:     { light: '#525252', dark: '#a0a0a0' },
         },
         muted: {
-          light: '#9E9B96',
-          dark:  '#636060',
+          light: '#9ca3af',
+          dark:  '#666666',
         },
-        // ── Segment accent strips (very subtle, used as dots + borders) ──
+        // ── Segment accent strips (blue — single accent color) ──
         journal: {
-          DEFAULT: '#C9A97A',   // warm amber
-          bg:      '#F9F4EC',   // light tinted bg
-          dark:    '#9B7C4F',
+          DEFAULT: '#3182ce',
+          bg:      'rgba(49,130,206,0.06)',
+          dark:    '#2c5282',
         },
         ideas: {
-          DEFAULT: '#7EB8A0',   // sage green
-          bg:      '#EDF6F2',
-          dark:    '#4F8F78',
+          DEFAULT: '#4299e1',
+          bg:      'rgba(66,153,225,0.06)',
+          dark:    '#2b6cb0',
         },
         notes: {
-          DEFAULT: '#7EA8C4',   // dusty blue
-          bg:      '#EDF3F9',
-          dark:    '#4F7A9B',
+          DEFAULT: '#63b3ed',
+          bg:      'rgba(99,179,237,0.06)',
+          dark:    '#2c5282',
         },
         connect: {
-          DEFAULT: '#B47EA8',   // soft mauve
-          bg:      '#F6EDF6',
-          dark:    '#855B7B',
+          DEFAULT: '#3182ce',
+          bg:      'rgba(49,130,206,0.06)',
+          dark:    '#2c5282',
         },
         // ── State tokens ──────────────────────────────────────────────────
         private: {

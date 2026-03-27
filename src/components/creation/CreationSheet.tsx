@@ -18,7 +18,7 @@ const actions: {
     type: 'journal',
     label: "Today's Journal",
     sub: 'Continue your daily reflection',
-    accent: '#C9A97A',
+    accent: '#3182ce',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -32,7 +32,7 @@ const actions: {
     type: 'idea',
     label: 'New Idea',
     sub: 'Capture a thought or brainstorm',
-    accent: '#7EB8A0',
+    accent: '#3182ce',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -46,7 +46,7 @@ const actions: {
     type: 'note',
     label: 'New Note',
     sub: 'Write something structured',
-    accent: '#7EA8C4',
+    accent: '#3182ce',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -61,7 +61,7 @@ const actions: {
     type: 'record-idea',
     label: 'Record an Idea',
     sub: 'Speak, auto-transcribe into Ideas',
-    accent: '#D47878',
+    accent: '#e53e3e',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -76,7 +76,7 @@ const actions: {
     type: 'record-note',
     label: 'Record a Note',
     sub: 'Speak, auto-transcribe into Notes',
-    accent: '#D47878',
+    accent: '#e53e3e',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

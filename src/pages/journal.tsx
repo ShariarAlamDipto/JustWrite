@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/router'
 import MobileShell from '@/components/layout/MobileShell'
 import JournalCard, { TodayCard } from '@/components/cards/JournalCard'
 import JournalEditor from '@/components/editors/JournalEditor'
@@ -51,6 +52,7 @@ const DEFAULT_FILTER: ListFilter = { query: '', showPrivate: true, sort: 'newest
 export default function JournalPage() {
   const { user, token } = useAuth()
   const { isDark } = useTheme()
+  const router = useRouter()
 
   // ── Start with cached data so the list renders immediately ──────────────────
   const [entries, setEntries] = useState<JournalEntry[]>(() => {
@@ -85,6 +87,18 @@ export default function JournalPage() {
   }, [user, token])
 
   useEffect(() => { fetchEntries() }, [fetchEntries])
+
+  // Handle ?new=1 (from FAB) and ?id=<uuid> (from Connect deep link)
+  useEffect(() => {
+    if (router.query.new === '1') {
+      setActiveEntry(null)
+      setView('editor')
+    }
+    if (router.query.id && entries.length) {
+      const found = entries.find((e) => e.id === router.query.id)
+      if (found) { setActiveEntry(found); setView('editor') }
+    }
+  }, [router.query, entries])
 
   const todayStr = new Date().toISOString().slice(0, 10)
   const todayEntry = entries.find((e) => (e.createdAt ?? '').startsWith(todayStr))

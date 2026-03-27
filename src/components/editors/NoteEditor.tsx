@@ -96,7 +96,7 @@ export default function NoteEditor({
     setBlocks((prev) => prev.map((b) => b.id === id ? { ...b, content } : b))
   }
 
-  const insertBlockAfter = (id: string, type: NoteBlock['type'] = 'paragraph') => {
+  const insertBlockAfter = (id: string, type: NoteBlock['type'] = 'paragraph'): string => {
     const newBlock = makeBlock(type)
     setBlocks((prev) => {
       const idx = prev.findIndex((b) => b.id === id)
@@ -104,6 +104,7 @@ export default function NoteEditor({
     })
     setActiveBlockId(newBlock.id)
     setTimeout(() => blockRefs.current.get(newBlock.id)?.focus(), 50)
+    return newBlock.id
   }
 
   const removeBlock = (id: string) => {
@@ -165,16 +166,17 @@ export default function NoteEditor({
     const activeBlock = blocks.find((b) => b.id === activeBlockId)
     if (activeBlock?.content === '') {
       updateBlock(activeBlockId, text)
+      setShowVoice(false)
+      setTimeout(() => blockRefs.current.get(activeBlockId)?.focus(), 60)
     } else {
-      insertBlockAfter(activeBlockId)
-      // The new block is at idx+1 after state update — refocus after next render
+      // insertBlockAfter returns the new block's id synchronously
+      const newId = insertBlockAfter(activeBlockId)
       setTimeout(() => {
-        const newBlock = blockRefs.current.get(activeBlockId)
-        if (newBlock) updateBlock(activeBlockId, text)
+        updateBlock(newId, text)
+        blockRefs.current.get(newId)?.focus()
       }, 60)
+      setShowVoice(false)
     }
-    setShowVoice(false)
-    setTimeout(() => blockRefs.current.get(activeBlockId)?.focus(), 120)
   }
 
   // ── Slash menu options ────────────────────────────────────────────────────────
@@ -226,13 +228,13 @@ export default function NoteEditor({
 
       <div
         className="flex flex-col min-h-dvh"
-        style={{ background: isDark ? '#131313' : '#F7F6F2', touchAction: 'pan-y' }}
+        style={{ background: isDark ? '#0d0d0d' : '#fafafa', touchAction: 'pan-y' }}
       >
         {/* ── Header ──────────────────────────────────────────────────────────── */}
         <header
           className="flex items-center justify-between px-4 py-2 gap-2 sticky top-0 z-20"
           style={{
-            background: isDark ? 'rgba(19,19,19,0.95)' : 'rgba(247,246,242,0.95)',
+            background: isDark ? 'rgba(13,13,13,0.95)' : 'rgba(250,250,250,0.95)',
             backdropFilter: 'blur(10px)',
             WebkitBackdropFilter: 'blur(10px)',
             borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'}`,
@@ -243,7 +245,7 @@ export default function NoteEditor({
           <button
             onPointerDown={handleDone}
             className="flex items-center gap-1 text-sm font-medium"
-            style={{ color: '#7EA8C4', minHeight: '44px', minWidth: '44px', touchAction: 'manipulation' }}
+            style={{ color: '#3182ce', minHeight: '44px', minWidth: '44px', touchAction: 'manipulation' }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -263,8 +265,8 @@ export default function NoteEditor({
               className="flex items-center justify-center rounded-xl transition-all active:scale-90"
               style={{
                 minWidth: '44px', minHeight: '44px', touchAction: 'manipulation',
-                background: showVoice ? 'rgba(212,120,120,0.15)' : 'transparent',
-                color: showVoice ? '#D47878' : isDark ? '#636060' : '#C8C5C0',
+                background: showVoice ? 'rgba(229,62,62,0.15)' : 'transparent',
+                color: showVoice ? '#e53e3e' : isDark ? '#636060' : '#C8C5C0',
               }}
               aria-label="Voice input"
             >
@@ -446,7 +448,7 @@ export default function NoteEditor({
                   >
                     <span
                       className="flex items-center justify-center rounded-lg text-xs font-bold flex-shrink-0"
-                      style={{ width: '24px', height: '24px', background: isDark ? '#2A2A2A' : '#EEECE8', color: '#7EA8C4' }}
+                      style={{ width: '24px', height: '24px', background: isDark ? '#2A2A2A' : '#EEECE8', color: '#3182ce' }}
                     >
                       {opt.icon}
                     </span>
@@ -459,7 +461,7 @@ export default function NoteEditor({
 
           {/* Tags */}
           <div className="mt-6">
-            <TagInput tags={tags} onChange={setTags} isDark={isDark} accent="#7EA8C4" placeholder="Add tags…" />
+            <TagInput tags={tags} onChange={setTags} isDark={isDark} accent="#3182ce" placeholder="Add tags…" />
           </div>
         </div>
 
@@ -467,7 +469,7 @@ export default function NoteEditor({
         <div
           className="sticky bottom-0 px-5 py-3"
           style={{
-            background: isDark ? 'rgba(19,19,19,0.9)' : 'rgba(247,246,242,0.9)',
+            background: isDark ? 'rgba(13,13,13,0.9)' : 'rgba(250,250,250,0.9)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
             paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',

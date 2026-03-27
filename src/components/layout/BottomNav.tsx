@@ -75,10 +75,10 @@ const tabs: { id: TabId; label: string; icon: (active: boolean) => React.ReactNo
 ]
 
 const ACCENT_COLORS: Record<TabId, string> = {
-  journal: '#C9A97A',
-  ideas:   '#7EB8A0',
-  notes:   '#7EA8C4',
-  connect: '#B47EA8',
+  journal: '#3182ce',
+  ideas:   '#3182ce',
+  notes:   '#3182ce',
+  connect: '#3182ce',
 }
 
 export default function BottomNav({ activeTab, onChange, isDark }: BottomNavProps) {
@@ -88,8 +88,8 @@ export default function BottomNav({ activeTab, onChange, isDark }: BottomNavProp
       style={{
         paddingBottom: 'env(safe-area-inset-bottom)',
         background: isDark
-          ? 'rgba(19, 19, 19, 0.95)'
-          : 'rgba(247, 246, 242, 0.95)',
+          ? 'rgba(13, 13, 13, 0.95)'
+          : 'rgba(250, 250, 250, 0.95)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
@@ -111,7 +111,7 @@ export default function BottomNav({ activeTab, onChange, isDark }: BottomNavProp
                   ? accentColor
                   : isDark ? '#636060' : '#9E9B96',
                 background: isActive
-                  ? `${accentColor}18`
+                  ? 'rgba(49,130,206,0.1)'
                   : 'transparent',
               }}
               aria-label={label}

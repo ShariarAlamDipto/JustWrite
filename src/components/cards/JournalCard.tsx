@@ -13,9 +13,9 @@ interface JournalCardProps {
 }
 
 const MOOD_COLORS: Record<number, string> = {
-  1: '#D47878', 2: '#D47878', 3: '#E0B877',
-  4: '#E0B877', 5: '#9E9B96', 6: '#9E9B96',
-  7: '#7EB8A0', 8: '#7EB8A0', 9: '#7EB8A0', 10: '#7EB8A0',
+  1: '#e53e3e', 2: '#e53e3e', 3: '#a0a0a0',
+  4: '#a0a0a0', 5: '#a0a0a0', 6: '#a0a0a0',
+  7: '#3182ce', 8: '#3182ce', 9: '#3182ce', 10: '#3182ce',
 }
 
 export default function JournalCard({ entry, isDark, onClick, onUnlock, isUnlocked = false }: JournalCardProps) {
@@ -90,11 +90,6 @@ export default function JournalCard({ entry, isDark, onClick, onUnlock, isUnlock
         </p>
       </div>
 
-      {/* Left accent strip — journal color */}
-      <span
-        className="absolute left-0 top-3 bottom-3 w-0.5 rounded-r-full"
-        style={{ background: '#C9A97A' }}
-      />
     </article>
   )
 }
@@ -117,15 +112,15 @@ export function TodayCard({ isDark, onClick, hasEntry, wordCount }: TodayCardPro
       onClick={onClick}
       className="w-full jw-card-press text-left overflow-hidden"
       style={{
-        background: isDark ? '#1E1B17' : '#FDF8F2',
-        border: `1.5px solid ${isDark ? '#3A3228' : '#EDE5D8'}`,
-        borderRadius: '20px',
+        background: isDark ? '#1a1a1a' : '#ffffff',
+        border: `1px solid ${isDark ? '#2a2a2a' : '#e5e5e5'}`,
+        borderRadius: '12px',
         padding: '20px',
       }}
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-medium mb-1" style={{ color: '#C9A97A', letterSpacing: '0.05em' }}>
+          <p className="text-xs font-medium mb-1" style={{ color: '#3182ce', letterSpacing: '0.05em' }}>
             TODAY
           </p>
           <p className="font-semibold" style={{
@@ -140,7 +135,7 @@ export function TodayCard({ isDark, onClick, hasEntry, wordCount }: TodayCardPro
 
         <span
           className="flex items-center justify-center w-10 h-10 rounded-2xl flex-shrink-0"
-          style={{ background: 'rgba(201,169,122,0.15)', color: '#C9A97A' }}
+          style={{ background: 'rgba(49,130,206,0.15)', color: '#3182ce' }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

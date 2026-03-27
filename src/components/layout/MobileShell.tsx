@@ -22,18 +22,18 @@ export default function MobileShell({ children, activeTab, isDark }: MobileShell
   const handleCreate = (target: CreationTarget) => {
     setSheetOpen(false)
     switch (target.type) {
-      case 'journal':      router.push('/journal/new'); break
-      case 'idea':         router.push('/ideas/new'); break
-      case 'note':         router.push('/notes/new'); break
-      case 'record-idea':  router.push('/ideas/new?voice=1'); break
-      case 'record-note':  router.push('/notes/new?voice=1'); break
+      case 'journal':      router.push('/journal?new=1'); break
+      case 'idea':         router.push('/ideas?new=1'); break
+      case 'note':         router.push('/notes?new=1'); break
+      case 'record-idea':  router.push('/ideas?new=1&voice=1'); break
+      case 'record-note':  router.push('/notes?new=1&voice=1'); break
     }
   }
 
   return (
     <div
       className="relative flex flex-col min-h-dvh overflow-hidden select-none"
-      style={{ background: isDark ? '#131313' : '#F7F6F2' }}
+      style={{ background: isDark ? '#0d0d0d' : '#fafafa' }}
     >
       {/* Main content — scrolls behind fixed nav */}
       <main className="flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: '72px' }}>
