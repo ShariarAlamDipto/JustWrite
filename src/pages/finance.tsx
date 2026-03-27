@@ -300,7 +300,11 @@ export default function FinancePage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
       body: JSON.stringify({ date: today, start_spendable: spendable, start_reserve: reserve }),
     })
-    if (res.ok) await loadDays()
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error ?? 'Failed to start day')
+    }
+    await loadDays()
   }
 
   const handleCloseDay = async (spendable: number, reserve: number) => {
@@ -310,7 +314,11 @@ export default function FinancePage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
       body: JSON.stringify({ id: todayLog.id, end_spendable: spendable, end_reserve: reserve, status: 'closed' }),
     })
-    if (res.ok) await loadDays()
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error ?? 'Failed to close day')
+    }
+    await loadDays()
   }
 
   const handleAddTxn = async (amount: number, category: string, note: string) => {
