@@ -1,7 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ============================================
    JUSTWRITE — Clean Minimal Design
    Light/Dark mode with elegant typography
    ============================================ */
+
+/* ── JustWrite Mobile Layer ────────────────── */
+@layer components {
+  /* Shell */
+  .jw-shell {
+    @apply flex flex-col min-h-dvh bg-canvas-light dark:bg-canvas-dark overflow-hidden;
+  }
+  .jw-screen {
+    @apply flex-1 overflow-y-auto overscroll-y-contain pb-nav;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Cards */
+  .jw-card {
+    @apply bg-card-light dark:bg-card-dark rounded-2xl shadow-card-light dark:shadow-card-dark;
+  }
+  .jw-card-press {
+    @apply active:scale-[0.98] transition-transform duration-100;
+  }
+
+  /* Bottom sheet */
+  .jw-sheet-overlay {
+    @apply fixed inset-0 bg-black/30 dark:bg-black/50 z-40 animate-fade-in;
+  }
+  .jw-sheet {
+    @apply fixed bottom-0 left-0 right-0 z-50 bg-card-light dark:bg-card-dark
+           rounded-t-3xl shadow-sheet dark:shadow-sheet-dark animate-slide-up-sheet
+           pb-safe-bottom;
+  }
+  .jw-sheet-handle {
+    @apply w-10 h-1 rounded-full bg-border-light dark:bg-border-dark mx-auto mt-3 mb-1;
+  }
+
+  /* Inputs */
+  .jw-input {
+    @apply bg-transparent outline-none text-ink dark:text-ink-light placeholder:text-muted-light
+           dark:placeholder:text-muted-dark;
+  }
+
+  /* Typography */
+  .jw-display  { @apply text-display font-sans font-semibold tracking-tight text-ink dark:text-ink-light; }
+  .jw-title    { @apply text-xl font-sans font-semibold tracking-tight text-ink dark:text-ink-light; }
+  .jw-body     { @apply text-base font-sans text-ink dark:text-ink-light leading-relaxed; }
+  .jw-caption  { @apply text-xs font-sans text-muted-light dark:text-muted-dark; }
+  .jw-label    { @apply text-2xs font-sans font-semibold uppercase tracking-widest text-muted-light dark:text-muted-dark; }
+
+  /* Segment accent dots */
+  .jw-dot-journal { @apply w-1.5 h-1.5 rounded-full bg-journal; }
+  .jw-dot-ideas   { @apply w-1.5 h-1.5 rounded-full bg-ideas; }
+  .jw-dot-notes   { @apply w-1.5 h-1.5 rounded-full bg-notes; }
+  .jw-dot-connect { @apply w-1.5 h-1.5 rounded-full bg-connect; }
+
+  /* Privacy blurred card */
+  .jw-private-blur { @apply blur-sm select-none pointer-events-none; }
+
+  /* Voice recording ring */
+  .jw-voice-ring {
+    @apply absolute inset-0 rounded-full border-2 border-voice animate-pulse-ring;
+  }
+}
+
+/* ── Custom scrollbar (mobile-hidden) ────────── */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-border-light dark:bg-border-dark rounded-full; }
+}
 
 :root {
   /* Core palette - Dark mode (default) */

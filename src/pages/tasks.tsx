@@ -1,7 +1,24 @@
-import React, { useEffect, useState, useCallback, useMemo, memo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, memo, useRef } from 'react';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
 import { encryptContent, decryptContent, isEncrypted } from '../lib/clientEncryption';
+
+// ── Tasks localStorage cache ──────────────────────────────────────────────────
+// Stores already-decrypted tasks so the next page load is instant.
+const TASKS_CACHE_KEY = (uid: string) => `jw:tasks:${uid}`;
+
+function readTasksCache(uid: string): any[] {
+  try {
+    const raw = localStorage.getItem(TASKS_CACHE_KEY(uid));
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function writeTasksCache(uid: string, tasks: any[]) {
+  try {
+    localStorage.setItem(TASKS_CACHE_KEY(uid), JSON.stringify(tasks.slice(0, 200)));
+  } catch { /* quota exceeded */ }
+}
 
 // Priority indicator colors
 const priorityColors: Record<string, string> = {
@@ -18,7 +35,7 @@ const priorityLabels: Record<string, string> = {
   low: 'Low',
 };
 
-// Memoized task item — clean, minimal with larger boundaries
+// Memoized task item - clean, minimal with larger boundaries
 interface TaskItemProps {
   task: any;
   toggleLoading: string | null;
@@ -44,7 +61,7 @@ const TaskItem = memo(({ task, toggleLoading, deleteLoading, onToggle, onDelete,
       }}
       aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
     >
-      {toggleLoading === task.id ? '·' : isDone ? '✓' : ''}
+      {toggleLoading === task.id ? '.' : isDone ? 'v' : ''}
     </button>
     
     <div style={taskStyles.content}>
@@ -80,7 +97,7 @@ const TaskItem = memo(({ task, toggleLoading, deleteLoading, onToggle, onDelete,
       style={taskStyles.deleteBtn}
       aria-label="Delete"
     >
-      {deleteLoading === task.id ? '·' : '×'}
+      {deleteLoading === task.id ? '.' : 'X'}
     </button>
   </div>
 ));
@@ -197,7 +214,7 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, loading }: AddTaskModalProps) =>
       <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
         <div className="modal-header">
           <h2 className="modal-title">Add New Task</h2>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={onClose}>X</button>
         </div>
         
         <form onSubmit={handleSubmit}>
@@ -286,44 +303,91 @@ const modalStyles: Record<string, React.CSSProperties> = {
 };
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<any[]>([]);
+  // Seed state from localStorage cache for instant first paint
+  const [tasks, setTasks] = useState<any[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith('jw:tasks:'));
+    if (keys.length) {
+      try { return JSON.parse(localStorage.getItem(keys[0]) ?? '[]'); } catch { return []; }
+    }
+    return [];
+  });
+  // Only show loading spinner when there is no cached data to show
   const [loading, setLoading] = useState(false);
   const [toggleLoading, setToggleLoading] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const { user, loading: authLoading, token } = useAuth();
+  const tasksEtagRef = useRef<string | null>(null);
+  const tasksSinceRef = useRef<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/tasks', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const params = new URLSearchParams({ limit: '100' });
+      if (tasksSinceRef.current) {
+        params.set('since', tasksSinceRef.current);
+      }
+
+      const headers: Record<string, string> = { 'Authorization': `Bearer ${token}` };
+      if (tasksEtagRef.current) {
+        headers['If-None-Match'] = tasksEtagRef.current;
+      }
+
+      const res = await fetch(`/api/tasks?${params.toString()}`, { headers });
+      if (res.status === 304) {
+        return;
+      }
+
       if (res.ok) {
         const json = await res.json();
         // Decrypt task titles and descriptions
         const decrypted = await Promise.all((json.tasks || []).map(async (task: any) => {
+          const item = { ...task };
           if (user?.id) {
-            if (task.title && isEncrypted(task.title)) {
-              task.title = await decryptContent(task.title, user.id);
+            if (item.title && isEncrypted(item.title)) {
+              item.title = await decryptContent(item.title, user.id);
             }
-            if (task.description && isEncrypted(task.description)) {
-              task.description = await decryptContent(task.description, user.id);
+            if (item.description && isEncrypted(item.description)) {
+              item.description = await decryptContent(item.description, user.id);
             }
           }
-          return task;
+          return item;
         }));
-        setTasks(decrypted);
+
+        if (tasksSinceRef.current) {
+          setTasks(prev => {
+            const map = new Map(prev.map((item: any) => [item.id, item]));
+            for (const item of decrypted) {
+              map.set(item.id, item);
+            }
+            const merged = [...map.values()].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            if (user?.id) writeTasksCache(user.id, merged);
+            return merged;
+          });
+        } else {
+          if (user?.id) writeTasksCache(user.id, decrypted);
+          setTasks(decrypted);
+        }
+
+        const newEtag = res.headers.get('etag');
+        if (newEtag) {
+          tasksEtagRef.current = newEtag;
+        }
+        tasksSinceRef.current = new Date().toISOString();
       }
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [token, user?.id]);
 
   useEffect(() => {
+    tasksEtagRef.current = null;
+    tasksSinceRef.current = null;
     if (user && token) fetchTasks();
   }, [user, token, fetchTasks]);
 
@@ -447,12 +511,13 @@ export default function TasksPage() {
     doneTasks: tasks.filter(t => t.status === 'done')
   }), [tasks]);
 
-  if (authLoading) {
+  // Don't block on authLoading if we already have cached tasks to show
+  if (authLoading && tasks.length === 0) {
     return (
       <>
         <Nav />
         <main style={styles.main}>
-          <p style={styles.loading}>Loading…</p>
+          <p style={styles.loading}>Loading...</p>
         </main>
       </>
     );
@@ -494,7 +559,7 @@ export default function TasksPage() {
         {loading ? (
           <div style={styles.loadingContainer}>
             <div className="spinner" />
-            <p style={styles.loading}>Loading tasks...</p>
+          <p style={styles.loading}>Loading...</p>
           </div>
         ) : tasks.length === 0 ? (
           <div style={styles.empty}>

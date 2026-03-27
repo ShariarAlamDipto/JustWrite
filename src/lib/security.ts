@@ -74,6 +74,22 @@ export function sanitizeStatus(status: string): 'todo' | 'done' {
 
 // Rate limiting helper (in-memory, for serverless use external store)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+let lastRateLimitCleanup = 0;
+
+function cleanupRateLimitMap(now: number) {
+  // Run cleanup at most once per minute to keep memory bounded without a global timer.
+  if (now - lastRateLimitCleanup < 60000) {
+    return;
+  }
+
+  for (const [key, value] of rateLimitMap.entries()) {
+    if (now > value.resetTime) {
+      rateLimitMap.delete(key);
+    }
+  }
+
+  lastRateLimitCleanup = now;
+}
 
 export function checkRateLimit(
   identifier: string,
@@ -81,6 +97,7 @@ export function checkRateLimit(
   windowMs: number = 60000
 ): { allowed: boolean; remaining: number } {
   const now = Date.now();
+  cleanupRateLimitMap(now);
   const record = rateLimitMap.get(identifier);
   
   if (!record || now > record.resetTime) {
@@ -91,20 +108,32 @@ export function checkRateLimit(
   if (record.count >= maxRequests) {
     return { allowed: false, remaining: 0 };
   }
-  
-  record.count++;
-  return { allowed: true, remaining: maxRequests - record.count };
+
+  const nextCount = record.count + 1;
+  rateLimitMap.set(identifier, {
+    count: nextCount,
+    resetTime: record.resetTime,
+  });
+
+  return { allowed: true, remaining: maxRequests - nextCount };
 }
 
-// Clean up old rate limit entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of rateLimitMap.entries()) {
-    if (now > value.resetTime) {
-      rateLimitMap.delete(key);
+export function sanitizeUrl(input: string): string | null {
+  if (!input || typeof input !== 'string') return null;
+
+  const cleaned = sanitizeInput(input).slice(0, 2048);
+  if (!cleaned) return null;
+
+  try {
+    const url = new URL(cleaned);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      return null;
     }
+    return url.toString();
+  } catch {
+    return null;
   }
-}, 60000);
+}
 
 // Validate and sanitize content length
 export function validateContentLength(content: string, maxLength: number = 50000): boolean {

@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { updateTask, listTasks, deleteTask } from '../../../lib/storage';
+import { updateTask, getTaskById, deleteTask } from '../../../lib/storage';
 import { withAuth } from '../../../lib/withAuth';
 import { sanitizeInput, sanitizePriority, sanitizeStatus, isValidUUID, checkRateLimit } from '../../../lib/security';
 import { withErrorHandler } from '../../../lib/apiHelpers';
@@ -58,9 +58,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     if (req.method === 'GET') {
-      // SECURITY: Filter by userId
-      const tasks = await listTasks(userId);
-      const task = tasks.find((t: any) => t.id === id);
+      const task = await getTaskById(id, userId);
       if (!task) return res.status(404).json({ error: 'Task not found' });
       return res.status(200).json({ task });
     }

@@ -40,9 +40,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const updates: any = {};
       
       if (content !== undefined) {
-        const sanitizedContent = sanitizeInput(content);
-        if (!validateContentLength(sanitizedContent)) {
-          return res.status(400).json({ error: 'Content must be between 1 and 50000 characters' });
+        const isEncryptedPayload = typeof content === 'string' &&
+          (content.startsWith('enc2:') || content.startsWith('enc:'));
+        const sanitizedContent = isEncryptedPayload
+          ? content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').slice(0, 100000)
+          : sanitizeInput(content);
+        if (!validateContentLength(sanitizedContent, isEncryptedPayload ? 100000 : 50000)) {
+          return res.status(400).json({ error: 'Content too long' });
         }
         updates.content = sanitizedContent;
       }

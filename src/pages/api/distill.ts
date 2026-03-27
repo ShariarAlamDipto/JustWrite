@@ -5,6 +5,20 @@ import { sanitizeInput, validateContentLength, isValidUUID, checkRateLimit } fro
 import { withErrorHandler } from '../../lib/apiHelpers';
 import { randomUUID } from 'crypto';
 
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function extractTasksFromText(text: string) {
   // very simple heuristic extraction for prototype/demo
   const lines = text.split(/\n|\.\s+/).map(s => s.trim()).filter(Boolean);
@@ -77,14 +91,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       try {
         const prompt = `Summarize the following journal entry and extract ALL actionable tasks. Be thorough and detailed. Return ONLY valid JSON: {"summary": "string (max 100 words)", "tasks": [{"title": "string", "description": "string or null", "priority": "low|medium|high"}]}. Entry:\n${contentToSummarize}`;
         
-        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+        const resp = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: { maxOutputTokens: 4000, temperature: 0.3 }
           })
-        });
+        }, 18000);
+
+        if (!resp.ok) {
+          throw new Error('Gemini request failed');
+        }
         
         const j = await resp.json();
         const text = j?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -112,11 +130,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (!tasks.length && groqUrl && groqKey) {
       try {
         const prompt = `Summarize and extract ALL actionable tasks from the following journal entry. Be thorough and detailed. Return strict JSON: {"summary": string, "tasks": [{"title": string, "description": string|null, "priority": "low"|"medium"|"high", "due": null|string}] }\\nEntry:\n'''${contentToSummarize}'''`;
-        const resp = await fetch(groqUrl, {
+        const resp = await fetchWithTimeout(groqUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
           body: JSON.stringify({ prompt, input: contentToSummarize })
-        });
+        }, 15000);
+
+        if (!resp.ok) {
+          throw new Error('Groq request failed');
+        }
         const j = await resp.json();
         // Expect provider to return JSON with summary and tasks, but be defensive
         if (j && (j.summary || j.tasks)) {
@@ -148,11 +170,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (!tasks.length && openaiKey) {
       const prompt = `You are an assistant that converts a personal journal entry into a short summary and a list of ALL actionable tasks. Be thorough and detailed. Return only valid JSON with fields: { \"summary\": string, \"tasks\": [ {\"title\":string, \"description\":string|null, \"priority\":\"low\"|\"medium\"|\"high\", \"due\": null | string } ] }. Entry:\n'''${contentToSummarize}'''`;
 
-      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      const resp = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
         body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: [{ role: 'system', content: 'You output only JSON.' }, { role: 'user', content: prompt }], max_tokens: 2000 })
-      });
+      }, 20000);
+
+      if (!resp.ok) {
+        throw new Error('OpenAI request failed');
+      }
       const j = await resp.json();
       const text = j?.choices?.[0]?.message?.content;
       if (text) {
