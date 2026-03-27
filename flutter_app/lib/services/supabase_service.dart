@@ -144,7 +144,7 @@ class SupabaseService {
   Future<List<Entry>> getEntries() async {
     final userId = _userId;
     if (userId == null) return [];
-    
+
     final response = await supabase
         .from('entries')
         .select()
@@ -153,6 +153,24 @@ class SupabaseService {
 
     return (response as List)
         .map((e) => Entry.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Returns raw JSON maps (no model parsing) for background-isolate decryption.
+  /// Limited to 50 most-recent entries to keep initial load fast.
+  Future<List<Map<String, dynamic>>> getRawEntries() async {
+    final userId = _userId;
+    if (userId == null) return [];
+
+    final response = await supabase
+        .from('entries')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(50);
+
+    return (response as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
   }
 
@@ -175,9 +193,6 @@ class SupabaseService {
   }
 
   Future<Entry> createEntry(Entry entry) async {
-    debugPrint('[SupabaseService] ===== CREATE ENTRY =====');
-    debugPrint('[SupabaseService] Entry to insert: ${entry.toJson()}');
-    
     try {
       final response = await supabase
           .from('entries')
@@ -185,13 +200,12 @@ class SupabaseService {
           .select()
           .single();
 
-      debugPrint('[SupabaseService] Response: $response');
-      final created = Entry.fromJson(response as Map<String, dynamic>);
-      debugPrint('[SupabaseService] Entry created: ${created.id}');
-      return created;
+      return Entry.fromJson(response as Map<String, dynamic>);
     } catch (e, stackTrace) {
-      debugPrint('[SupabaseService] ERROR creating entry: $e');
-      debugPrint('[SupabaseService] Stack: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('[SupabaseService] ERROR creating entry: $e');
+        debugPrint('[SupabaseService] Stack: $stackTrace');
+      }
       rethrow;
     }
   }
@@ -222,7 +236,7 @@ class SupabaseService {
   Future<List<Task>> getTasks() async {
     final userId = _userId;
     if (userId == null) return [];
-    
+
     final response = await supabase
         .from('tasks')
         .select()
@@ -231,6 +245,23 @@ class SupabaseService {
 
     return (response as List)
         .map((t) => Task.fromJson(t as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Returns raw JSON maps for tasks for background-isolate decryption.
+  Future<List<Map<String, dynamic>>> getRawTasks() async {
+    final userId = _userId;
+    if (userId == null) return [];
+
+    final response = await supabase
+        .from('tasks')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(200);
+
+    return (response as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
   }
 

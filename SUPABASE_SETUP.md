@@ -1,4 +1,4 @@
-# Supabase Configuration Guide
+﻿# Supabase Configuration Guide
 
 ## Critical: Configure Redirect URLs in Supabase Console
 
@@ -11,7 +11,7 @@ The magic link authentication requires you to add your redirect URL to Supabase'
    - Select your project: `hvljihceyzpfsktjtipi`
 
 2. **Navigate to Auth Settings**
-   - Left sidebar: **Authentication** → **Providers**
+   - Left sidebar: **Authentication** Ã¢â€ â€™ **Providers**
    - Click on **Email** provider
 
 3. **Add Redirect URLs**
@@ -38,7 +38,7 @@ The magic link authentication requires you to add your redirect URL to Supabase'
    https://hvljihceyzpfsktjtipi.supabase.co/auth/v1/verify?token=...&type=magiclink&redirect_to=http://localhost:3000/auth/callback
    ```
 
-3. User clicks the link → redirected to `/auth/callback` with token in URL hash
+3. User clicks the link Ã¢â€ â€™ redirected to `/auth/callback` with token in URL hash
 4. Our app (`src/pages/auth/callback.tsx`) detects the session
 5. User is logged in and redirected to home page (`/`)
 
@@ -48,26 +48,26 @@ Make sure `.env.local` has:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://hvljihceyzpfsktjtipi.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 GROQ_API_URL=https://api.groq.com/openai/v1/chat/completions
-GROQ_API_KEY=gsk_OhpsgfZgRrcy3zkeE0MtWGdyb3FYhAkPBqKrHqaY42I...
+GROQ_API_KEY=your_groq_api_key_here
 ```
 
 ## Troubleshooting
 
 ### "Redirect URL not allowed"
-- ❌ You haven't added the localhost URL to Supabase console
-- ✅ Solution: Follow steps 1-4 above
+- Ã¢ÂÅ’ You haven't added the localhost URL to Supabase console
+- Ã¢Å“â€¦ Solution: Follow steps 1-4 above
 
 ### Magic link isn't working
-- Check browser console for errors (F12 → Console tab)
+- Check browser console for errors (F12 Ã¢â€ â€™ Console tab)
 - Verify `.env.local` has correct `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - Try signing in again
 
 ### Email not arriving
 - Check spam/junk folder
 - Verify email is typed correctly
-- Check Supabase project logs: Auth → Logs
+- Check Supabase project logs: Auth Ã¢â€ â€™ Logs
 
 ## Testing Flow
 

@@ -2,6 +2,21 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { withAuth } from '../../lib/withAuth';
 import { sanitizeInput, validateContentLength, checkRateLimit } from '../../lib/security';
 import { withErrorHandler } from '../../lib/apiHelpers';
+import { randomUUID } from 'crypto';
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
@@ -39,7 +54,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     if (groqUrl && groqKey) {
       try {
-      const response = await fetch(groqUrl, {
+      const response = await fetchWithTimeout(groqUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${groqKey}`,
@@ -86,7 +101,9 @@ If the user's text is extremely vague, make reasonable assumptions and proceed.`
           temperature: 0.7,
           max_tokens: 1024,
         }),
-      });        if (response.ok) {
+      }, 15000);
+
+        if (response.ok) {
           const data = await response.json();
           const content = data.choices?.[0]?.message?.content;
           if (content) {
@@ -140,7 +157,7 @@ function extractTasksHeuristic(text: string): any[] {
         if (taskText && taskText.length > 5 && taskText.length < 200 && !foundTasks.has(taskText)) {
           foundTasks.add(taskText);
           tasks.push({
-            id: Math.random().toString(36).substr(2, 9),
+            id: randomUUID(),
             title: taskText.split(/\s+/).slice(0, 8).join(' '),
             description: taskText,
             priority: taskText.toLowerCase().includes('urgent') || taskText.toLowerCase().includes('critical') ? 'high' : 'medium',

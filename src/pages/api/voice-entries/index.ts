@@ -2,7 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { withErrorHandler } from '../../../lib/apiHelpers';
 import { withAuth } from '../../../lib/withAuth';
 import { createClient } from '@supabase/supabase-js';
-import { sanitizeInput, checkRateLimit } from '../../../lib/security';
+import { sanitizeInput, sanitizeUrl, checkRateLimit } from '../../../lib/security';
+import { createListEtag, isNotModified, setRevalidateHeaders } from '../../../lib/httpCache';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,14 +26,44 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'GET') {
       // List voice entries
       try {
-        const { data, error } = await supabase
+        const rawLimit = Number.parseInt(String(req.query.limit ?? '100'), 10);
+        const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(200, rawLimit)) : 100;
+        const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
+
+        let query = supabase
           .from('voice_entries')
           .select('*')
           .eq('user_id', userId)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (cursor) {
+          query = query.lt('created_at', cursor);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
-        return res.status(200).json({ voiceEntries: data || [] });
+        const voiceEntries = data || [];
+
+        const etag = createListEtag(voiceEntries);
+        setRevalidateHeaders(res, etag);
+        if (isNotModified(req, etag)) {
+          return res.status(304).end();
+        }
+
+        const nextCursor = voiceEntries.length === limit
+          ? voiceEntries[voiceEntries.length - 1]?.created_at ?? null
+          : null;
+
+        return res.status(200).json({
+          voiceEntries,
+          meta: {
+            limit,
+            nextCursor,
+            hasMore: voiceEntries.length === limit,
+          },
+        });
       } catch {
         return res.status(500).json({ error: 'Failed to load voice entries' });
       }
@@ -58,7 +89,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           .insert({
             user_id: userId,
             title: sanitizedTitle,
-            audio_url: audio_url ? sanitizeInput(audio_url) : null,
+            audio_url: typeof audio_url === 'string' ? sanitizeUrl(audio_url) : null,
             audio_duration: typeof audio_duration === 'number' ? audio_duration : null,
             transcript: transcript ? sanitizeInput(transcript) : null,
             metadata: metadata || null, // metadata is JSON, validated by Supabase

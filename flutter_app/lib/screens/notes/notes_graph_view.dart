@@ -1,8 +1,88 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:justwrite_mobile/models/note.dart';
 import 'package:justwrite_mobile/providers/note_provider.dart';
+
+// ─── Background isolate worker ────────────────────────────────────────────────
+// Top-level function so compute() can spawn it in a separate Dart isolate.
+// Returns flattened [x0,y0, x1,y1, ...] positions + degree list.
+Map<String, dynamic> _layoutWorker(Map<String, dynamic> params) {
+  final nodeCount = params['nodeCount'] as int;
+  final edgeFrom = List<int>.from(params['edgeFrom'] as List);
+  final edgeTo = List<int>.from(params['edgeTo'] as List);
+  final width = params['width'] as double;
+  final height = params['height'] as double;
+
+  if (nodeCount == 0) return {'positions': <double>[], 'degrees': <int>[]};
+
+  final rand = Random(42);
+  final cx = width / 2;
+  final cy = height / 2;
+  final radius = min(cx, cy) * 0.7;
+
+  final x = List.generate(nodeCount, (i) {
+    final angle = (2 * pi * i) / nodeCount;
+    return cx + radius * cos(angle) + rand.nextDouble() * 10 - 5;
+  });
+  final y = List.generate(nodeCount, (i) {
+    final angle = (2 * pi * i) / nodeCount;
+    return cy + radius * sin(angle) + rand.nextDouble() * 10 - 5;
+  });
+  final vx = List.filled(nodeCount, 0.0);
+  final vy = List.filled(nodeCount, 0.0);
+  final degrees = List.filled(nodeCount, 0);
+
+  for (int i = 0; i < edgeFrom.length; i++) {
+    degrees[edgeFrom[i]]++;
+    degrees[edgeTo[i]]++;
+  }
+
+  const repulsion = 8000.0;
+  const attraction = 0.05;
+  const damping = 0.85;
+  const centerForce = 0.008;
+  const iterations = 120;
+
+  for (int iter = 0; iter < iterations; iter++) {
+    for (int i = 0; i < nodeCount; i++) {
+      for (int j = i + 1; j < nodeCount; j++) {
+        final dx = x[i] - x[j];
+        final dy = y[i] - y[j];
+        final dist = max(sqrt(dx * dx + dy * dy), 0.1);
+        final force = repulsion / (dist * dist);
+        vx[i] += dx / dist * force;
+        vy[i] += dy / dist * force;
+        vx[j] -= dx / dist * force;
+        vy[j] -= dy / dist * force;
+      }
+    }
+    for (int e = 0; e < edgeFrom.length; e++) {
+      final fi = edgeFrom[e];
+      final ti = edgeTo[e];
+      final dx = x[ti] - x[fi];
+      final dy = y[ti] - y[fi];
+      vx[fi] += dx * attraction;
+      vy[fi] += dy * attraction;
+      vx[ti] -= dx * attraction;
+      vy[ti] -= dy * attraction;
+    }
+    for (int i = 0; i < nodeCount; i++) {
+      vx[i] = (vx[i] + (cx - x[i]) * centerForce) * damping;
+      vy[i] = (vy[i] + (cy - y[i]) * centerForce) * damping;
+      x[i] += vx[i];
+      y[i] += vy[i];
+    }
+  }
+
+  final positions = <double>[];
+  for (int i = 0; i < nodeCount; i++) {
+    positions.add(x[i]);
+    positions.add(y[i]);
+  }
+  return {'positions': positions, 'degrees': degrees};
+}
 
 // ─── Graph model ──────────────────────────────────────────────────────────────
 
@@ -24,72 +104,6 @@ class _GraphEdge {
   const _GraphEdge(this.fromIdx, this.toIdx);
 }
 
-// ─── Force-directed layout ────────────────────────────────────────────────────
-
-List<_GraphNode> _buildLayout(
-    List<Note> notes, List<_GraphEdge> edges, Size size) {
-  final rand = Random(42);
-  final cx = size.width / 2;
-  final cy = size.height / 2;
-  final radius = min(cx, cy) * 0.7;
-
-  final nodes = List.generate(notes.length, (i) {
-    final angle = (2 * pi * i) / max(notes.length, 1);
-    return _GraphNode(
-      note: notes[i],
-      position: Offset(
-        cx + radius * cos(angle) + rand.nextDouble() * 10 - 5,
-        cy + radius * sin(angle) + rand.nextDouble() * 10 - 5,
-      ),
-    );
-  });
-
-  // Count degrees
-  for (final e in edges) {
-    nodes[e.fromIdx].degree++;
-    nodes[e.toIdx].degree++;
-  }
-
-  const repulsion = 8000.0;
-  const attraction = 0.05;
-  const damping = 0.85;
-  const centerForce = 0.008;
-  const iterations = 120;
-
-  for (int iter = 0; iter < iterations; iter++) {
-    // Repulsion between all node pairs
-    for (int i = 0; i < nodes.length; i++) {
-      for (int j = i + 1; j < nodes.length; j++) {
-        final delta = nodes[i].position - nodes[j].position;
-        final dist = max(delta.distance, 0.1);
-        final force = repulsion / (dist * dist);
-        final dir = delta / dist;
-        nodes[i].velocity += dir * force;
-        nodes[j].velocity -= dir * force;
-      }
-    }
-
-    // Attraction along edges
-    for (final e in edges) {
-      final from = nodes[e.fromIdx];
-      final to = nodes[e.toIdx];
-      final delta = to.position - from.position;
-      final force = delta * attraction;
-      from.velocity += force;
-      to.velocity -= force;
-    }
-
-    // Center pull
-    for (final node in nodes) {
-      node.velocity +=
-          (Offset(cx, cy) - node.position) * centerForce;
-      node.velocity *= damping;
-      node.position += node.velocity;
-    }
-  }
-
-  return nodes;
-}
 
 // ─── Painter ──────────────────────────────────────────────────────────────────
 
@@ -208,11 +222,11 @@ class _NotesGraphViewState extends State<NotesGraphView> {
     }
   }
 
-  void _buildGraph() {
+  Future<void> _buildGraph() async {
     final notes = widget.provider.notes;
     if (notes.isEmpty) return;
 
-    // Build edge list from wikilinks
+    // Build edge list from wikilinks (fast — stays on main thread)
     final titleToIdx = <String, int>{};
     for (int i = 0; i < notes.length; i++) {
       titleToIdx[notes[i].title.toLowerCase()] = i;
@@ -234,8 +248,28 @@ class _NotesGraphViewState extends State<NotesGraphView> {
       }
     }
 
-    const layoutSize = Size(900, 650);
-    final nodes = _buildLayout(notes, edges, layoutSize);
+    // Run the O(n²) force simulation in a background isolate to avoid jank
+    final result = await compute(_layoutWorker, {
+      'nodeCount': notes.length,
+      'edgeFrom': edges.map((e) => e.fromIdx).toList(),
+      'edgeTo': edges.map((e) => e.toIdx).toList(),
+      'width': 900.0,
+      'height': 650.0,
+    });
+
+    if (!mounted) return;
+
+    final positions = List<double>.from(result['positions'] as List);
+    final degrees = List<int>.from(result['degrees'] as List);
+
+    final nodes = List.generate(notes.length, (i) {
+      final node = _GraphNode(
+        note: notes[i],
+        position: Offset(positions[i * 2], positions[i * 2 + 1]),
+      );
+      node.degree = degrees[i];
+      return node;
+    });
 
     setState(() {
       _nodes = nodes;

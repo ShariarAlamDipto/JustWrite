@@ -11,7 +11,7 @@ const supabaseKey = supabaseServiceKey || supabaseAnonKey;
 
 // Fail fast if Supabase is not configured (avoids silent null-client errors)
 if (!supabaseUrl || !supabaseKey) {
-  console.error('[storage] Supabase URL or key is missing — database calls will fail');
+  console.error('[storage] Supabase URL or key is missing Ã¢â‚¬â€ database calls will fail');
 }
 
 const supabase = supabaseUrl && supabaseKey 
@@ -75,25 +75,37 @@ async function checkIsLockedColumn(): Promise<boolean> {
 }
 
 // SECURITY: All queries now filter by user_id to prevent data leakage
-export async function listEntries(userId?: string, options?: { locked?: boolean }) {
+export async function listEntries(
+  userId?: string,
+  options?: { locked?: boolean; limit?: number; since?: string; cursor?: string }
+) {
+  const safeLimit = Math.max(1, Math.min(200, options?.limit ?? 100));
+
   if (supabase) {
-    const hasLockedColumn = await checkIsLockedColumn();
-    
     let query = supabase
       .from('entries')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
+      .select('id,content,source,created_at,updated_at,mood,is_locked,is_private,title,user_id,summary,word_count,tags')
+      .order('created_at', { ascending: false })
+      .limit(safeLimit);
+
     // SECURITY: Filter by user_id when provided
     if (userId) {
       query = query.eq('user_id', userId);
     }
-    
-    // Filter by locked status only if column exists
-    if (hasLockedColumn && options?.locked !== undefined) {
+
+    // Filter by locked status when requested
+    if (options?.locked !== undefined) {
       query = query.eq('is_locked', options.locked);
     }
-    
+
+    if (options?.since) {
+      query = query.or(`updated_at.gte.${options.since},created_at.gte.${options.since}`);
+    }
+
+    if (options?.cursor) {
+      query = query.lt('created_at', options.cursor);
+    }
+
     const { data, error } = await query;
     if (error) {
       console.error('Supabase listEntries error:', error.message);
@@ -101,16 +113,32 @@ export async function listEntries(userId?: string, options?: { locked?: boolean 
     }
     return data || [];
   }
-  // Filter memory DB by userId and locked status if provided
-  let results = userId 
+
+  let results = userId
     ? memoryDb.entries.filter((e: any) => e.user_id === userId)
     : memoryDb.entries;
-  
+
   if (options?.locked !== undefined) {
     results = results.filter((e: any) => e.is_locked === options.locked);
   }
-  
-  return results;
+
+  if (options?.since) {
+    const sinceMs = new Date(options.since).getTime();
+    results = results.filter((e: any) => {
+      const updatedMs = e.updated_at ? new Date(e.updated_at).getTime() : 0;
+      const createdMs = e.created_at ? new Date(e.created_at).getTime() : 0;
+      return updatedMs >= sinceMs || createdMs >= sinceMs;
+    });
+  }
+
+  if (options?.cursor) {
+    const cursorMs = new Date(options.cursor).getTime();
+    results = results.filter((e: any) => new Date(e.created_at).getTime() < cursorMs);
+  }
+
+  return [...results]
+    .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, safeLimit);
 }
 
 // SECURITY: Include user_id in entry creation
@@ -227,7 +255,7 @@ export async function updateEntry(id: string, updates: any, userId?: string) {
 // SECURITY: Delete entry with ownership verification
 export async function deleteEntry(id: string, userId?: string) {
   if (supabase) {
-    // Delete with user_id scope — never rely on a pre-fetch ownership check alone
+    // Delete with user_id scope Ã¢â‚¬â€ never rely on a pre-fetch ownership check alone
     const { error } = await supabase
       .from('entries')
       .delete()
@@ -247,18 +275,32 @@ export async function deleteEntry(id: string, userId?: string) {
 }
 
 // SECURITY: Filter tasks by user_id
-export async function listTasks(userId?: string) {
+export async function listTasks(
+  userId?: string,
+  options?: { limit?: number; since?: string; cursor?: string }
+) {
+  const safeLimit = Math.max(1, Math.min(200, options?.limit ?? 100));
+
   if (supabase) {
     let query = supabase
       .from('tasks')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
+      .select('id,title,description,priority,status,entry_id,user_id,created_at,updated_at')
+      .order('created_at', { ascending: false })
+      .limit(safeLimit);
+
     // SECURITY: Filter by user_id when provided
     if (userId) {
       query = query.eq('user_id', userId);
     }
-    
+
+    if (options?.since) {
+      query = query.or(`updated_at.gte.${options.since},created_at.gte.${options.since}`);
+    }
+
+    if (options?.cursor) {
+      query = query.lt('created_at', options.cursor);
+    }
+
     const { data, error } = await query;
     if (error) {
       console.error('Supabase listTasks error:', error.message);
@@ -266,9 +308,49 @@ export async function listTasks(userId?: string) {
     }
     return data || [];
   }
-  return userId 
+
+  let results = userId
     ? memoryDb.tasks.filter((t: any) => t.user_id === userId)
     : memoryDb.tasks;
+
+  if (options?.since) {
+    const sinceMs = new Date(options.since).getTime();
+    results = results.filter((t: any) => {
+      const updatedMs = t.updated_at ? new Date(t.updated_at).getTime() : 0;
+      const createdMs = t.created_at ? new Date(t.created_at).getTime() : 0;
+      return updatedMs >= sinceMs || createdMs >= sinceMs;
+    });
+  }
+
+  if (options?.cursor) {
+    const cursorMs = new Date(options.cursor).getTime();
+    results = results.filter((t: any) => new Date(t.created_at).getTime() < cursorMs);
+  }
+
+  return [...results]
+    .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, safeLimit);
+}
+
+export async function getTaskById(id: string, userId?: string) {
+  if (supabase) {
+    let query = supabase
+      .from('tasks')
+      .select('*')
+      .eq('id', id);
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data, error } = await query.single();
+    if (error) return null;
+    return data;
+  }
+
+  const task = memoryDb.tasks.find((t: any) => t.id === id);
+  if (task && userId && task.user_id !== userId) return null;
+  return task || null;
 }
 
 // SECURITY: Include user_id in task creation
@@ -654,7 +736,7 @@ export async function linkNoteKeywords(noteId: string, keywordIds: string[]) {
 
 // ============= GRAPH DATA =============
 
-// Knowledge graph — Notes-only second brain view.
+// Knowledge graph Ã¢â‚¬â€ Notes-only second brain view.
 // Includes: note nodes, shared keyword nodes, wikilink edges, keyword edges.
 // Intentionally excludes journal entries, tasks, and voice entries.
 export async function getGraphData(userId: string) {
@@ -721,7 +803,7 @@ export async function getGraphData(userId: string) {
   ];
 
   const links: any[] = [
-    // Note → Keyword (shared concepts)
+    // Note Ã¢â€ â€™ Keyword (shared concepts)
     ...noteKws
       .filter((nk: Row) => sharedKwIds.has(nk.keyword_id))
       .map((nk: Row) => ({
@@ -729,7 +811,7 @@ export async function getGraphData(userId: string) {
         target: `kw-${nk.keyword_id}`,
         type: 'keyword',
       })),
-    // Note → Note (wikilinks: [[title]] references)
+    // Note Ã¢â€ â€™ Note (wikilinks: [[title]] references)
     ...wikilinks
       .filter((w: Row) => noteIds.has(w.from_id) && noteIds.has(w.to_id))
       .map((w: Row) => ({

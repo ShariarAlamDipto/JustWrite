@@ -2,27 +2,70 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { withAuth } from '../../../lib/withAuth';
 import { checkRateLimit } from '../../../lib/security';
 import { withErrorHandler } from '../../../lib/apiHelpers';
-import { createClient } from '@supabase/supabase-js';
 
-// Disable default body parser — we receive multipart form data
+// Disable default body parser - we receive multipart form data
 export const config = { api: { bodyParser: false } };
 
-const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-  : null;
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+const MAX_MULTIPART_BYTES = MAX_AUDIO_BYTES + 1024 * 1024;
 
-async function parseMultipart(req: NextApiRequest): Promise<{ audioBuffer: Buffer; mimeType: string } | null> {
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+type ParseResult =
+  | { audioBuffer: Buffer; mimeType: string }
+  | { error: 'too_large' | 'invalid' };
+
+async function parseMultipart(req: NextApiRequest): Promise<ParseResult> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let mimeType = 'audio/webm';
+    let totalBytes = 0;
+    let finalized = false;
 
     const contentType = req.headers['content-type'] || '';
     const boundary = contentType.split('boundary=')[1];
-    if (!boundary) return resolve(null);
+    if (!boundary) return resolve({ error: 'invalid' });
 
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    const contentLengthHeader = req.headers['content-length'];
+    const parsedContentLength = typeof contentLengthHeader === 'string'
+      ? Number.parseInt(contentLengthHeader, 10)
+      : 0;
+
+    if (Number.isFinite(parsedContentLength) && parsedContentLength > MAX_MULTIPART_BYTES) {
+      return resolve({ error: 'too_large' });
+    }
+
+    req.on('data', (chunk: Buffer) => {
+      if (finalized) return;
+
+      totalBytes += chunk.length;
+      if (totalBytes > MAX_MULTIPART_BYTES) {
+        finalized = true;
+        req.pause();
+        return resolve({ error: 'too_large' });
+      }
+
+      chunks.push(chunk);
+    });
+
     req.on('error', reject);
     req.on('end', () => {
+      if (finalized) {
+        return;
+      }
+
       const body = Buffer.concat(chunks).toString('binary');
       const boundaryDelim = `--${boundary}`;
       const parts = body.split(boundaryDelim).slice(1, -1);
@@ -36,10 +79,16 @@ async function parseMultipart(req: NextApiRequest): Promise<{ audioBuffer: Buffe
         if (mimeMatch) mimeType = mimeMatch[1].trim();
 
         const audioBody = rawBodyParts.join('\r\n\r\n').replace(/\r\n$/, '');
-        resolve({ audioBuffer: Buffer.from(audioBody, 'binary'), mimeType });
-        return;
+        const audioBuffer = Buffer.from(audioBody, 'binary');
+
+        if (audioBuffer.length > MAX_AUDIO_BYTES) {
+          return resolve({ error: 'too_large' });
+        }
+
+        return resolve({ audioBuffer, mimeType });
       }
-      resolve(null);
+
+      return resolve({ error: 'invalid' });
     });
   });
 }
@@ -63,18 +112,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     const parsed = await parseMultipart(req);
-    if (!parsed) {
+    if ('error' in parsed) {
+      if (parsed.error === 'too_large') {
+        return res.status(413).json({ error: 'Audio file too large (max 25MB)' });
+      }
       return res.status(400).json({ error: 'No audio file found in request' });
     }
 
     const { audioBuffer, mimeType } = parsed;
 
-    if (audioBuffer.length > 25 * 1024 * 1024) {
-      return res.status(400).json({ error: 'Audio file too large (max 25MB)' });
-    }
-
     try {
-      // Send to Groq Whisper API
       const formData = new FormData();
       const blob = new Blob([audioBuffer], { type: mimeType });
       const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('mp3') ? 'mp3' : 'webm';
@@ -82,11 +129,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       formData.append('model', 'whisper-large-v3');
       formData.append('response_format', 'json');
 
-      const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      const groqRes = await fetchWithTimeout('https://api.groq.com/openai/v1/audio/transcriptions', {
         method: 'POST',
         headers: { Authorization: `Bearer ${groqApiKey}` },
         body: formData,
-      });
+      }, 30000);
 
       if (!groqRes.ok) {
         const errText = await groqRes.text();
@@ -97,7 +144,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const result = await groqRes.json() as { text: string };
       const transcript = result.text?.trim() || '';
 
-      // Extract simple keywords from transcript (stop-word filtered)
       const stopWords = new Set(['the','a','an','and','or','but','in','on','at','to','for',
         'of','with','by','from','is','was','are','were','be','been','have','has','had',
         'do','did','will','would','could','should','may','might','this','that','these',
@@ -107,7 +153,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         transcript.toLowerCase()
           .replace(/[^a-z\s]/g, ' ')
           .split(/\s+/)
-          .filter(w => w.length > 3 && !stopWords.has(w))
+          .filter((w) => w.length > 3 && !stopWords.has(w))
       )].slice(0, 20);
 
       return res.status(200).json({ transcript, keywords });

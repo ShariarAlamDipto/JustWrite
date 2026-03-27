@@ -1,15 +1,49 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:justwrite_mobile/models/task.dart';
-import 'package:justwrite_mobile/services/supabase_service.dart';
 import 'package:justwrite_mobile/services/encryption_service.dart';
 import 'package:justwrite_mobile/services/compression_service.dart';
+import 'package:justwrite_mobile/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+// Top-level function required by compute() — runs in a background isolate.
+// Decrypts task title and description without blocking the UI thread.
+List<Map<String, dynamic>> _decryptTasksBatch(Map<String, dynamic> params) {
+  final tasks = (params['tasks'] as List).cast<Map<String, dynamic>>();
+  final userId = params['userId'] as String;
+  final encryption = EncryptionService();
+  final compression = CompressionService();
+
+  return tasks.map((json) {
+    String title = (json['title'] as String?) ?? '';
+    String description = (json['description'] as String?) ?? '';
+
+    try {
+      if (encryption.isEncrypted(title)) {
+        title = encryption.decrypt(title, userId);
+        title = compression.decompress(title);
+      } else if (title.startsWith('gz:')) {
+        title = compression.decompress(title);
+      }
+    } catch (_) {}
+
+    try {
+      if (encryption.isEncrypted(description)) {
+        description = encryption.decrypt(description, userId);
+        description = compression.decompress(description);
+      } else if (description.startsWith('gz:')) {
+        description = compression.decompress(description);
+      }
+    } catch (_) {}
+
+    return Map<String, dynamic>.from(json)
+      ..['title'] = title
+      ..['description'] = description;
+  }).toList();
+}
+
 class TaskProvider extends ChangeNotifier {
   final _supabaseService = SupabaseService();
-  final _encryption = EncryptionService();
-  final _compression = CompressionService();
   List<Task> _tasks = [];
   bool _isLoading = false;
   String? _error;
@@ -55,40 +89,36 @@ class TaskProvider extends ChangeNotifier {
     if (!forceRefresh && _isCacheValid && _tasks.isNotEmpty) {
       return;
     }
-    
+
     // Prevent duplicate loading
     if (_isLoading) return;
-    
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final rawTasks = await _supabaseService.getTasks();
       final userId = Supabase.instance.client.auth.currentUser?.id;
-      _tasks = rawTasks.map((task) {
-        if (userId == null) return task;
-        String title = task.title;
-        String description = task.description;
-        // Decrypt + decompress if task content was encrypted (e.g. via web migration)
-        if (_encryption.isEncrypted(title)) {
-          try {
-            title = _encryption.decrypt(title, userId);
-            title = _compression.decompress(title);
-          } catch (_) {}
-        } else if (title.startsWith('gz:')) {
-          try { title = _compression.decompress(title); } catch (_) {}
-        }
-        if (_encryption.isEncrypted(description)) {
-          try {
-            description = _encryption.decrypt(description, userId);
-            description = _compression.decompress(description);
-          } catch (_) {}
-        } else if (description.startsWith('gz:')) {
-          try { description = _compression.decompress(description); } catch (_) {}
-        }
-        return task.copyWith(title: title, description: description);
-      }).toList();
+      if (userId == null) {
+        _tasks = [];
+        return;
+      }
+
+      final rawMaps = await _supabaseService.getRawTasks();
+      if (rawMaps.isEmpty) {
+        _tasks = [];
+        _lastFetch = DateTime.now();
+        _invalidateCache();
+        return;
+      }
+
+      // Offload PBKDF2+AES-GCM decryption to a background isolate
+      final decryptedMaps = await compute(
+        _decryptTasksBatch,
+        {'tasks': rawMaps, 'userId': userId},
+      );
+
+      _tasks = decryptedMaps.map((m) => Task.fromJson(m)).toList();
       _lastFetch = DateTime.now();
       _invalidateCache();
     } catch (e) {

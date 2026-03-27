@@ -36,7 +36,7 @@ const nextConfig = {
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(), browsing-topics=(), payment=(), usb=()'
+            value: 'camera=(), microphone=(self), geolocation=(), browsing-topics=(), payment=(), usb=()'
           },
           {
             // SECURITY: Enhanced Content Security Policy

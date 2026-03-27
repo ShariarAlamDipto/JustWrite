@@ -44,11 +44,18 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.wait([
-        context.read<EntryProvider>().loadEntries(),
-        context.read<TaskProvider>().loadTasks(),
-        context.read<NoteProvider>().loadNotes(),
-      ]);
+      // Stagger loads to keep the UI responsive on startup.
+      // Entries go first (Journal is the landing screen).
+      // Tasks and Notes are deferred so the first frame renders fast.
+      context.read<EntryProvider>().loadEntries();
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
+        context.read<TaskProvider>().loadTasks();
+      });
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (!mounted) return;
+        context.read<NoteProvider>().loadNotes();
+      });
     });
   }
 
