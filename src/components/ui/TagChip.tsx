@@ -19,9 +19,15 @@ export default function TagChip({ tag, isDark, onRemove, onClick, active, accent
 
   return (
     <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs
-                 font-medium transition-all duration-150"
-      style={{ background: bg, color, cursor: onClick ? 'pointer' : 'default' }}
+      className="inline-flex items-center gap-1 text-xs font-medium transition-all duration-150"
+      style={{
+        background: 'transparent',
+        border: `1px solid ${active ? (accent ?? '#3182ce') : (isDark ? '#2a2a2a' : '#e5e5e5')}`,
+        color,
+        borderRadius: '999px',
+        padding: '1px 7px',
+        cursor: onClick ? 'pointer' : 'default',
+      }}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
     >

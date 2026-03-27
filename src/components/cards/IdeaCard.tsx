@@ -24,7 +24,7 @@ export default function IdeaCard({ idea, isDark, onClick, onUnlock, isUnlocked =
     >
       {isBlurred && onUnlock && <PrivacyOverlay isDark={isDark} onUnlock={onUnlock} />}
 
-      <div className={`px-4 py-4 ${isBlurred ? 'jw-private-blur' : ''}`}>
+      <div className={`px-4 py-3 ${isBlurred ? 'jw-private-blur' : ''}`}>
         <div className="flex items-start justify-between gap-2 mb-2">
           <MetaLabel
             createdAt={idea.createdAt}
@@ -133,10 +133,11 @@ export function QuickCapture({ isDark, onSubmit, onVoice }: QuickCaptureProps) {
 
   return (
     <div
-      className="mx-4 mt-3 mb-2 rounded-2xl overflow-hidden"
+      className="mx-4 mt-3 mb-2 overflow-hidden"
       style={{
-        background: isDark ? '#1C1C1C' : '#FFFFFF',
-        border: `1.5px solid ${isDark ? '#2E2E2E' : '#E8E5DF'}`,
+        background: isDark ? '#1a1a1a' : '#ffffff',
+        border: `1px solid ${isDark ? '#2a2a2a' : '#e5e5e5'}`,
+        borderRadius: '8px',
       }}
     >
       <textarea
@@ -179,7 +180,7 @@ export function QuickCapture({ isDark, onSubmit, onVoice }: QuickCaptureProps) {
         <button
           onClick={handleSubmit}
           disabled={!text.trim()}
-          className="px-3 py-1 rounded-xl text-xs font-semibold
+          className="px-3 py-1 rounded text-xs font-semibold
                      transition-all duration-150 active:scale-95 disabled:opacity-30"
           style={{
             background: text.trim() ? '#3182ce' : (isDark ? '#242424' : '#F0EDE8'),

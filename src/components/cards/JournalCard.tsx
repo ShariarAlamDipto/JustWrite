@@ -31,7 +31,7 @@ export default function JournalCard({ entry, isDark, onClick, onUnlock, isUnlock
       {/* Privacy overlay */}
       {isBlurred && onUnlock && <PrivacyOverlay isDark={isDark} onUnlock={onUnlock} />}
 
-      <div className={`px-4 py-4 ${isBlurred ? 'jw-private-blur' : ''}`}>
+      <div className={`px-4 py-3 ${isBlurred ? 'jw-private-blur' : ''}`}>
         {/* Header row */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <MetaLabel
@@ -114,8 +114,8 @@ export function TodayCard({ isDark, onClick, hasEntry, wordCount }: TodayCardPro
       style={{
         background: isDark ? '#1a1a1a' : '#ffffff',
         border: `1px solid ${isDark ? '#2a2a2a' : '#e5e5e5'}`,
-        borderRadius: '12px',
-        padding: '20px',
+        borderRadius: '8px',
+        padding: '14px 16px',
       }}
     >
       <div className="flex items-start justify-between">
@@ -134,7 +134,7 @@ export function TodayCard({ isDark, onClick, hasEntry, wordCount }: TodayCardPro
         </div>
 
         <span
-          className="flex items-center justify-center w-10 h-10 rounded-2xl flex-shrink-0"
+          className="flex items-center justify-center w-8 h-8 rounded flex-shrink-0"
           style={{ background: 'rgba(49,130,206,0.15)', color: '#3182ce' }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"

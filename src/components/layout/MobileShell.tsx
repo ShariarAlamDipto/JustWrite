@@ -37,7 +37,9 @@ export default function MobileShell({ children, activeTab, isDark }: MobileShell
     >
       {/* Main content — scrolls behind fixed nav */}
       <main className="flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: '72px' }}>
-        {children}
+        <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+          {children}
+        </div>
       </main>
 
       {/* Bottom navigation */}

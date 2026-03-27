@@ -27,7 +27,7 @@ export default function NoteCard({ note, isDark, onClick, onUnlock, isUnlocked =
     >
       {isBlurred && onUnlock && <PrivacyOverlay isDark={isDark} onUnlock={onUnlock} />}
 
-      <div className={`px-4 py-4 ${isBlurred ? 'jw-private-blur' : ''}`}>
+      <div className={`px-4 py-3 ${isBlurred ? 'jw-private-blur' : ''}`}>
         {/* Title row */}
         <div className="flex items-start gap-3 mb-1">
           <span className="text-xl flex-shrink-0 mt-0.5">{note.icon}</span>
@@ -102,32 +102,10 @@ export default function NoteCard({ note, isDark, onClick, onUnlock, isUnlocked =
 // ── Empty state for Notes list ────────────────────────────────────────────────
 export function NotesEmpty({ isDark, onCreate }: { isDark: boolean; onCreate: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center py-20 px-8 gap-4">
-      <div
-        className="w-16 h-16 rounded-3xl flex items-center justify-center"
-        style={{ background: isDark ? 'rgba(49,130,206,0.1)' : 'rgba(49,130,206,0.06)' }}
-      >
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3182ce"
-             strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="8" y1="13" x2="16" y2="13"/>
-          <line x1="8" y1="17" x2="12" y2="17"/>
-        </svg>
-      </div>
-      <div className="text-center">
-        <p className="font-semibold mb-1" style={{ color: isDark ? '#F2F0EB' : '#1A1A1A', fontSize: '16px' }}>
-          Your notes live here
-        </p>
-        <p className="text-sm" style={{ color: isDark ? '#636060' : '#9E9B96', lineHeight: 1.6 }}>
-          Structured writing, linked thoughts,<br/>and everything you want to keep.
-        </p>
-      </div>
-      <button
-        onClick={onCreate}
-        className="px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all active:scale-95 mt-1"
-        style={{ background: '#3182ce', color: '#fff' }}
-      >
+    <div className="empty-state">
+      <div className="empty-state-icon">📝</div>
+      <p style={{ color: 'var(--fg-dim)', marginBottom: '1rem' }}>No notes yet</p>
+      <button className="btn btn-primary" onClick={onCreate}>
         Create first note
       </button>
     </div>

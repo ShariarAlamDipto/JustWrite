@@ -88,17 +88,26 @@ export default function JournalPage() {
 
   useEffect(() => { fetchEntries() }, [fetchEntries])
 
-  // Handle ?new=1 (from FAB) and ?id=<uuid> (from Connect deep link)
+  // Handle ?new=1 (from FAB) — consume immediately to prevent reopen loop
   useEffect(() => {
     if (router.query.new === '1') {
       setActiveEntry(null)
       setView('editor')
+      router.replace('/journal', undefined, { shallow: true })
     }
+  }, [router.query.new]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle ?id=<uuid> (from Connect deep link) — consume immediately to prevent reopen after onBack
+  useEffect(() => {
     if (router.query.id && entries.length) {
       const found = entries.find((e) => e.id === router.query.id)
-      if (found) { setActiveEntry(found); setView('editor') }
+      if (found) {
+        setActiveEntry(found)
+        setView('editor')
+        router.replace('/journal', undefined, { shallow: true })
+      }
     }
-  }, [router.query, entries])
+  }, [router.query.id, entries]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const todayStr = new Date().toISOString().slice(0, 10)
   const todayEntry = entries.find((e) => (e.createdAt ?? '').startsWith(todayStr))
@@ -156,10 +165,10 @@ export default function JournalPage() {
 
   return (
     <MobileShell activeTab="journal" isDark={isDark}>
-      <div className="px-4 pt-5 pb-2">
+      <div className="px-4 pt-4 pb-2">
         <h1
-          className="text-2xl font-bold mb-4"
-          style={{ color: isDark ? '#F2F0EB' : '#1A1A1A', letterSpacing: '-0.025em' }}
+          className="text-lg font-semibold mb-3"
+          style={{ color: isDark ? '#f5f5f5' : '#1a1a1a' }}
         >
           Journal
         </h1>
@@ -172,11 +181,11 @@ export default function JournalPage() {
         />
       </div>
 
-      <div className="px-4 pt-4 pb-4 space-y-3">
+      <div className="px-4 pt-3 pb-4 space-y-2">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-20 rounded-2xl animate-pulse"
-                 style={{ background: isDark ? '#1C1C1C' : '#EEECE8' }} />
+            <div key={i} className="h-16 animate-pulse"
+                 style={{ background: isDark ? '#1a1a1a' : '#f0f0f0', borderRadius: '8px' }} />
           ))
         ) : (
           filtered

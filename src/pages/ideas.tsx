@@ -40,21 +40,27 @@ export default function IdeasPage() {
   const [startWithVoice, setStartWithVoice] = useState(false)
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
 
-  // Handle ?new=1, ?voice=1 (from FAB) and ?id=<uuid> (from Connect deep link)
+  // Handle ?new=1, ?voice=1 (from FAB) — consume immediately to prevent reopen loop
   useEffect(() => {
     if (router.query.new === '1') {
       setStartWithVoice(router.query.voice === '1')
       setActiveIdea(null)
       setView('editor')
+      router.replace('/ideas', undefined, { shallow: true })
     }
-  }, [router.query.new, router.query.voice])
+  }, [router.query.new]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Handle ?id=<uuid> (from Connect deep link) — consume immediately
   useEffect(() => {
     if (router.query.id && ideas.length) {
       const found = ideas.find((i) => i.id === router.query.id)
-      if (found) { setActiveIdea(found); setView('editor') }
+      if (found) {
+        setActiveIdea(found)
+        setView('editor')
+        router.replace('/ideas', undefined, { shallow: true })
+      }
     }
-  }, [router.query.id, ideas])
+  }, [router.query.id, ideas]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!user || !token) return
@@ -74,7 +80,8 @@ export default function IdeasPage() {
       const res = await fetch(`/api/entries/${activeIdea.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...data, type: 'idea' }),
+        // Entries API accepts `content` not `body`
+        body: JSON.stringify({ content: data.body }),
       })
       if (res.ok) {
         const { entry: updated } = await res.json()
@@ -136,11 +143,11 @@ export default function IdeasPage() {
 
   return (
     <MobileShell activeTab="ideas" isDark={isDark}>
-      <div className="pt-5">
+      <div className="pt-4">
         <div className="px-4 mb-1">
           <h1
-            className="text-2xl font-bold"
-            style={{ color: isDark ? '#F2F0EB' : '#1A1A1A', letterSpacing: '-0.025em' }}
+            className="text-lg font-semibold"
+            style={{ color: isDark ? '#f5f5f5' : '#1a1a1a' }}
           >
             Ideas
           </h1>
@@ -158,31 +165,19 @@ export default function IdeasPage() {
         />
 
         {/* Ideas list */}
-        <div className="px-4 pt-2 pb-4 space-y-3">
+        <div className="px-4 pt-2 pb-4 space-y-2">
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="h-24 rounded-2xl animate-pulse"
-                style={{ background: isDark ? '#1C1C1C' : '#EEECE8' }}
+                className="h-16 animate-pulse"
+                style={{ background: isDark ? '#1a1a1a' : '#f0f0f0', borderRadius: '8px' }}
               />
             ))
           ) : ideas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div
-                className="w-16 h-16 rounded-3xl flex items-center justify-center"
-                style={{ background: isDark ? 'rgba(49,130,206,0.1)' : 'rgba(49,130,206,0.06)' }}
-              >
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3182ce"
-                     strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M9 18V5l12-2v13"/>
-                  <circle cx="6" cy="18" r="3"/>
-                  <circle cx="18" cy="16" r="3"/>
-                </svg>
-              </div>
-              <p className="text-sm text-center" style={{ color: isDark ? '#636060' : '#9E9B96', lineHeight: 1.6 }}>
-                Capture your first idea above<br/>or tap the mic to record
-              </p>
+            <div className="empty-state">
+              <div className="empty-state-icon">💡</div>
+              <p style={{ color: 'var(--muted)' }}>Capture your first idea above</p>
             </div>
           ) : (
             ideas.map((idea) => (

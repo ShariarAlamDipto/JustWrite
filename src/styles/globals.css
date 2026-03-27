@@ -20,10 +20,14 @@
 
   /* Cards */
   .jw-card {
-    @apply bg-card-light dark:bg-card-dark rounded-2xl shadow-card-light dark:shadow-card-dark;
+    @apply bg-card-light dark:bg-card-dark;
+    border-radius: 8px;
+    border: 1px solid;
+    border-color: #e5e5e5;
   }
+  .dark .jw-card { border-color: #2a2a2a; }
   .jw-card-press {
-    @apply active:scale-[0.98] transition-transform duration-100;
+    @apply active:scale-[0.99] transition-transform duration-100;
   }
 
   /* Bottom sheet */

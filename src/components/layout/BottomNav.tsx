@@ -95,7 +95,7 @@ export default function BottomNav({ activeTab, onChange, isDark }: BottomNavProp
         borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
       }}
     >
-      <div className="flex items-end justify-around px-1 pt-1 pb-1">
+      <div className="flex items-center justify-around px-1 pt-1 pb-1">
         {tabs.map(({ id, label, icon }) => {
           const isActive = activeTab === id
           const accentColor = ACCENT_COLORS[id]
@@ -104,7 +104,7 @@ export default function BottomNav({ activeTab, onChange, isDark }: BottomNavProp
             <button
               key={id}
               onClick={() => onChange(id)}
-              className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl
+              className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded
                          transition-all duration-200 active:scale-95 min-w-[56px]"
               style={{
                 color: isActive

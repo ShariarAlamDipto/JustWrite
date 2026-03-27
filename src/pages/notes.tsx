@@ -43,19 +43,50 @@ export default function NotesPage() {
   const [activeNote, setActiveNote] = useState<Partial<Note> | null>(null)
   const [startWithVoice, setStartWithVoice] = useState(false)
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
+  const [noteLoading, setNoteLoading] = useState(false)
 
-  // Handle ?new=1, ?voice=1 (from FAB) and ?id=<uuid> (from Connect deep link)
+  // Fetch full note (with blocks) before opening editor — prevents empty-block autosave overwriting real content
+  const openNote = async (note: Note) => {
+    if (!token) return
+    setNoteLoading(true)
+    try {
+      const res = await fetch(`/api/notes/${note.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const { note: full } = await res.json()
+        setActiveNote(toNote(full))
+      } else {
+        setActiveNote(note) // fallback to list item
+      }
+    } catch {
+      setActiveNote(note) // fallback on network error
+    } finally {
+      setNoteLoading(false)
+      setView('editor')
+    }
+  }
+
+  // Handle ?new=1, ?voice=1 (from FAB) and ?id=<uuid> (from Connect deep link).
+  // Consume query params immediately via router.replace to prevent reopen on back+refetch.
   useEffect(() => {
     if (router.query.new === '1') {
       setStartWithVoice(router.query.voice === '1')
       setActiveNote(null)
       setView('editor')
+      router.replace('/notes', undefined, { shallow: true })
     }
+  }, [router.query.new]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     if (router.query.id && notes.length) {
       const found = notes.find((n) => n.id === router.query.id)
-      if (found) { setActiveNote(found); setView('editor') }
+      if (found) {
+        router.replace('/notes', undefined, { shallow: true })
+        openNote(found)
+      }
     }
-  }, [router.query, notes])
+  }, [router.query.id, notes]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!user || !token) return
@@ -82,7 +113,8 @@ export default function NotesPage() {
       const res = await fetch(`/api/notes/${activeNote.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(data),
+        // Map isPrivate → is_locked (API field name)
+        body: JSON.stringify({ ...data, is_locked: data.isPrivate }),
       })
       if (res.ok) {
         const { note: updated } = await res.json()
@@ -92,7 +124,8 @@ export default function NotesPage() {
       const res = await fetch('/api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...data, source: startWithVoice ? 'voice' : 'typed' }),
+        // Map isPrivate → is_locked (API field name)
+        body: JSON.stringify({ ...data, is_locked: data.isPrivate, source: startWithVoice ? 'voice' : 'typed' }),
       })
       if (res.ok) {
         const { note: created } = await res.json()
@@ -125,22 +158,22 @@ export default function NotesPage() {
 
   return (
     <MobileShell activeTab="notes" isDark={isDark}>
-      <div className="pt-5 px-4 mb-3">
+      <div className="pt-4 px-4 mb-2">
         <h1
-          className="text-2xl font-bold"
-          style={{ color: isDark ? '#F2F0EB' : '#1A1A1A', letterSpacing: '-0.025em' }}
+          className="text-lg font-semibold"
+          style={{ color: isDark ? '#f5f5f5' : '#1a1a1a' }}
         >
           Notes
         </h1>
       </div>
 
-      <div className="px-4 pb-4 space-y-3">
+      <div className="px-4 pb-4 space-y-2">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-24 rounded-2xl animate-pulse"
-              style={{ background: isDark ? '#1C1C1C' : '#EEECE8' }}
+              className="h-16 animate-pulse"
+              style={{ background: isDark ? '#1a1a1a' : '#f0f0f0', borderRadius: '8px' }}
             />
           ))
         ) : sorted.length === 0 ? (
@@ -159,10 +192,7 @@ export default function NotesPage() {
               isDark={isDark}
               isUnlocked={unlockedIds.has(note.id)}
               onUnlock={() => setUnlockedIds((prev) => new Set(prev).add(note.id))}
-              onClick={() => {
-                setActiveNote(note)
-                setView('editor')
-              }}
+              onClick={() => openNote(note)}
             />
           ))
         )}
