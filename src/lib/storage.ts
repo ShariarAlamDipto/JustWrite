@@ -84,7 +84,7 @@ export async function listEntries(
   if (supabase) {
     let query = supabase
       .from('entries')
-      .select('id,content,source,created_at,updated_at,mood,is_locked,title,user_id,summary')
+      .select('id,content,source,created_at,updated_at,mood,is_locked,is_private,title,user_id,summary,word_count,tags')
       .order('created_at', { ascending: false })
       .limit(safeLimit);
 

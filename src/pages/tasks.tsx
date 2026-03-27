@@ -40,14 +40,16 @@ interface TaskItemProps {
   task: any;
   toggleLoading: string | null;
   deleteLoading: string | null;
+  confirmDeleteId: string | null;
   onToggle: (task: any) => void;
   onDelete: (id: string) => void;
+  onConfirmDelete: (id: string | null) => void;
   isDone?: boolean;
 }
 
-const TaskItem = memo(({ task, toggleLoading, deleteLoading, onToggle, onDelete, isDone }: TaskItemProps) => (
-  <div style={{ 
-    ...taskStyles.item, 
+const TaskItem = memo(({ task, toggleLoading, deleteLoading, confirmDeleteId, onToggle, onDelete, onConfirmDelete, isDone }: TaskItemProps) => (
+  <div style={{
+    ...taskStyles.item,
     opacity: isDone ? 0.6 : 1,
     borderLeftColor: isDone ? 'var(--border)' : priorityColors[task.priority] || priorityColors.medium,
   }}>
@@ -61,13 +63,13 @@ const TaskItem = memo(({ task, toggleLoading, deleteLoading, onToggle, onDelete,
       }}
       aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
     >
-      {toggleLoading === task.id ? '.' : isDone ? 'v' : ''}
+      {toggleLoading === task.id ? '.' : isDone ? '✓' : ''}
     </button>
-    
+
     <div style={taskStyles.content}>
       <div style={taskStyles.titleRow}>
-        <span style={{ 
-          ...taskStyles.title, 
+        <span style={{
+          ...taskStyles.title,
           textDecoration: isDone ? 'line-through' : 'none',
           color: isDone ? 'var(--muted)' : 'var(--fg)',
         }}>
@@ -91,14 +93,34 @@ const TaskItem = memo(({ task, toggleLoading, deleteLoading, onToggle, onDelete,
       )}
     </div>
 
-    <button
-      onClick={() => onDelete(task.id)}
-      disabled={deleteLoading === task.id}
-      style={taskStyles.deleteBtn}
-      aria-label="Delete"
-    >
-      {deleteLoading === task.id ? '.' : 'X'}
-    </button>
+    {confirmDeleteId === task.id ? (
+      <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
+        <button
+          onClick={() => onDelete(task.id)}
+          disabled={deleteLoading === task.id}
+          style={{ ...taskStyles.deleteBtn, color: 'var(--danger)', fontSize: '12px', width: 'auto', padding: '0 6px' }}
+          aria-label="Confirm delete"
+        >
+          {deleteLoading === task.id ? '…' : 'Yes'}
+        </button>
+        <button
+          onClick={() => onConfirmDelete(null)}
+          style={{ ...taskStyles.deleteBtn, fontSize: '12px', width: 'auto', padding: '0 6px' }}
+          aria-label="Cancel delete"
+        >
+          No
+        </button>
+      </div>
+    ) : (
+      <button
+        onClick={() => onConfirmDelete(task.id)}
+        disabled={deleteLoading === task.id}
+        style={taskStyles.deleteBtn}
+        aria-label="Delete"
+      >
+        {deleteLoading === task.id ? '…' : '×'}
+      </button>
+    )}
   </div>
 ));
 
@@ -214,7 +236,7 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, loading }: AddTaskModalProps) =>
       <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
         <div className="modal-header">
           <h2 className="modal-title">Add New Task</h2>
-          <button className="modal-close" onClick={onClose}>X</button>
+          <button className="modal-close" onClick={onClose}>&#x2715;</button>
         </div>
         
         <form onSubmit={handleSubmit}>
@@ -318,13 +340,14 @@ export default function TasksPage() {
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { user, loading: authLoading, token } = useAuth();
   const tasksEtagRef = useRef<string | null>(null);
   const tasksSinceRef = useRef<string | null>(null);
 
-  const fetchTasks = useCallback(async () => {
+  const fetchTasks = useCallback(async (hasCachedData = false) => {
     if (!token) return;
-    setLoading(true);
+    if (!hasCachedData) setLoading(true);
     try {
       const params = new URLSearchParams({ limit: '100' });
       if (tasksSinceRef.current) {
@@ -388,8 +411,12 @@ export default function TasksPage() {
   useEffect(() => {
     tasksEtagRef.current = null;
     tasksSinceRef.current = null;
-    if (user && token) fetchTasks();
-  }, [user, token, fetchTasks]);
+    if (user && token) {
+      const hasCached = tasks.length > 0;
+      fetchTasks(hasCached);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, token]);
 
   const addTask = useCallback(async (taskData: { title: string; description: string; priority: string }) => {
     if (!token) return;
@@ -474,14 +501,18 @@ export default function TasksPage() {
   }, [token]);
 
   const deleteTask = useCallback(async (id: string) => {
-    if (!confirm('Delete this task?')) return;
     if (!token) return;
-    
+    setConfirmDeleteId(null);
+
+    let taskToDelete: any = null;
+    let taskIndex = -1;
+    setTasks(prev => {
+      taskIndex = prev.findIndex(t => t.id === id);
+      taskToDelete = prev[taskIndex] ?? null;
+      return prev.filter(t => t.id !== id);
+    });
+
     setDeleteLoading(id);
-    const taskToDelete = tasks.find(t => t.id === id);
-    const taskIndex = tasks.findIndex(t => t.id === id);
-    setTasks(prev => prev.filter(t => t.id !== id));
-    
     try {
       const res = await fetch(`/api/tasks/${id}`, {
         method: 'DELETE',
@@ -489,22 +520,22 @@ export default function TasksPage() {
       });
       if (!res.ok && taskToDelete) {
         setTasks(prev => {
-          const newTasks = [...prev];
-          newTasks.splice(taskIndex, 0, taskToDelete);
-          return newTasks;
+          const next = [...prev];
+          next.splice(Math.min(taskIndex, next.length), 0, taskToDelete);
+          return next;
         });
       }
-    } catch (err) {
+    } catch {
       if (taskToDelete) {
         setTasks(prev => {
-          const newTasks = [...prev];
-          newTasks.splice(taskIndex, 0, taskToDelete);
-          return newTasks;
+          const next = [...prev];
+          next.splice(Math.min(taskIndex, next.length), 0, taskToDelete);
+          return next;
         });
       }
     }
     setDeleteLoading(null);
-  }, [token, tasks]);
+  }, [token]);
 
   const { todoTasks, doneTasks } = useMemo(() => ({
     todoTasks: tasks.filter(t => t.status !== 'done'),
@@ -588,8 +619,10 @@ export default function TasksPage() {
                       task={t}
                       toggleLoading={toggleLoading}
                       deleteLoading={deleteLoading}
+                      confirmDeleteId={confirmDeleteId}
                       onToggle={toggleDone}
                       onDelete={deleteTask}
+                      onConfirmDelete={setConfirmDeleteId}
                     />
                   ))}
                 </div>
@@ -607,8 +640,10 @@ export default function TasksPage() {
                       task={t}
                       toggleLoading={toggleLoading}
                       deleteLoading={deleteLoading}
+                      confirmDeleteId={confirmDeleteId}
                       onToggle={toggleDone}
                       onDelete={deleteTask}
+                      onConfirmDelete={setConfirmDeleteId}
                       isDone
                     />
                   ))}

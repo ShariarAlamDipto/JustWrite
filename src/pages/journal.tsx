@@ -10,6 +10,26 @@ type View = 'list' | 'editor'
 
 const CACHE_KEY = (uid: string) => `jw:journal:${uid}`
 
+// ── Map raw snake_case DB row → JournalEntry camelCase ───────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toJournalEntry(raw: any): JournalEntry {
+  return {
+    id:         raw.id,
+    userId:     raw.user_id,
+    createdAt:  raw.created_at,
+    updatedAt:  raw.updated_at,
+    body:       raw.content ?? '',
+    title:      raw.title ?? undefined,
+    mood:       raw.mood ?? undefined,
+    wordCount:  raw.word_count ?? 0,
+    isPrivate:  raw.is_private ?? false,
+    isLocked:   raw.is_locked ?? false,
+    source:     raw.source ?? 'typed',
+    tags:       raw.tags ?? [],
+    segment:    'journal',
+  }
+}
+
 // ── Tiny localStorage cache helpers ──────────────────────────────────────────
 function readCache(uid: string): JournalEntry[] {
   try {
@@ -35,7 +55,6 @@ export default function JournalPage() {
   // ── Start with cached data so the list renders immediately ──────────────────
   const [entries, setEntries] = useState<JournalEntry[]>(() => {
     if (typeof window === 'undefined') return []
-    // Attempt to read any cached userId from localStorage
     const keys = Object.keys(localStorage).filter((k) => k.startsWith('jw:journal:'))
     if (keys.length) {
       try { return JSON.parse(localStorage.getItem(keys[0]) ?? '[]') } catch { return [] }
@@ -58,7 +77,7 @@ export default function JournalPage() {
       })
       if (!res.ok) return
       const data = await res.json()
-      const fresh: JournalEntry[] = data.entries ?? []
+      const fresh: JournalEntry[] = (data.entries ?? []).map(toJournalEntry)
       setEntries(fresh)
       writeCache(user.id, fresh)
     } catch { /* network error — keep showing cached */ }
@@ -86,7 +105,10 @@ export default function JournalPage() {
       })
       if (res.ok) {
         const { entry: updated } = await res.json()
-        setEntries((prev) => prev.map((e) => e.id === activeEntry.id ? { ...e, ...updated } : e))
+        setEntries((prev) => prev.map((e) => e.id === activeEntry.id
+          ? { ...e, body: updated.content ?? e.body, mood: updated.mood ?? e.mood }
+          : e
+        ))
       }
     } else {
       const res = await fetch('/api/entries', {
@@ -96,12 +118,13 @@ export default function JournalPage() {
       })
       if (res.ok) {
         const { entry: created } = await res.json()
+        const mapped = toJournalEntry(created)
         setEntries((prev) => {
-          const next = [created, ...prev]
+          const next = [mapped, ...prev]
           writeCache(user.id, next)
           return next
         })
-        setActiveEntry(created)
+        setActiveEntry(mapped)
       }
     }
   }

@@ -9,6 +9,26 @@ import type { Idea } from '@/lib/jw-types'
 
 type View = 'list' | 'editor'
 
+// ── Map raw snake_case DB row → Idea camelCase ────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toIdea(raw: any): Idea {
+  return {
+    id:                  raw.id,
+    userId:              raw.user_id,
+    createdAt:           raw.created_at,
+    updatedAt:           raw.updated_at,
+    body:                raw.content ?? '',
+    title:               raw.title ?? undefined,
+    isPrivate:           raw.is_private ?? false,
+    isLocked:            raw.is_locked ?? false,
+    source:              raw.source ?? 'typed',
+    tags:                raw.tags ?? [],
+    segment:             'ideas',
+    convertedToNoteId:   raw.converted_to_note_id ?? undefined,
+    voiceTranscriptId:   raw.voice_transcript_id ?? undefined,
+  }
+}
+
 export default function IdeasPage() {
   const { user, token } = useAuth()
   const { isDark } = useTheme()
@@ -30,16 +50,16 @@ export default function IdeasPage() {
   }, [router.query.voice])
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !token) return
     setLoading(true)
     fetch('/api/entries?type=idea', {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
-      .then((data) => setIdeas(data.entries ?? []))
+      .then((data) => setIdeas((data.entries ?? []).map(toIdea)))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [user])
+  }, [user, token])
 
   const handleSave = async (data: { title?: string; body: string; isPrivate: boolean; tags: string[] }) => {
     if (!user) return
@@ -50,19 +70,20 @@ export default function IdeasPage() {
         body: JSON.stringify({ ...data, type: 'idea' }),
       })
       if (res.ok) {
-        const updated = await res.json()
-        setIdeas((prev) => prev.map((i) => i.id === activeIdea.id ? { ...i, ...updated } : i))
+        const { entry: updated } = await res.json()
+        setIdeas((prev) => prev.map((i) => i.id === activeIdea.id ? { ...i, ...toIdea(updated) } : i))
       }
     } else {
       const res = await fetch('/api/entries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...data, type: 'idea', source: startWithVoice ? 'voice' : 'typed' }),
+        body: JSON.stringify({ content: data.body, type: 'idea', source: startWithVoice ? 'voice' : 'typed' }),
       })
       if (res.ok) {
-        const created = await res.json()
-        setIdeas((prev) => [created, ...prev])
-        setActiveIdea(created)
+        const { entry: created } = await res.json()
+        const mapped = toIdea(created)
+        setIdeas((prev) => [mapped, ...prev])
+        setActiveIdea(mapped)
         setStartWithVoice(false)
       }
     }
@@ -73,11 +94,11 @@ export default function IdeasPage() {
     const res = await fetch('/api/entries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ body: text, isPrivate: false, tags: [], type: 'idea', source: 'typed' }),
+      body: JSON.stringify({ content: text, type: 'idea', source: 'typed' }),
     })
     if (res.ok) {
-      const created = await res.json()
-      setIdeas((prev) => [created, ...prev])
+      const { entry: created } = await res.json()
+      setIdeas((prev) => [toIdea(created), ...prev])
     }
   }
 

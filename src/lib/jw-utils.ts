@@ -3,8 +3,10 @@
 import type { Segment } from './jw-types'
 
 // ── Passive date/time labels — never ask user to enter manually ────────────────
-export function passiveTimeLabel(isoDate: string): string {
+export function passiveTimeLabel(isoDate: string | undefined | null): string {
+  if (!isoDate) return ''
   const date = new Date(isoDate)
+  if (isNaN(date.getTime())) return ''
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
   const diffSec = Math.floor(diffMs / 1000)
@@ -22,8 +24,10 @@ export function passiveTimeLabel(isoDate: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export function fullDateLabel(isoDate: string): string {
+export function fullDateLabel(isoDate: string | undefined | null): string {
+  if (!isoDate) return ''
   const date = new Date(isoDate)
+  if (isNaN(date.getTime())) return ''
   const now = new Date()
   const isToday = date.toDateString() === now.toDateString()
   const yesterday = new Date(now)
@@ -104,7 +108,8 @@ export function formatDuration(sec: number): string {
 }
 
 // ── Truncate text for card previews ──────────────────────────────────────────
-export function truncate(text: string, maxChars = 140): string {
+export function truncate(text: string | undefined | null, maxChars = 140): string {
+  if (!text) return ''
   if (text.length <= maxChars) return text
   return text.slice(0, maxChars).trimEnd() + '…'
 }
