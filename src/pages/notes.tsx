@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Nav } from '@/components/Nav';
 import { BlockEditor, Block } from '@/components/notes/BlockEditor';
+import VoiceCapture from '@/components/voice/VoiceCapture';
 import { useAuth } from '@/lib/useAuth';
 import { useRouter } from 'next/router';
 
@@ -30,6 +31,7 @@ export default function NotesPage() {
   const [saving, setSaving] = useState<'saved' | 'saving' | 'error'>('saved');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [search, setSearch] = useState('');
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChange = useRef<{ title: string; icon: string | null; blocks: Block[] } | null>(null);
@@ -116,6 +118,25 @@ export default function NotesPage() {
     setNotes(prev => prev.map(n => n.id === id ? { ...n, is_pinned: !pinned } : n));
   }, [user, token]);
 
+  const createNoteFromTranscript = useCallback(async (text: string) => {
+    if (!user || !token) return;
+    setVoiceOpen(false);
+    try {
+      const title = text.slice(0, 60).split(' ').slice(0, 8).join(' ');
+      const blocks: Block[] = [{ id: `b-${Date.now()}`, type: 'paragraph', content: text, indent: 0 }];
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title, blocks, source: 'voice' }),
+      });
+      if (res.ok) {
+        const { note } = await res.json();
+        setNotes(prev => [note, ...prev]);
+        await openNote(note.id);
+      }
+    } catch { /* ignore */ }
+  }, [user, token, openNote]);
+
   const handleEditorChange = useCallback((title: string, icon: string | null, blocks: Block[]) => {
     if (!selectedNote || !user || !token) return;
     pendingChange.current = { title, icon, blocks };
@@ -162,7 +183,14 @@ export default function NotesPage() {
         <aside style={{ ...sidebar, ...(sidebarOpen ? {} : sidebarHidden) }}>
           <div style={sidebarHeader}>
             <span style={sidebarTitle}>Notes</span>
-            <button style={newNoteBtn} onClick={createNote} title="New note">+</button>
+            <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
+              <VoiceCapture
+                isDark={false}
+                compact
+                onTranscript={createNoteFromTranscript}
+              />
+              <button style={newNoteBtn} onClick={createNote} title="New note">+</button>
+            </div>
           </div>
           <div style={searchWrap}>
             <input

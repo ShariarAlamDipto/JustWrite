@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Nav } from '@/components/Nav'
 import { useAuth } from '@/lib/useAuth'
+import VoiceCapture from '@/components/voice/VoiceCapture'
 
 const priorityColors: Record<string, string> = {
   urgent: 'var(--priority-urgent)',
@@ -144,6 +145,13 @@ export default function IdeasPage() {
             style={styles.textarea}
           />
           <div style={styles.buttonRow}>
+            <VoiceCapture
+              isDark={false}
+              compact
+              onTranscript={(text) =>
+                setFreeText((prev) => prev ? `${prev}\n\n${text}` : text)
+              }
+            />
             <button
               onClick={handleSaveAsIdea}
               disabled={savingIdea || !freeText.trim()}

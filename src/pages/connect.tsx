@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import AppShell from '@/components/layout/AppShell'
+import { Nav } from '@/components/Nav'
 import ConnectView from '@/components/connect/ConnectView'
 import { useAuth } from '@/lib/useAuth'
-import { useTheme } from '@/lib/ThemeContext'
 import type { GraphNode, GraphEdge, Pattern, Backlink, Segment } from '@/lib/jw-types'
 
 interface ConnectData {
@@ -15,7 +14,6 @@ interface ConnectData {
 
 export default function ConnectPage() {
   const { user, token } = useAuth()
-  const { isDark } = useTheme()
   const router = useRouter()
   const [data, setData] = useState<ConnectData>({
     nodes: [],
@@ -116,33 +114,33 @@ export default function ConnectPage() {
   }
 
   return (
-    <AppShell activeTab="connect" isDark={isDark}>
-      <div className="pt-5 px-4 mb-2">
-        <h1
-          className="text-lg font-semibold"
-          style={{ color: isDark ? '#f5f5f5' : '#1a1a1a' }}
-        >
-          Connect
-        </h1>
-      </div>
+    <>
+      <Nav />
+      <main style={{ maxWidth: '960px', margin: '0 auto', padding: '2rem 1rem 4rem' }}>
+        <header style={{ marginBottom: '1.5rem' }}>
+          <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0, color: 'var(--fg)', letterSpacing: '-0.02em' }}>
+            Connect
+          </h1>
+          <p style={{ fontSize: '14px', color: 'var(--muted)', margin: '0.375rem 0 0' }}>
+            Discover patterns and connections across your writing
+          </p>
+        </header>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div
-            className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
-            style={{ borderColor: '#3182ce', borderTopColor: 'transparent' }}
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
+            <div className="spinner" />
+          </div>
+        ) : (
+          <ConnectView
+            isDark={false}
+            nodes={data.nodes}
+            edges={data.edges}
+            patterns={data.patterns}
+            backlinks={data.backlinks}
+            onNodeClick={handleNodeClick}
           />
-        </div>
-      ) : (
-        <ConnectView
-          isDark={isDark}
-          nodes={data.nodes}
-          edges={data.edges}
-          patterns={data.patterns}
-          backlinks={data.backlinks}
-          onNodeClick={handleNodeClick}
-        />
-      )}
-    </AppShell>
+        )}
+      </main>
+    </>
   )
 }

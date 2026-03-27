@@ -42,6 +42,7 @@ export function Nav() {
           <Link href="/notes"   style={{...styles.navLink, ...(isActive('/notes')   ? styles.navLinkActive : {})}}>Notes</Link>
           <Link href="/tasks"   style={{...styles.navLink, ...(isActive('/tasks')   ? styles.navLinkActive : {})}}>Tasks</Link>
           <Link href="/connect" style={{...styles.navLink, ...(isActive('/connect') ? styles.navLinkActive : {})}}>Connect</Link>
+          <Link href="/finance" style={{...styles.navLink, ...(isActive('/finance') ? styles.navLinkActive : {})}}>Finance</Link>
           <Link href="/voice"   style={{...styles.navLink, ...(isActive('/voice')   ? styles.navLinkActive : {})}}>Voice</Link>
           <Link href="/prompts" style={{...styles.navLink, ...(isActive('/prompts') ? styles.navLinkActive : {})}}>Prompts</Link>
         </div>
@@ -96,6 +97,7 @@ export function Nav() {
           <Link href="/notes"   style={{...styles.mobileLink, ...(isActive('/notes')   ? styles.mobileLinkActive : {})}}>Notes</Link>
           <Link href="/tasks"   style={{...styles.mobileLink, ...(isActive('/tasks')   ? styles.mobileLinkActive : {})}}>Tasks</Link>
           <Link href="/connect" style={{...styles.mobileLink, ...(isActive('/connect') ? styles.mobileLinkActive : {})}}>Connect</Link>
+          <Link href="/finance" style={{...styles.mobileLink, ...(isActive('/finance') ? styles.mobileLinkActive : {})}}>Finance</Link>
           <Link href="/voice"   style={{...styles.mobileLink, ...(isActive('/voice')   ? styles.mobileLinkActive : {})}}>Voice</Link>
           <Link href="/prompts" style={{...styles.mobileLink, ...(isActive('/prompts') ? styles.mobileLinkActive : {})}}>Prompts</Link>
           <div style={styles.mobileDivider} />
