@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import MobileShell from '@/components/layout/MobileShell'
+import { Nav } from '@/components/Nav'
 import NoteCard, { NotesEmpty } from '@/components/cards/NoteCard'
 import NoteEditor from '@/components/editors/NoteEditor'
 import { useAuth } from '@/lib/useAuth'
@@ -157,7 +157,7 @@ export default function NotesPage() {
   })
 
   return (
-    <MobileShell activeTab="notes" isDark={isDark}>
+    <><Nav /><div className="container">
       <div className="pt-4 px-4 mb-2">
         <h1
           className="text-lg font-semibold"
@@ -197,6 +197,6 @@ export default function NotesPage() {
           ))
         )}
       </div>
-    </MobileShell>
+    </div></>
   )
 }

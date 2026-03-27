@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
-import MobileShell from '@/components/layout/MobileShell'
+import { Nav } from '@/components/Nav'
 import JournalCard, { TodayCard } from '@/components/cards/JournalCard'
 import JournalEditor from '@/components/editors/JournalEditor'
 import { useAuth } from '@/lib/useAuth'
@@ -164,7 +164,7 @@ export default function JournalPage() {
   }
 
   return (
-    <MobileShell activeTab="journal" isDark={isDark}>
+    <><Nav /><div className="container">
       <div className="px-4 pt-4 pb-2">
         <h1
           className="text-lg font-semibold mb-3"
@@ -202,6 +202,6 @@ export default function JournalPage() {
             ))
         )}
       </div>
-    </MobileShell>
+    </div></>
   )
 }

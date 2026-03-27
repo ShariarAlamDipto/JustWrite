@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import MobileShell from '@/components/layout/MobileShell'
+import { Nav } from '@/components/Nav'
 import ConnectView from '@/components/connect/ConnectView'
 import { useAuth } from '@/lib/useAuth'
 import { useTheme } from '@/lib/ThemeContext'
@@ -41,15 +41,17 @@ export default function ConnectPage() {
       .then(([graphData, entriesData]) => {
         const entries: any[] = entriesData.entries ?? []
 
-        // Build patterns from tag counts
+        // Build patterns from tag counts.
+        // Raw entries are snake_case: created_at, content, no type field.
         const tagMap = new Map<string, { count: number; lastSeen: string; rep: any }>()
         for (const e of entries) {
+          const createdAt = e.created_at ?? e.createdAt ?? ''
           for (const tag of e.tags ?? []) {
             const existing = tagMap.get(tag)
-            if (!existing || e.createdAt > existing.lastSeen) {
+            if (!existing || createdAt > existing.lastSeen) {
               tagMap.set(tag, {
                 count: (existing?.count ?? 0) + 1,
-                lastSeen: e.createdAt,
+                lastSeen: createdAt,
                 rep: e,
               })
             } else {
@@ -65,8 +67,8 @@ export default function ConnectPage() {
             lastSeen: v.lastSeen,
             representative: {
               id: v.rep.id,
-              title: v.rep.title ?? v.rep.body?.slice(0, 40) ?? 'Untitled',
-              segment: (v.rep.type ?? 'journal') as Segment,
+              title: v.rep.title ?? (v.rep.content ?? v.rep.body ?? '').slice(0, 40) ?? 'Untitled',
+              segment: 'journal' as Segment,
             },
           }))
           .sort((a, b) => b.count - a.count)
@@ -114,7 +116,7 @@ export default function ConnectPage() {
   }
 
   return (
-    <MobileShell activeTab="connect" isDark={isDark}>
+    <><Nav /><div className="container">
       <div className="pt-5 px-4 mb-2">
         <h1
           className="text-2xl font-bold"
@@ -141,6 +143,6 @@ export default function ConnectPage() {
           onNodeClick={handleNodeClick}
         />
       )}
-    </MobileShell>
+    </div></>
   )
 }

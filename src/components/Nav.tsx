@@ -37,60 +37,13 @@ export function Nav() {
 
         {/* Desktop Nav */}
         <div style={styles.desktopNav}>
-          <Link 
-            href="/" 
-            style={{...styles.navLink, ...(isActive('/') ? styles.navLinkActive : {})}}
-          >
-            Journal
-          </Link>
-          <Link 
-            href="/locked" 
-            style={{...styles.navLink, ...(isActive('/locked') ? styles.navLinkActive : {})}}
-          >
-            Private
-          </Link>
-          <Link 
-            href="/tasks" 
-            style={{...styles.navLink, ...(isActive('/tasks') ? styles.navLinkActive : {})}}
-          >
-            Tasks
-          </Link>
-          <Link 
-            href="/brainstorm" 
-            style={{...styles.navLink, ...(isActive('/brainstorm') ? styles.navLinkActive : {})}}
-          >
-            Ideas
-          </Link>
-          <Link 
-            href="/voice" 
-            style={{...styles.navLink, ...(isActive('/voice') ? styles.navLinkActive : {})}}
-          >
-            Voice
-          </Link>
-          <Link 
-            href="/prompts" 
-            style={{...styles.navLink, ...(isActive('/prompts') ? styles.navLinkActive : {})}}
-          >
-            Prompts
-          </Link>
-          <Link
-            href="/notes"
-            style={{...styles.navLink, ...(isActive('/notes') ? styles.navLinkActive : {})}}
-          >
-            Notes
-          </Link>
-          <Link
-            href="/graph"
-            style={{...styles.navLink, ...(isActive('/graph') ? styles.navLinkActive : {})}}
-          >
-            Graph
-          </Link>
-          <Link
-            href="/insights"
-            style={{...styles.navLink, ...(isActive('/insights') ? styles.navLinkActive : {})}}
-          >
-            Insights
-          </Link>
+          <Link href="/journal" style={{...styles.navLink, ...(isActive('/journal') ? styles.navLinkActive : {})}}>Journal</Link>
+          <Link href="/ideas"   style={{...styles.navLink, ...(isActive('/ideas')   ? styles.navLinkActive : {})}}>Ideas</Link>
+          <Link href="/notes"   style={{...styles.navLink, ...(isActive('/notes')   ? styles.navLinkActive : {})}}>Notes</Link>
+          <Link href="/tasks"   style={{...styles.navLink, ...(isActive('/tasks')   ? styles.navLinkActive : {})}}>Tasks</Link>
+          <Link href="/connect" style={{...styles.navLink, ...(isActive('/connect') ? styles.navLinkActive : {})}}>Connect</Link>
+          <Link href="/voice"   style={{...styles.navLink, ...(isActive('/voice')   ? styles.navLinkActive : {})}}>Voice</Link>
+          <Link href="/prompts" style={{...styles.navLink, ...(isActive('/prompts') ? styles.navLinkActive : {})}}>Prompts</Link>
         </div>
 
         {/* User / Auth / Theme */}
@@ -138,33 +91,13 @@ export function Nav() {
       {/* Mobile Menu */}
       {menuOpen && (
         <div style={styles.mobileMenu}>
-          <Link href="/" style={{...styles.mobileLink, ...(isActive('/') ? styles.mobileLinkActive : {})}}>
-            Journal
-          </Link>
-          <Link href="/locked" style={{...styles.mobileLink, ...(isActive('/locked') ? styles.mobileLinkActive : {})}}>
-            Private
-          </Link>
-          <Link href="/tasks" style={{...styles.mobileLink, ...(isActive('/tasks') ? styles.mobileLinkActive : {})}}>
-            Tasks
-          </Link>
-          <Link href="/brainstorm" style={{...styles.mobileLink, ...(isActive('/brainstorm') ? styles.mobileLinkActive : {})}}>
-            Ideas
-          </Link>
-          <Link href="/voice" style={{...styles.mobileLink, ...(isActive('/voice') ? styles.mobileLinkActive : {})}}>
-            Voice
-          </Link>
-          <Link href="/prompts" style={{...styles.mobileLink, ...(isActive('/prompts') ? styles.mobileLinkActive : {})}}>
-            Prompts
-          </Link>
-          <Link href="/notes" style={{...styles.mobileLink, ...(isActive('/notes') ? styles.mobileLinkActive : {})}}>
-            Notes
-          </Link>
-          <Link href="/graph" style={{...styles.mobileLink, ...(isActive('/graph') ? styles.mobileLinkActive : {})}}>
-            Graph
-          </Link>
-          <Link href="/insights" style={{...styles.mobileLink, ...(isActive('/insights') ? styles.mobileLinkActive : {})}}>
-            Insights
-          </Link>
+          <Link href="/journal" style={{...styles.mobileLink, ...(isActive('/journal') ? styles.mobileLinkActive : {})}}>Journal</Link>
+          <Link href="/ideas"   style={{...styles.mobileLink, ...(isActive('/ideas')   ? styles.mobileLinkActive : {})}}>Ideas</Link>
+          <Link href="/notes"   style={{...styles.mobileLink, ...(isActive('/notes')   ? styles.mobileLinkActive : {})}}>Notes</Link>
+          <Link href="/tasks"   style={{...styles.mobileLink, ...(isActive('/tasks')   ? styles.mobileLinkActive : {})}}>Tasks</Link>
+          <Link href="/connect" style={{...styles.mobileLink, ...(isActive('/connect') ? styles.mobileLinkActive : {})}}>Connect</Link>
+          <Link href="/voice"   style={{...styles.mobileLink, ...(isActive('/voice')   ? styles.mobileLinkActive : {})}}>Voice</Link>
+          <Link href="/prompts" style={{...styles.mobileLink, ...(isActive('/prompts') ? styles.mobileLinkActive : {})}}>Prompts</Link>
           <div style={styles.mobileDivider} />
           <button onClick={toggleTheme} style={styles.mobileLink}>
             {isDark ? 'Light Mode' : 'Dark Mode'}

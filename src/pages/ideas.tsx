@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import MobileShell from '@/components/layout/MobileShell'
+import { Nav } from '@/components/Nav'
 import IdeaCard, { QuickCapture } from '@/components/cards/IdeaCard'
 import IdeaEditor from '@/components/editors/IdeaEditor'
 import { useAuth } from '@/lib/useAuth'
@@ -142,7 +142,7 @@ export default function IdeasPage() {
   }
 
   return (
-    <MobileShell activeTab="ideas" isDark={isDark}>
+    <><Nav /><div className="container">
       <div className="pt-4">
         <div className="px-4 mb-1">
           <h1
@@ -196,6 +196,6 @@ export default function IdeasPage() {
           )}
         </div>
       </div>
-    </MobileShell>
+    </div></>
   )
 }
