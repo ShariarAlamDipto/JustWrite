@@ -29,7 +29,7 @@ const fmt = (n?: number | null) =>
   n == null ? '—' : new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
 const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+  new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
 
 const todayISO = () => {
   const d = new Date()
@@ -155,12 +155,13 @@ function DaySetupModal({
   onClose: () => void
 }) {
   const [spendable, setSpendable] = useState(
-    mode === 'close' ? (day?.end_spendable?.toString() ?? '') : (day?.end_spendable?.toString() ?? '')
+    mode === 'close' ? (day?.end_spendable?.toString() ?? '') : ''
   )
   const [reserve, setReserve] = useState(
     mode === 'close' ? (day?.end_reserve?.toString() ?? '') : ''
   )
   const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
 
   // For "close" mode: compute reconciliation
   const loggedIncome = day?.finance_txns.filter((t) => t.kind === 'income').reduce((s, t) => s + t.amount, 0) ?? 0
@@ -172,10 +173,17 @@ function DaySetupModal({
   const handleSave = async () => {
     const s = parseFloat(spendable)
     const r = parseFloat(reserve || '0')
-    if (isNaN(s)) return
+    if (isNaN(s) || s < 0) { setErr('Enter a valid amount'); return }
     setSaving(true)
-    try { await onSave(s, r); onClose() }
-    finally { setSaving(false) }
+    setErr('')
+    try {
+      await onSave(s, r)
+      onClose()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Failed to save. Try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -250,6 +258,7 @@ function DaySetupModal({
           </div>
         )}
 
+        {err && <p style={{ color: '#e53e3e', fontSize: '12px', marginBottom: '0.5rem', textAlign: 'center' }}>{err}</p>}
         <button onClick={handleSave} disabled={saving || !spendable.trim()} className="btn btn-primary" style={{ width: '100%' }}>
           {saving ? 'Saving…' : mode === 'start' ? 'Start Day' : 'Close Day'}
         </button>
@@ -328,7 +337,11 @@ export default function FinancePage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
       body: JSON.stringify({ day_id: todayLog.id, kind: quickAdd, amount, category, note }),
     })
-    if (res.ok) await loadDays()
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error ?? 'Failed to save transaction')
+    }
+    await loadDays()
   }
 
   const handleDeleteTxn = async (id: string) => {
