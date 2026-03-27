@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { Nav } from '@/components/Nav'
+import AppShell from '@/components/layout/AppShell'
 import NoteCard, { NotesEmpty } from '@/components/cards/NoteCard'
 import NoteEditor from '@/components/editors/NoteEditor'
 import { useAuth } from '@/lib/useAuth'
@@ -157,7 +157,7 @@ export default function NotesPage() {
   })
 
   return (
-    <><Nav /><div className="container">
+    <AppShell activeTab="notes" isDark={isDark}>
       <div className="pt-4 px-4 mb-2">
         <h1
           className="text-lg font-semibold"
@@ -197,6 +197,6 @@ export default function NotesPage() {
           ))
         )}
       </div>
-    </div></>
+    </AppShell>
   )
 }

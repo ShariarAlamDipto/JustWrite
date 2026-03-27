@@ -198,9 +198,9 @@ export default function NoteEditor({
 
   const blockStyle = (type: NoteBlock['type']): React.CSSProperties => {
     const base: React.CSSProperties = { color: isDark ? '#D8D5CF' : '#2A2824', lineHeight: 1.75 }
-    if (type === 'heading1') return { ...base, fontSize: '22px', fontWeight: 700, letterSpacing: '-0.02em', color: isDark ? '#F2F0EB' : '#1A1A1A' }
-    if (type === 'heading2') return { ...base, fontSize: '18px', fontWeight: 600, letterSpacing: '-0.01em', color: isDark ? '#F2F0EB' : '#1A1A1A' }
-    if (type === 'quote') return { ...base, fontSize: '16px', fontStyle: 'italic', color: isDark ? '#9A9792' : '#6B6862' }
+    if (type === 'heading1') return { ...base, fontSize: '22px', fontWeight: 700, letterSpacing: '-0.02em', color: isDark ? '#f5f5f5' : '#1a1a1a' }
+    if (type === 'heading2') return { ...base, fontSize: '18px', fontWeight: 600, letterSpacing: '-0.01em', color: isDark ? '#f5f5f5' : '#1a1a1a' }
+    if (type === 'quote') return { ...base, fontSize: '16px', fontStyle: 'italic', color: isDark ? '#9ca3af' : '#525252' }
     return { ...base, fontSize: '16px' }
   }
 
@@ -255,7 +255,7 @@ export default function NoteEditor({
           </button>
 
           <div className="flex items-center gap-1">
-            <span className="text-xs" style={{ color: isDark ? '#4A4A4A' : '#C8C5C0' }}>
+            <span className="text-xs" style={{ color: isDark ? '#4A4A4A' : '#9ca3af' }}>
               {saveStatus === 'saving' ? 'Saving…' : (title || blocks.some((b) => b.content)) ? '✓' : ''}
             </span>
 
@@ -266,7 +266,7 @@ export default function NoteEditor({
               style={{
                 minWidth: '44px', minHeight: '44px', touchAction: 'manipulation',
                 background: showVoice ? 'rgba(229,62,62,0.15)' : 'transparent',
-                color: showVoice ? '#e53e3e' : isDark ? '#636060' : '#C8C5C0',
+                color: showVoice ? '#e53e3e' : isDark ? '#666666' : '#9ca3af',
               }}
               aria-label="Voice input"
             >
@@ -287,7 +287,7 @@ export default function NoteEditor({
         {showVoice && (
           <div
             className="mx-4 mt-3 rounded-2xl overflow-hidden"
-            style={{ background: isDark ? '#1C1C1C' : '#FFFFFF', border: `1px solid ${isDark ? '#2E2E2E' : '#E8E5DF'}` }}
+            style={{ background: isDark ? '#1a1a1a' : '#FFFFFF', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e5e5'}`, borderRadius: '8px' }}
           >
             <VoiceCapture isDark={isDark} onTranscript={handleVoiceTranscript} />
           </div>
@@ -306,7 +306,7 @@ export default function NoteEditor({
                 className="text-3xl flex items-center justify-center rounded-2xl transition-all active:scale-90"
                 style={{
                   width: '48px', height: '48px', touchAction: 'manipulation',
-                  background: isDark ? '#1C1C1C' : '#EEECE8',
+                  background: isDark ? '#1a1a1a' : '#f0f0f0',
                 }}
               >
                 {icon}
@@ -316,9 +316,10 @@ export default function NoteEditor({
                 <div
                   className="absolute top-14 left-0 p-2 rounded-2xl grid grid-cols-5 gap-1"
                   style={{
-                    background: isDark ? '#1C1C1C' : '#FFFFFF',
-                    border: `1px solid ${isDark ? '#2E2E2E' : '#E8E5DF'}`,
+                    background: isDark ? '#1a1a1a' : '#FFFFFF',
+                    border: `1px solid ${isDark ? '#2a2a2a' : '#e5e5e5'}`,
                     boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                    borderRadius: '8px',
                     zIndex: 30,
                   }}
                 >
@@ -329,7 +330,7 @@ export default function NoteEditor({
                       className="text-xl flex items-center justify-center rounded-xl active:scale-90"
                       style={{
                         width: '36px', height: '36px', touchAction: 'manipulation',
-                        background: icon === em ? (isDark ? '#2A2A2A' : '#F0EDE8') : 'transparent',
+                        background: icon === em ? (isDark ? '#2a2a2a' : '#f0f0f0') : 'transparent',
                       }}
                     >
                       {em}
@@ -348,7 +349,7 @@ export default function NoteEditor({
               className="jw-input flex-1 font-semibold select-text"
               style={{
                 fontSize: '24px',
-                color: isDark ? '#F2F0EB' : '#1A1A1A',
+                color: isDark ? '#f5f5f5' : '#1a1a1a',
                 letterSpacing: '-0.02em',
                 paddingTop: '8px',
                 touchAction: 'manipulation',
@@ -368,15 +369,15 @@ export default function NoteEditor({
               if (block.type === 'divider') {
                 return (
                   <div key={block.id} className="flex items-center gap-3 py-2 my-2">
-                    <div className="flex-1 h-px" style={{ background: isDark ? '#2E2E2E' : '#E8E5DF' }} />
+                    <div className="flex-1 h-px" style={{ background: isDark ? '#2a2a2a' : '#e5e5e5' }} />
                     <button
                       onPointerDown={() => removeBlock(block.id)}
                       className="text-xs opacity-40 active:opacity-80"
-                      style={{ minWidth: '28px', minHeight: '28px', color: isDark ? '#636060' : '#9E9B96', touchAction: 'manipulation' }}
+                      style={{ minWidth: '28px', minHeight: '28px', color: isDark ? '#666666' : '#9ca3af', touchAction: 'manipulation' }}
                     >
                       ✕
                     </button>
-                    <div className="flex-1 h-px" style={{ background: isDark ? '#2E2E2E' : '#E8E5DF' }} />
+                    <div className="flex-1 h-px" style={{ background: isDark ? '#2a2a2a' : '#e5e5e5' }} />
                   </div>
                 )
               }
@@ -386,7 +387,7 @@ export default function NoteEditor({
                   {block.type === 'bullet' && (
                     <span
                       className="absolute left-0 top-3 text-sm pointer-events-none select-none"
-                      style={{ color: isDark ? '#636060' : '#9E9B96' }}
+                      style={{ color: isDark ? '#666666' : '#9ca3af' }}
                     >
                       •
                     </span>
@@ -421,12 +422,13 @@ export default function NoteEditor({
             {/* Slash command menu — z-index 30, above overlay (z-10) */}
             {showSlash && filteredSlash.length > 0 && (
               <div
-                className="absolute w-52 rounded-2xl overflow-hidden"
+                className="absolute w-52 overflow-hidden"
                 style={{
-                  background: isDark ? '#1C1C1C' : '#FFFFFF',
-                  border: `1px solid ${isDark ? '#2E2E2E' : '#E8E5DF'}`,
+                  background: isDark ? '#1a1a1a' : '#FFFFFF',
+                  border: `1px solid ${isDark ? '#2a2a2a' : '#e5e5e5'}`,
                   boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
                   marginTop: '4px',
+                  borderRadius: '8px',
                   zIndex: 30,
                 }}
               >
@@ -448,7 +450,7 @@ export default function NoteEditor({
                   >
                     <span
                       className="flex items-center justify-center rounded-lg text-xs font-bold flex-shrink-0"
-                      style={{ width: '24px', height: '24px', background: isDark ? '#2A2A2A' : '#EEECE8', color: '#3182ce' }}
+                      style={{ width: '24px', height: '24px', background: isDark ? '#2a2a2a' : '#f0f0f0', color: '#3182ce' }}
                     >
                       {opt.icon}
                     </span>

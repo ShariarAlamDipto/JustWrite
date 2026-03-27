@@ -93,7 +93,7 @@ export default function IdeaEditor({
         </button>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-xs" style={{ color: isDark ? '#4A4A4A' : '#C8C5C0' }}>
+          <span className="text-xs" style={{ color: isDark ? '#4A4A4A' : '#9ca3af' }}>
             {saveStatus === 'saving' ? 'Saving…' : body ? '✓' : ''}
           </span>
 
@@ -121,7 +121,7 @@ export default function IdeaEditor({
             className="w-8 h-8 flex items-center justify-center rounded-xl transition-all active:scale-90"
             style={{
               background: showVoice ? 'rgba(229,62,62,0.15)' : 'transparent',
-              color: showVoice ? '#e53e3e' : isDark ? '#636060' : '#C8C5C0',
+              color: showVoice ? '#e53e3e' : isDark ? '#666666' : '#9ca3af',
             }}
             aria-label="Voice input"
           >
@@ -141,8 +141,8 @@ export default function IdeaEditor({
       {/* ── Voice panel ────────────────────────────────────────────────────── */}
       {showVoice && (
         <div
-          className="mx-4 mt-3 rounded-2xl overflow-hidden animate-slide-up"
-          style={{ background: isDark ? '#1C1C1C' : '#FFFFFF', border: `1px solid ${isDark ? '#2E2E2E' : '#E8E5DF'}` }}
+          className="mx-4 mt-3 overflow-hidden animate-slide-up"
+          style={{ background: isDark ? '#1a1a1a' : '#FFFFFF', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e5e5'}`, borderRadius: '8px' }}
         >
           <VoiceCapture isDark={isDark} onTranscript={handleVoiceTranscript} />
         </div>

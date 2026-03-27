@@ -96,7 +96,7 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
         {/* Status + actions */}
         <div className="flex items-center gap-2">
           {/* Save status */}
-          <span className="text-xs" style={{ color: isDark ? '#4A4A4A' : '#C8C5C0' }}>
+          <span className="text-xs" style={{ color: isDark ? '#4A4A4A' : '#9ca3af' }}>
             {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' && body ? '✓' : ''}
           </span>
 
@@ -110,7 +110,7 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
           >
             {mood ? moodEmoji(mood) : (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                   stroke={isDark ? '#636060' : '#C8C5C0'} strokeWidth="2" strokeLinecap="round">
+                   stroke={isDark ? '#666666' : '#9ca3af'} strokeWidth="2" strokeLinecap="round">
                 <circle cx="12" cy="12" r="10"/>
                 <path d="M8 13s1.5 2 4 2 4-2 4-2"/>
                 <line x1="9" y1="9" x2="9.01" y2="9"/>
@@ -125,7 +125,7 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
             className="w-8 h-8 flex items-center justify-center rounded-xl transition-all active:scale-90"
             style={{
               background: showVoice ? 'rgba(229,62,62,0.15)' : 'transparent',
-              color: showVoice ? '#e53e3e' : isDark ? '#636060' : '#C8C5C0',
+              color: showVoice ? '#e53e3e' : isDark ? '#666666' : '#9ca3af',
             }}
             aria-label="Voice input"
           >
@@ -146,8 +146,8 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
       {/* ── Voice panel ────────────────────────────────────────────────── */}
       {showVoice && (
         <div
-          className="mx-4 mt-3 rounded-2xl overflow-hidden"
-          style={{ background: isDark ? '#1C1C1C' : '#FFFFFF', border: `1px solid ${isDark ? '#2E2E2E' : '#E8E5DF'}` }}
+          className="mx-4 mt-3 overflow-hidden"
+          style={{ background: isDark ? '#1a1a1a' : '#FFFFFF', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e5e5'}`, borderRadius: '8px' }}
         >
           <VoiceCapture isDark={isDark} onTranscript={handleVoiceTranscript} />
         </div>
@@ -167,7 +167,7 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
               }}
             >
               <span className="text-2xl">{moodEmoji(m)}</span>
-              <span className="text-2xs" style={{ color: isDark ? '#636060' : '#9E9B96' }}>
+              <span className="text-2xs" style={{ color: isDark ? '#666666' : '#9ca3af' }}>
                 {['Low', 'Meh', 'Okay', 'Good', 'Great'][Math.floor(m / 2)]}
               </span>
             </button>
@@ -186,7 +186,7 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
           className="jw-input w-full mb-3 font-semibold"
           style={{
             fontSize: '22px',
-            color: isDark ? '#F2F0EB' : '#1A1A1A',
+            color: isDark ? '#f5f5f5' : '#1a1a1a',
             letterSpacing: '-0.015em',
           }}
         />

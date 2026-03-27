@@ -20,7 +20,7 @@ const MOOD_COLORS: Record<number, string> = {
 
 export default function JournalCard({ entry, isDark, onClick, onUnlock, isUnlocked = false }: JournalCardProps) {
   const isBlurred = entry.isPrivate && !isUnlocked
-  const moodColor = entry.mood ? MOOD_COLORS[Math.round(entry.mood)] ?? '#9E9B96' : undefined
+  const moodColor = entry.mood ? MOOD_COLORS[Math.round(entry.mood)] ?? '#9ca3af' : undefined
 
   return (
     <article
@@ -69,7 +69,7 @@ export default function JournalCard({ entry, isDark, onClick, onUnlock, isUnlock
             className="font-semibold mb-1 leading-snug"
             style={{
               fontSize: '16px',
-              color: isDark ? '#F2F0EB' : '#1A1A1A',
+              color: isDark ? '#f5f5f5' : '#1a1a1a',
               letterSpacing: '-0.01em',
             }}
           >
@@ -82,7 +82,7 @@ export default function JournalCard({ entry, isDark, onClick, onUnlock, isUnlock
           className="leading-relaxed"
           style={{
             fontSize: '14px',
-            color: isDark ? '#9A9792' : '#6B6862',
+            color: isDark ? '#9ca3af' : '#525252',
             lineHeight: 1.6,
           }}
         >
@@ -124,11 +124,11 @@ export function TodayCard({ isDark, onClick, hasEntry, wordCount }: TodayCardPro
             TODAY
           </p>
           <p className="font-semibold" style={{
-            fontSize: '16px', color: isDark ? '#F2F0EB' : '#1A1A1A', letterSpacing: '-0.01em',
+            fontSize: '16px', color: isDark ? '#f5f5f5' : '#1a1a1a', letterSpacing: '-0.01em',
           }}>
             {today}
           </p>
-          <p className="text-sm mt-1" style={{ color: isDark ? '#636060' : '#9E9B96' }}>
+          <p className="text-sm mt-1" style={{ color: isDark ? '#666666' : '#9ca3af' }}>
             {hasEntry ? `${wordCount ?? 0} words · Continue writing` : 'Start your daily entry'}
           </p>
         </div>

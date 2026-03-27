@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { Nav } from '@/components/Nav'
+import AppShell from '@/components/layout/AppShell'
 import ConnectView from '@/components/connect/ConnectView'
 import { useAuth } from '@/lib/useAuth'
 import { useTheme } from '@/lib/ThemeContext'
@@ -116,11 +116,11 @@ export default function ConnectPage() {
   }
 
   return (
-    <><Nav /><div className="container">
+    <AppShell activeTab="connect" isDark={isDark}>
       <div className="pt-5 px-4 mb-2">
         <h1
-          className="text-2xl font-bold"
-          style={{ color: isDark ? '#F2F0EB' : '#1A1A1A', letterSpacing: '-0.025em' }}
+          className="text-lg font-semibold"
+          style={{ color: isDark ? '#f5f5f5' : '#1a1a1a' }}
         >
           Connect
         </h1>
@@ -143,6 +143,6 @@ export default function ConnectPage() {
           onNodeClick={handleNodeClick}
         />
       )}
-    </div></>
+    </AppShell>
   )
 }

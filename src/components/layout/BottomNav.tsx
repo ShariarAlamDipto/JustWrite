@@ -109,7 +109,7 @@ export default function BottomNav({ activeTab, onChange, isDark }: BottomNavProp
               style={{
                 color: isActive
                   ? accentColor
-                  : isDark ? '#636060' : '#9E9B96',
+                  : isDark ? '#666666' : '#9ca3af',
                 background: isActive
                   ? 'rgba(49,130,206,0.1)'
                   : 'transparent',
@@ -123,7 +123,7 @@ export default function BottomNav({ activeTab, onChange, isDark }: BottomNavProp
                 style={{
                   color: isActive
                     ? accentColor
-                    : isDark ? '#636060' : '#9E9B96',
+                    : isDark ? '#666666' : '#9ca3af',
                   fontWeight: isActive ? 600 : 400,
                   fontSize: '10px',
                   letterSpacing: '0.02em',

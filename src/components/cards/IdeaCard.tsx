@@ -73,7 +73,7 @@ export default function IdeaCard({ idea, isDark, onClick, onUnlock, isUnlocked =
         {idea.title && (
           <h3
             className="font-semibold mb-1.5 leading-snug"
-            style={{ fontSize: '15px', color: isDark ? '#F2F0EB' : '#1A1A1A' }}
+            style={{ fontSize: '15px', color: isDark ? '#f5f5f5' : '#1a1a1a' }}
           >
             {idea.title}
           </h3>
@@ -82,7 +82,7 @@ export default function IdeaCard({ idea, isDark, onClick, onUnlock, isUnlocked =
         {/* Body */}
         <p
           className="leading-relaxed mb-3"
-          style={{ fontSize: '14px', color: isDark ? '#9A9792' : '#6B6862', lineHeight: 1.6 }}
+          style={{ fontSize: '14px', color: isDark ? '#9ca3af' : '#525252', lineHeight: 1.6 }}
         >
           {truncate(idea.body, 180)}
         </p>
@@ -94,7 +94,7 @@ export default function IdeaCard({ idea, isDark, onClick, onUnlock, isUnlocked =
               <TagChip key={tag} tag={tag} isDark={isDark} />
             ))}
             {idea.tags.length > 4 && (
-              <span className="text-2xs" style={{ color: isDark ? '#636060' : '#9E9B96' }}>
+              <span className="text-2xs" style={{ color: isDark ? '#666666' : '#9ca3af' }}>
                 +{idea.tags.length - 4}
               </span>
             )}
@@ -149,7 +149,7 @@ export function QuickCapture({ isDark, onSubmit, onVoice }: QuickCaptureProps) {
         rows={2}
         className="jw-input w-full px-4 pt-3 pb-2 text-sm resize-none"
         style={{
-          color: isDark ? '#F2F0EB' : '#1A1A1A',
+          color: isDark ? '#f5f5f5' : '#1a1a1a',
           minHeight: '64px',
           maxHeight: '160px',
         }}
@@ -164,7 +164,7 @@ export function QuickCapture({ isDark, onSubmit, onVoice }: QuickCaptureProps) {
           onClick={onVoice}
           className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs
                      transition-colors active:scale-90"
-          style={{ color: isDark ? '#8A8882' : '#9E9B96' }}
+          style={{ color: isDark ? '#a0a0a0' : '#9ca3af' }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -184,7 +184,7 @@ export function QuickCapture({ isDark, onSubmit, onVoice }: QuickCaptureProps) {
                      transition-all duration-150 active:scale-95 disabled:opacity-30"
           style={{
             background: text.trim() ? '#3182ce' : (isDark ? '#242424' : '#F0EDE8'),
-            color: text.trim() ? '#fff' : (isDark ? '#636060' : '#9E9B96'),
+            color: text.trim() ? '#fff' : (isDark ? '#666666' : '#9ca3af'),
           }}
         >
           Save idea

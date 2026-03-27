@@ -36,7 +36,7 @@ export default function NoteCard({ note, isDark, onClick, onUnlock, isUnlocked =
               className="font-semibold leading-snug truncate"
               style={{
                 fontSize: '16px',
-                color: isDark ? '#F2F0EB' : '#1A1A1A',
+                color: isDark ? '#f5f5f5' : '#1a1a1a',
                 letterSpacing: '-0.01em',
               }}
             >
@@ -64,7 +64,7 @@ export default function NoteCard({ note, isDark, onClick, onUnlock, isUnlocked =
         {preview && (
           <p
             className="mb-3 leading-relaxed ml-8"
-            style={{ fontSize: '13px', color: isDark ? '#7A7774' : '#8A8680', lineHeight: 1.55 }}
+            style={{ fontSize: '13px', color: isDark ? '#a0a0a0' : '#a0a0a0', lineHeight: 1.55 }}
           >
             {truncate(preview, 120)}
           </p>
@@ -86,7 +86,7 @@ export default function NoteCard({ note, isDark, onClick, onUnlock, isUnlocked =
                 <TagChip key={tag} tag={tag} isDark={isDark} />
               ))}
               {tags.length > 2 && (
-                <span className="text-2xs" style={{ color: isDark ? '#636060' : '#9E9B96' }}>
+                <span className="text-2xs" style={{ color: isDark ? '#666666' : '#9ca3af' }}>
                   +{tags.length - 2}
                 </span>
               )}
