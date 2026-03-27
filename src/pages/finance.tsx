@@ -31,7 +31,13 @@ const fmt = (n?: number | null) =>
 const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
 
-const todayISO = () => new Date().toISOString().slice(0, 10)
+const todayISO = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 // ── Quick Add Modal ─────────────────────────────────────────────────────────
 function QuickAddModal({
@@ -318,7 +324,7 @@ export default function FinancePage() {
   }
 
   const handleDeleteTxn = async (id: string) => {
-    await fetch(`/api/finance/txns?id=${id}`, {
+    await fetch(`/api/finance/txns/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token ?? ''}` },
     })
@@ -565,7 +571,7 @@ function HistoryView({ days, today }: { days: DayLog[]; today: string }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
               <div>
                 <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--fg)', margin: 0 }}>
-                  {new Date(day.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                  {new Date(`${day.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                 </p>
                 <span style={{
                   fontSize: '10px', fontWeight: 600, padding: '1px 6px', borderRadius: '10px',
