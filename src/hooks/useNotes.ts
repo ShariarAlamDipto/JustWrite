@@ -31,7 +31,45 @@ export function useNotes(user: { id: string } | null, token: string | null) {
   const [saving, setSaving] = useState<SaveStatus>('saved');
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingChange = useRef<{ title: string; icon: string | null; blocks: Block[] } | null>(null);
+  // Store pending change together with the note ID it belongs to,
+  // so the timer callback always saves to the correct note even after switching.
+  const pendingChange = useRef<{
+    noteId: string;
+    title: string;
+    icon: string | null;
+    blocks: Block[];
+  } | null>(null);
+
+  // ── Flush any pending save immediately ──────────────────────────────────────
+
+  const flushSave = useCallback(async () => {
+    if (!pendingChange.current || !user || !token) return;
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const change = pendingChange.current;
+    pendingChange.current = null;
+    try {
+      const res = await fetch(`/api/notes/${change.noteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: change.title, icon: change.icon, blocks: change.blocks }),
+      });
+      if (res.ok) {
+        setSaving('saved');
+        setNotes(prev => prev.map(n =>
+          n.id === change.noteId
+            ? { ...n, title: change.title || 'Untitled', icon: change.icon }
+            : n
+        ));
+      } else {
+        setSaving('error');
+      }
+    } catch {
+      setSaving('error');
+    }
+  }, [user, token]);
 
   // ── Load notes list ─────────────────────────────────────────────────────────
 
@@ -54,6 +92,8 @@ export function useNotes(user: { id: string } | null, token: string | null) {
 
   const openNote = useCallback(async (id: string) => {
     if (!user || !token) return;
+    // Flush any pending save for the previous note before switching
+    await flushSave();
     setLoadingNote(true);
     try {
       const res = await fetch(`/api/notes/${id}`, {
@@ -66,12 +106,14 @@ export function useNotes(user: { id: string } | null, token: string | null) {
     } finally {
       setLoadingNote(false);
     }
-  }, [user, token]);
+  }, [user, token, flushSave]);
 
   // ── Create note ─────────────────────────────────────────────────────────────
 
   const createNote = useCallback(async () => {
     if (!user || !token) return;
+    // Flush any pending save before creating a new note
+    await flushSave();
     try {
       const res = await fetch('/api/notes', {
         method: 'POST',
@@ -94,12 +136,18 @@ export function useNotes(user: { id: string } | null, token: string | null) {
     } catch {
       alert('Failed to create note. Please try again.');
     }
-  }, [user, token, openNote]);
+  }, [user, token, openNote, flushSave]);
 
   // ── Delete note ─────────────────────────────────────────────────────────────
 
   const deleteNote = useCallback(async (id: string) => {
     if (!user || !token || !confirm('Delete this note?')) return;
+    // If deleting the note with a pending save, discard it
+    if (pendingChange.current?.noteId === id) {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      pendingChange.current = null;
+    }
     const res = await fetch(`/api/notes/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
@@ -125,23 +173,27 @@ export function useNotes(user: { id: string } | null, token: string | null) {
     setNotes(prev => prev.map(n => n.id === id ? { ...n, is_pinned: !pinned } : n));
   }, [user, token]);
 
-  // ── Auto-save (debounced, 1.5s) ─────────────────────────────────────────────
+  // ── Auto-save (debounced 1.5 s) ─────────────────────────────────────────────
 
   const handleEditorChange = useCallback((
     title: string,
     icon: string | null,
-    blocks: Block[]
+    blocks: Block[],
   ) => {
     if (!selectedNote || !user || !token) return;
-    pendingChange.current = { title, icon, blocks };
+
+    // Always record the note ID alongside the change so the timer callback
+    // saves to the correct note even if the user has switched notes.
+    pendingChange.current = { noteId: selectedNote.id, title, icon, blocks };
     setSaving('saving');
 
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       const change = pendingChange.current;
-      if (!change || !selectedNote || !user || !token) return;
+      if (!change || !user || !token) return;
+      pendingChange.current = null;
       try {
-        const res = await fetch(`/api/notes/${selectedNote.id}`, {
+        const res = await fetch(`/api/notes/${change.noteId}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -152,7 +204,7 @@ export function useNotes(user: { id: string } | null, token: string | null) {
         if (res.ok) {
           setSaving('saved');
           setNotes(prev => prev.map(n =>
-            n.id === selectedNote.id
+            n.id === change.noteId
               ? { ...n, title: change.title || 'Untitled', icon: change.icon }
               : n
           ));

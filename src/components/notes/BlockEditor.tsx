@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,7 @@ interface BlockEditorProps {
   onChange: (title: string, icon: string | null, blocks: Block[]) => void;
   readOnly?: boolean;
   noteTitles?: { id: string; title: string; icon: string | null }[];
+  onWikilinkClick?: (title: string) => void;
 }
 
 // ─── Slash menu items ─────────────────────────────────────────────────────────
@@ -45,11 +46,53 @@ const SLASH_ITEMS: { type: BlockType; label: string; description: string; symbol
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function newBlock(type: BlockType = 'paragraph'): Block {
-  return { id: crypto.randomUUID(), type, content: '', indent: 0, open: true, icon: '💡' };
+  return { id: crypto.randomUUID(), type, content: '', indent: 0, open: true };
 }
 
 function isMultiline(type: BlockType) {
   return type === 'paragraph' || type === 'quote' || type === 'code' || type === 'callout';
+}
+
+// Returns the set of block IDs that should be hidden (children of closed toggles)
+function getHiddenSet(blocks: Block[]): Set<string> {
+  const hidden = new Set<string>();
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].type === 'toggle' && !blocks[i].open) {
+      const parentIndent = blocks[i].indent;
+      for (let j = i + 1; j < blocks.length; j++) {
+        if (blocks[j].indent > parentIndent) {
+          hidden.add(blocks[j].id);
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  return hidden;
+}
+
+// Render text with [[wikilinks]] as clickable spans
+function renderWithWikilinks(
+  content: string,
+  onWikiClick: (title: string) => void,
+): React.ReactNode {
+  if (!content.includes('[[')) return content;
+  const parts = content.split(/(\[\[.*?\]\])/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('[[') && part.endsWith(']]')) {
+      const title = part.slice(2, -2);
+      return (
+        <span
+          key={i}
+          onClick={(e) => { e.stopPropagation(); onWikiClick(title); }}
+          style={{ color: 'var(--accent-bright)', borderBottom: '1px solid var(--accent-bright)', cursor: 'pointer' }}
+        >
+          {title}
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
 }
 
 // ─── Slash Menu ───────────────────────────────────────────────────────────────
@@ -174,6 +217,9 @@ interface BlockItemProps {
   onDragOver: (e: React.DragEvent) => void;
   onDrop: () => void;
   autoFocus: boolean;
+  onInsertAfter: () => void;
+  isDragTarget: boolean;
+  onWikilinkClick: (title: string) => void;
 }
 
 function BlockItem({
@@ -184,63 +230,121 @@ function BlockItem({
   showWiki, wikiQuery, wikiNotes, onWikiSelect, onWikiClose,
   onToggle, onDragStart, onDragOver, onDrop,
   autoFocus,
+  onInsertAfter,
+  isDragTarget,
+  onWikilinkClick,
 }: BlockItemProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
-  // Auto-resize textarea
+  // Auto-resize textarea when editing
   useEffect(() => {
     const el = inputRef.current;
-    if (el) {
+    if (el && editing) {
       el.style.height = 'auto';
       el.style.height = el.scrollHeight + 'px';
     }
-  }, [block.content, block.type]);
+  }, [block.content, block.type, editing]);
 
-  // Focus when isFocused changes
+  // When parent says this block should be focused, enter editing mode
   useEffect(() => {
-    if (isFocused && inputRef.current) {
-      inputRef.current.focus();
-      const len = inputRef.current.value.length;
-      inputRef.current.setSelectionRange(len, len);
+    if (isFocused && !editing) {
+      setEditing(true);
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (el) {
+          el.focus();
+          const len = el.value.length;
+          el.setSelectionRange(len, len);
+        }
+      });
     }
-  }, [isFocused]);
+  }, [isFocused]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // autoFocus for newly created blocks
+  useEffect(() => {
+    if (autoFocus) {
+      setEditing(true);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [autoFocus]);
 
   if (block.type === 'divider') {
     return (
       <div
-        style={{ ...blockWrap, paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
+        style={{
+          ...blockWrap,
+          paddingTop: '0.25rem',
+          paddingBottom: '0.25rem',
+          borderTop: isDragTarget ? '2px solid var(--accent-bright)' : '2px solid transparent',
+        }}
         draggable
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDrop={onDrop}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
+        <button
+          style={{ ...insertBtn, opacity: hovered ? 1 : 0 }}
+          onClick={onInsertAfter}
+          onMouseDown={e => e.preventDefault()}
+          title="Add block below"
+        >+</button>
+        <div style={{ ...dragHandle, opacity: hovered ? 1 : 0 }} title="Drag to reorder">⠿</div>
         <div style={dividerStyle} />
       </div>
     );
   }
 
   const prefix = block.type === 'bullet'
-    ? <span style={prefixStyle}>{'  '.repeat(block.indent)}•</span>
+    ? <span style={prefixStyle}>•</span>
     : block.type === 'numbered'
     ? <span style={prefixStyle}>{numberedIndex}.</span>
     : block.type === 'toggle'
-    ? <span style={{ ...prefixStyle, cursor: 'pointer', userSelect: 'none' }} onClick={onToggle}>{block.open ? '▾' : '▸'}</span>
+    ? (
+      <span
+        style={{ ...prefixStyle, cursor: 'pointer', userSelect: 'none', display: 'inline-block', transition: 'transform 0.15s ease' }}
+        onClick={onToggle}
+      >
+        {block.open !== false ? '▾' : '▸'}
+      </span>
+    )
     : null;
 
   const inputStyle = getInputStyle(block.type);
 
+  // Show rendered (non-editable) view when not actively editing and block has content
+  const showRendered = !editing && block.content.length > 0 && block.type !== 'code';
+
   return (
     <div
-      style={{ ...blockWrap, paddingLeft: `${block.indent * 1.5}rem` }}
+      style={{
+        ...blockWrap,
+        paddingLeft: `calc(2.5rem + ${block.indent * 1.5}rem)`,
+        background: hovered ? 'rgba(255,255,255,0.025)' : 'transparent',
+        borderTop: isDragTarget ? '2px solid var(--accent-bright)' : '2px solid transparent',
+      }}
       draggable
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      {/* Drag handle */}
-      <div style={dragHandle} className="drag-handle" title="Drag to reorder">⠿</div>
+      {/* Insert block below button */}
+      <button
+        style={{ ...insertBtn, opacity: hovered ? 1 : 0 }}
+        onClick={onInsertAfter}
+        onMouseDown={e => e.preventDefault()}
+        title="Add block below"
+      >+</button>
 
-      {/* Block prefix (bullet/number/toggle arrow) */}
+      {/* Drag handle */}
+      <div style={{ ...dragHandle, opacity: hovered ? 1 : 0 }} title="Drag to reorder">⠿</div>
+
+      {/* Block prefix (bullet / number / toggle arrow) */}
       {prefix}
 
       {/* Callout icon */}
@@ -248,36 +352,46 @@ function BlockItem({
         <span style={calloutIcon}>{block.icon || '💡'}</span>
       )}
 
-      <div style={{ position: 'relative', flex: 1 }}>
-        <textarea
-          ref={inputRef}
-          value={block.content}
-          onChange={e => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          onFocus={onFocus}
-          autoFocus={autoFocus}
-          rows={1}
-          placeholder={getPlaceholder(block.type, isFocused)}
-          spellCheck
-          style={inputStyle}
-        />
-        {showSlash && (
+      <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+        {showRendered ? (
+          // ── Rendered view: wikilinks are clickable, content is formatted ──
+          <div
+            style={{ ...inputStyle, cursor: 'text', minHeight: '1.65em', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            onClick={() => {
+              setEditing(true);
+              onFocus();
+              requestAnimationFrame(() => {
+                const el = inputRef.current;
+                if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+              });
+            }}
+          >
+            {renderWithWikilinks(block.content, onWikilinkClick)}
+          </div>
+        ) : (
+          // ── Editing textarea ──
+          <textarea
+            ref={inputRef}
+            value={block.content}
+            onChange={e => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            onFocus={() => { setEditing(true); onFocus(); }}
+            onBlur={() => setEditing(false)}
+            rows={1}
+            placeholder={getPlaceholder(block.type)}
+            spellCheck
+            style={{ ...inputStyle, display: 'block' }}
+          />
+        )}
+
+        {showSlash && editing && (
           <div style={slashStyles.anchor}>
-            <SlashMenu
-              query={slashQuery}
-              onSelect={onSlashSelect}
-              onClose={onSlashClose}
-            />
+            <SlashMenu query={slashQuery} onSelect={onSlashSelect} onClose={onSlashClose} />
           </div>
         )}
-        {showWiki && (
+        {showWiki && editing && (
           <div style={slashStyles.anchor}>
-            <WikilinkMenu
-              query={wikiQuery}
-              notes={wikiNotes}
-              onSelect={onWikiSelect}
-              onClose={onWikiClose}
-            />
+            <WikilinkMenu query={wikiQuery} notes={wikiNotes} onSelect={onWikiSelect} onClose={onWikiClose} />
           </div>
         )}
       </div>
@@ -287,7 +401,9 @@ function BlockItem({
 
 // ─── Main BlockEditor ─────────────────────────────────────────────────────────
 
-export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChange, readOnly, noteTitles = [] }: BlockEditorProps) {
+export function BlockEditor({
+  noteId, title, icon, blocks: initialBlocks, onChange, readOnly, noteTitles = [], onWikilinkClick,
+}: BlockEditorProps) {
   const [blocks, setBlocks] = useState<Block[]>(
     initialBlocks.length > 0 ? initialBlocks : [newBlock()]
   );
@@ -299,16 +415,19 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
   const [wikiBlockId, setWikiBlockId] = useState<string | null>(null);
   const [wikiQuery, setWikiQuery] = useState('');
   const [dragSourceId, setDragSourceId] = useState<string | null>(null);
+  const [dragTargetId, setDragTargetId] = useState<string | null>(null);
   const [newBlockId, setNewBlockId] = useState<string | null>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
 
-  // Sync blocks when noteId changes
+  // Sync state when note changes
   useEffect(() => {
     setBlocks(initialBlocks.length > 0 ? initialBlocks : [newBlock()]);
     setTitleValue(title);
     setIconValue(icon);
     setFocusedId(null);
     setSlashBlockId(null);
+    setNewBlockId(null);
+    setDragTargetId(null);
   }, [noteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Notify parent on every change
@@ -322,25 +441,41 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
     if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
   }, [titleValue]);
 
+  // Hidden block IDs: children of closed toggles
+  const hiddenSet = useMemo(() => getHiddenSet(blocks), [blocks]);
+
   const updateBlock = useCallback((id: string, content: string) => {
     setBlocks(prev => prev.map(b => b.id === id ? { ...b, content } : b));
   }, []);
 
   const changeBlockType = useCallback((id: string, type: BlockType) => {
-    setBlocks(prev => prev.map(b => b.id === id ? { ...b, type, content: b.content.startsWith('/') ? '' : b.content } : b));
+    setBlocks(prev => prev.map(b =>
+      b.id === id ? { ...b, type, content: b.content.startsWith('/') ? '' : b.content } : b
+    ));
     setSlashBlockId(null);
     setSlashQuery('');
     setFocusedId(id);
   }, []);
 
+  const insertBlockAfter = useCallback((id: string) => {
+    const nb = newBlock();
+    setBlocks(prev => {
+      const idx = prev.findIndex(b => b.id === id);
+      const next = [...prev];
+      next.splice(idx + 1, 0, nb);
+      return next;
+    });
+    setNewBlockId(nb.id);
+    setFocusedId(nb.id);
+  }, []);
+
   const handleKeyDown = useCallback((
     e: KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>,
     block: Block,
-    index: number
+    index: number,
   ) => {
-    // Enter → new paragraph below (unless Shift+Enter in multiline block)
     if (e.key === 'Enter' && !(e.shiftKey && isMultiline(block.type))) {
-      if (slashBlockId) return; // slash menu handles enter
+      if (slashBlockId) return;
       e.preventDefault();
       const nb = newBlock();
       setBlocks(prev => {
@@ -353,7 +488,6 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
       setSlashBlockId(null);
     }
 
-    // Backspace on empty block → delete and focus previous
     if (e.key === 'Backspace' && block.content === '' && blocks.length > 1) {
       e.preventDefault();
       setBlocks(prev => prev.filter(b => b.id !== block.id));
@@ -362,7 +496,6 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
       setSlashBlockId(null);
     }
 
-    // Tab → indent / Shift+Tab → unindent
     if (e.key === 'Tab') {
       e.preventDefault();
       setBlocks(prev => prev.map(b =>
@@ -372,7 +505,6 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
       ));
     }
 
-    // Arrow navigation between blocks
     if (e.key === 'ArrowUp' && index > 0) {
       const el = e.currentTarget as HTMLTextAreaElement;
       if (el.selectionStart === 0) {
@@ -402,7 +534,6 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
   }, []);
 
   const handleChange = useCallback((block: Block, value: string) => {
-    // Slash command detection
     if (value === '/') {
       setSlashBlockId(block.id);
       setSlashQuery('');
@@ -416,7 +547,6 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
       }
     }
 
-    // Wikilink detection: find last `[[` in value
     const lastOpen = value.lastIndexOf('[[');
     if (lastOpen !== -1 && !value.slice(lastOpen).includes(']]')) {
       const query = value.slice(lastOpen + 2);
@@ -442,15 +572,13 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
       return next;
     });
     setDragSourceId(null);
+    setDragTargetId(null);
   }, [dragSourceId]);
 
-  // Count numbered list items
   let numberedCount = 0;
 
   return (
     <div style={editorContainer}>
-      {/* Cover placeholder (future: image upload) */}
-
       {/* Icon + Title */}
       <div style={titleArea}>
         <button
@@ -482,6 +610,9 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
       {/* Blocks */}
       <div style={blocksArea}>
         {blocks.map((block, index) => {
+          // Skip blocks hidden by a closed toggle parent
+          if (hiddenSet.has(block.id)) return null;
+
           if (block.type === 'numbered') numberedCount++;
           else numberedCount = 0;
 
@@ -504,11 +635,16 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
               wikiNotes={noteTitles}
               onWikiSelect={selectedTitle => applyWikilink(block.id, selectedTitle)}
               onWikiClose={() => { setWikiBlockId(null); setWikiQuery(''); }}
-              onToggle={() => setBlocks(prev => prev.map(b => b.id === block.id ? { ...b, open: !b.open } : b))}
+              onToggle={() => setBlocks(prev => prev.map(b =>
+                b.id === block.id ? { ...b, open: b.open === false ? true : false } : b
+              ))}
               onDragStart={() => setDragSourceId(block.id)}
-              onDragOver={e => { e.preventDefault(); }}
+              onDragOver={e => { e.preventDefault(); setDragTargetId(block.id); }}
               onDrop={() => handleDrop(block.id)}
               autoFocus={newBlockId === block.id}
+              onInsertAfter={() => insertBlockAfter(block.id)}
+              isDragTarget={dragTargetId === block.id && dragSourceId !== block.id}
+              onWikilinkClick={onWikilinkClick ?? (() => {})}
             />
           );
         })}
@@ -532,8 +668,7 @@ export function BlockEditor({ noteId, title, icon, blocks: initialBlocks, onChan
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-function getPlaceholder(type: BlockType, focused: boolean): string {
-  if (!focused) return '';
+function getPlaceholder(type: BlockType): string {
   const map: Partial<Record<BlockType, string>> = {
     paragraph: "Write something, or type '/' for commands…",
     h1: 'Heading 1',
@@ -561,7 +696,6 @@ function getInputStyle(type: BlockType): React.CSSProperties {
     lineHeight: 1.65,
     padding: '2px 0',
     overflowY: 'hidden',
-    display: 'block',
   };
   const variants: Partial<Record<BlockType, React.CSSProperties>> = {
     h1: { fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1.2, padding: '4px 0' },
@@ -642,26 +776,50 @@ const blocksArea: React.CSSProperties = {
   gap: '0.125rem',
 };
 
+// Each block row — left padding makes room for the insert + drag handle buttons
 const blockWrap: React.CSSProperties = {
   display: 'flex',
   alignItems: 'flex-start',
-  gap: '0.5rem',
+  gap: '0.375rem',
   position: 'relative',
   borderRadius: 'var(--radius-sm)',
-  padding: '0.125rem 0.25rem',
-  transition: 'background 0.1s ease',
+  padding: '0.125rem 0.25rem 0.125rem 0',
+  transition: 'background 0.1s ease, border-top 0.1s ease',
+};
+
+// Insert block below button (appears on left on hover)
+const insertBtn: React.CSSProperties = {
+  position: 'absolute',
+  left: '0.125rem',
+  top: '0.2rem',
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--muted)',
+  cursor: 'pointer',
+  fontSize: '14px',
+  width: '18px',
+  height: '18px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 'var(--radius-sm)',
+  fontFamily: 'inherit',
+  padding: 0,
+  lineHeight: 1,
+  transition: 'opacity 0.15s ease, color 0.1s ease',
 };
 
 const dragHandle: React.CSSProperties = {
+  position: 'absolute',
+  left: '1.25rem',
+  top: '0.2rem',
   color: 'var(--muted)',
   fontSize: '14px',
   cursor: 'grab',
-  opacity: 0,
   transition: 'opacity 0.15s ease',
   userSelect: 'none',
-  flexShrink: 0,
-  paddingTop: '4px',
   lineHeight: 1,
+  padding: '2px',
 };
 
 const prefixStyle: React.CSSProperties = {
@@ -671,6 +829,7 @@ const prefixStyle: React.CSSProperties = {
   paddingTop: '3px',
   lineHeight: 1.65,
   minWidth: '1.25rem',
+  userSelect: 'none',
 };
 
 const calloutIcon: React.CSSProperties = {

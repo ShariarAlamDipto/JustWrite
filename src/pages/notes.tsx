@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from 'react';
+import { useState, useEffect, useMemo, memo, useCallback } from 'react';
 import { Nav } from '@/components/Nav';
 import { BlockEditor } from '@/components/notes/BlockEditor';
 import { useAuth } from '@/lib/useAuth';
@@ -62,6 +62,14 @@ export default function NotesPage() {
 
   // Backlinks come from the note detail (fetched by API when note is opened)
   const backlinks = selectedNote?.backlinks ?? [];
+
+  // Navigate to a note by its title (used when clicking [[wikilinks]])
+  const handleWikilinkClick = useCallback((title: string) => {
+    const target = notes.find(
+      n => n.title.toLowerCase().trim() === title.toLowerCase().trim()
+    );
+    if (target) openNote(target.id);
+  }, [notes, openNote]);
 
   if (authLoading || !user) return null;
 
@@ -175,6 +183,7 @@ export default function NotesPage() {
                   blocks={selectedNote.blocks || []}
                   onChange={handleEditorChange}
                   noteTitles={notes.filter(n => n.id !== selectedNote.id)}
+                  onWikilinkClick={handleWikilinkClick}
                 />
 
                 {backlinks.length > 0 && (
