@@ -1,201 +1,253 @@
-import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/router'
-import AppShell from '@/components/layout/AppShell'
-import IdeaCard, { QuickCapture } from '@/components/cards/IdeaCard'
-import IdeaEditor from '@/components/editors/IdeaEditor'
+import React, { useState } from 'react'
+import { Nav } from '@/components/Nav'
 import { useAuth } from '@/lib/useAuth'
-import { useTheme } from '@/lib/ThemeContext'
-import type { Idea } from '@/lib/jw-types'
 
-type View = 'list' | 'editor'
-
-// ── Map raw snake_case DB row → Idea camelCase ────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toIdea(raw: any): Idea {
-  return {
-    id:                  raw.id,
-    userId:              raw.user_id,
-    createdAt:           raw.created_at,
-    updatedAt:           raw.updated_at,
-    body:                raw.content ?? '',
-    title:               raw.title ?? undefined,
-    isPrivate:           raw.is_private ?? false,
-    isLocked:            raw.is_locked ?? false,
-    source:              raw.source ?? 'typed',
-    tags:                raw.tags ?? [],
-    segment:             'ideas',
-    convertedToNoteId:   raw.converted_to_note_id ?? undefined,
-    voiceTranscriptId:   raw.voice_transcript_id ?? undefined,
-  }
+const priorityColors: Record<string, string> = {
+  urgent: 'var(--priority-urgent)',
+  high: 'var(--priority-high)',
+  medium: 'var(--priority-medium)',
+  low: 'var(--priority-low)',
 }
 
 export default function IdeasPage() {
   const { user, token } = useAuth()
-  const { isDark } = useTheme()
-  const router = useRouter()
-  const [ideas, setIdeas] = useState<Idea[]>([])
-  const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<View>('list')
-  const [activeIdea, setActiveIdea] = useState<Partial<Idea> | null>(null)
-  const [startWithVoice, setStartWithVoice] = useState(false)
-  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
+  const [freeText, setFreeText] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [generatedTasks, setGeneratedTasks] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set())
+  const [addingTasks, setAddingTasks] = useState(false)
+  const [savingIdea, setSavingIdea] = useState(false)
 
-  // Handle ?new=1, ?voice=1 (from FAB) — consume immediately to prevent reopen loop
-  useEffect(() => {
-    if (router.query.new === '1') {
-      setStartWithVoice(router.query.voice === '1')
-      setActiveIdea(null)
-      setView('editor')
-      router.replace('/ideas', undefined, { shallow: true })
-    }
-  }, [router.query.new]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Handle ?id=<uuid> (from Connect deep link) — consume immediately
-  useEffect(() => {
-    if (router.query.id && ideas.length) {
-      const found = ideas.find((i) => i.id === router.query.id)
-      if (found) {
-        setActiveIdea(found)
-        setView('editor')
-        router.replace('/ideas', undefined, { shallow: true })
-      }
-    }
-  }, [router.query.id, ideas]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!user || !token) return
+  const handleGenerate = async () => {
+    if (!freeText.trim()) return
     setLoading(true)
-    fetch('/api/entries?type=idea', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data) => setIdeas((data.entries ?? []).map(toIdea)))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [user, token])
-
-  const handleSave = async (data: { title?: string; body: string; isPrivate: boolean; tags: string[] }) => {
-    if (!user) return
-    if (activeIdea?.id) {
-      const res = await fetch(`/api/entries/${activeIdea.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        // Entries API accepts `content` not `body`
-        body: JSON.stringify({ content: data.body }),
+    try {
+      const res = await fetch('/api/brainstorm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+        body: JSON.stringify({ text: freeText }),
       })
       if (res.ok) {
-        const { entry: updated } = await res.json()
-        setIdeas((prev) => prev.map((i) => i.id === activeIdea.id ? { ...i, ...toIdea(updated) } : i))
+        const json = await res.json()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const tasksWithIds = (json.tasks || []).map((t: any, i: number) => ({
+          ...t,
+          id: `task-${Date.now()}-${i}`,
+        }))
+        setGeneratedTasks(tasksWithIds)
+        setSelectedTasks(new Set(tasksWithIds.map((t: { id: string }) => t.id)))
+      } else {
+        const err = await res.json()
+        alert(`Error: ${err.error}`)
       }
-    } else {
+    } catch {
+      // ignore
+    }
+    setLoading(false)
+  }
+
+  const handleSaveAsIdea = async () => {
+    if (!freeText.trim()) return
+    setSavingIdea(true)
+    try {
       const res = await fetch('/api/entries', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: data.body, type: 'idea', source: startWithVoice ? 'voice' : 'typed' }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+        body: JSON.stringify({ content: freeText.trim(), source: 'idea', is_locked: false }),
       })
       if (res.ok) {
-        const { entry: created } = await res.json()
-        const mapped = toIdea(created)
-        setIdeas((prev) => [mapped, ...prev])
-        setActiveIdea(mapped)
-        setStartWithVoice(false)
+        setFreeText('')
+        alert('Idea saved')
+      } else {
+        const err = await res.json()
+        alert(`Error: ${err.error}`)
       }
+    } catch {
+      alert('Failed to save idea.')
     }
+    setSavingIdea(false)
   }
 
-  const handleQuickCapture = async (text: string) => {
-    if (!user) return
-    const res = await fetch('/api/entries', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ content: text, type: 'idea', source: 'typed' }),
-    })
-    if (res.ok) {
-      const { entry: created } = await res.json()
-      setIdeas((prev) => [toIdea(created), ...prev])
-    }
+  const toggleTask = (id: string) => {
+    const next = new Set(selectedTasks)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedTasks(next)
   }
 
-  const handleConvertToNote = async () => {
-    if (!user || !activeIdea?.id) return
-    const res = await fetch('/api/entries/convert', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ideaId: activeIdea.id }),
-    })
-    if (res.ok) {
-      router.push('/notes')
-    }
+  const deleteTask = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setGeneratedTasks((prev) => prev.filter((t) => t.id !== id))
+    setSelectedTasks((prev) => { const s = new Set(prev); s.delete(id); return s })
   }
 
-  if (view === 'editor') {
+  const handleAddSelected = async () => {
+    if (selectedTasks.size === 0) return
+    setAddingTasks(true)
+    const toAdd = generatedTasks.filter((t) => selectedTasks.has(t.id))
+    try {
+      const results = await Promise.all(
+        toAdd.map((t) =>
+          fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+            body: JSON.stringify({ title: t.title, description: t.description, priority: t.priority, status: 'todo' }),
+          })
+        )
+      )
+      if (results.every((r) => r.ok)) {
+        setSelectedTasks(new Set())
+        setGeneratedTasks([])
+        setFreeText('')
+        alert(`Added ${toAdd.length} task(s)`)
+      } else {
+        alert('Some tasks failed. Try again.')
+      }
+    } catch {
+      alert('Failed to add tasks.')
+    }
+    setAddingTasks(false)
+  }
+
+  if (!user) {
     return (
-      <IdeaEditor
-        idea={activeIdea ?? undefined}
-        isDark={isDark}
-        onSave={handleSave}
-        onBack={() => { setView('list'); setActiveIdea(null); setStartWithVoice(false) }}
-        onConvertToNote={activeIdea?.id ? handleConvertToNote : undefined}
-        startWithVoice={startWithVoice}
-      />
+      <>
+        <Nav />
+        <main style={styles.main}>
+          <div style={styles.authCard}>
+            <h2 style={{ marginBottom: '0.5rem' }}>Sign in to capture ideas</h2>
+            <p style={{ color: 'var(--muted)' }}>Create an account to save your ideas</p>
+            <a href="/auth/login" className="btn btn-primary" style={{ marginTop: '1rem' }}>
+              Sign in
+            </a>
+          </div>
+        </main>
+      </>
     )
   }
 
   return (
-    <AppShell activeTab="ideas" isDark={isDark}>
-      <div className="pt-4">
-        <div className="px-4 mb-1">
-          <h1
-            className="text-lg font-semibold"
-            style={{ color: isDark ? '#f5f5f5' : '#1a1a1a' }}
-          >
-            Ideas
-          </h1>
-        </div>
+    <>
+      <Nav />
+      <main style={styles.main}>
+        <header style={styles.header}>
+          <h1 style={styles.title}>Ideas</h1>
+          <p style={styles.subtitle}>Dump your thoughts, extract actionable tasks</p>
+        </header>
 
-        {/* Quick capture — always visible */}
-        <QuickCapture
-          isDark={isDark}
-          onSubmit={handleQuickCapture}
-          onVoice={() => {
-            setStartWithVoice(true)
-            setActiveIdea(null)
-            setView('editor')
-          }}
-        />
+        <section style={styles.editorSection}>
+          <textarea
+            value={freeText}
+            onChange={(e) => setFreeText(e.target.value)}
+            placeholder="Write anything… ideas, todos, notes, random thoughts…"
+            style={styles.textarea}
+          />
+          <div style={styles.buttonRow}>
+            <button
+              onClick={handleSaveAsIdea}
+              disabled={savingIdea || !freeText.trim()}
+              className="btn"
+              style={{ flex: 1 }}
+            >
+              {savingIdea ? 'Saving…' : 'Save Idea'}
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={loading || !freeText.trim()}
+              className="btn btn-primary"
+              style={{ flex: 2 }}
+            >
+              {loading ? 'Analyzing…' : 'Extract Tasks'}
+            </button>
+          </div>
+        </section>
 
-        {/* Ideas list */}
-        <div className="px-4 pt-2 pb-4 space-y-2">
-          {loading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-16 animate-pulse"
-                style={{ background: isDark ? '#1a1a1a' : '#f0f0f0', borderRadius: '8px' }}
-              />
-            ))
-          ) : ideas.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">💡</div>
-              <p style={{ color: 'var(--muted)' }}>Capture your first idea above</p>
+        {generatedTasks.length > 0 && (
+          <section style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <h2 style={styles.sectionTitle}>Extracted Tasks</h2>
+              <span style={styles.count}>{selectedTasks.size}/{generatedTasks.length} selected</span>
             </div>
-          ) : (
-            ideas.map((idea) => (
-              <IdeaCard
-                key={idea.id}
-                idea={idea}
-                isDark={isDark}
-                isUnlocked={unlockedIds.has(idea.id)}
-                onUnlock={() => setUnlockedIds((prev) => new Set(prev).add(idea.id))}
-                onClick={() => {
-                  setActiveIdea(idea)
-                  setView('editor')
-                }}
-              />
-            ))
-          )}
-        </div>
-      </div>
-    </AppShell>
+            <div style={styles.taskList}>
+              {generatedTasks.map((task) => (
+                <div
+                  key={task.id}
+                  onClick={() => toggleTask(task.id)}
+                  style={{
+                    ...styles.taskItem,
+                    borderColor: selectedTasks.has(task.id) ? 'var(--accent)' : 'var(--border)',
+                    background: selectedTasks.has(task.id) ? 'var(--accent-glow)' : 'var(--bg-card)',
+                  }}
+                >
+                  <div style={{
+                    ...styles.checkbox,
+                    background: selectedTasks.has(task.id) ? 'var(--accent)' : 'transparent',
+                    borderColor: selectedTasks.has(task.id) ? 'var(--accent)' : 'var(--border)',
+                  }}>
+                    {selectedTasks.has(task.id) && '✓'}
+                  </div>
+                  <div style={styles.taskContent}>
+                    <span style={styles.taskTitle}>{task.title}</span>
+                    {task.description && <p style={styles.taskDesc}>{task.description}</p>}
+                    <span style={{ ...styles.taskPriority, color: priorityColors[task.priority] || priorityColors.medium }}>
+                      {task.priority || 'medium'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={(e) => deleteTask(task.id, e)}
+                    style={styles.deleteBtn}
+                    aria-label="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div style={styles.actions}>
+              <button
+                onClick={handleAddSelected}
+                disabled={selectedTasks.size === 0 || addingTasks}
+                className="btn btn-primary"
+                style={{ flex: 2 }}
+              >
+                {addingTasks ? 'Adding…' : `Add ${selectedTasks.size} Task${selectedTasks.size !== 1 ? 's' : ''}`}
+              </button>
+              <button
+                onClick={() => { setGeneratedTasks([]); setSelectedTasks(new Set()) }}
+                className="btn"
+                style={{ flex: 1 }}
+              >
+                Clear
+              </button>
+            </div>
+          </section>
+        )}
+      </main>
+    </>
   )
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  main: { maxWidth: '720px', margin: '0 auto', padding: '2rem 1rem 4rem' },
+  header: { marginBottom: '1.5rem' },
+  title: { fontSize: '28px', fontWeight: 700, margin: 0, color: 'var(--fg)', letterSpacing: '-0.02em' },
+  subtitle: { fontSize: '14px', color: 'var(--muted)', margin: '0.375rem 0 0' },
+  editorSection: { background: 'var(--bg-card)', padding: '1.25rem', borderRadius: 'var(--radius-lg)', marginBottom: '2rem', border: '1px solid var(--border)' },
+  textarea: { width: '100%', minHeight: '160px', background: 'var(--input-bg)', color: 'var(--fg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '1rem', fontSize: '15px', lineHeight: 1.6, resize: 'vertical' as const },
+  buttonRow: { display: 'flex', gap: '0.5rem', marginTop: '1rem' },
+  section: { marginBottom: '2rem' },
+  sectionHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' },
+  sectionTitle: { fontSize: '12px', fontWeight: 600, margin: 0, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
+  count: { fontSize: '12px', color: 'var(--accent-bright)', background: 'var(--accent-glow)', padding: '0.125rem 0.5rem', borderRadius: '12px', fontWeight: 500 },
+  taskList: { display: 'flex', flexDirection: 'column' as const, gap: '0.75rem' },
+  taskItem: { display: 'flex', alignItems: 'flex-start', gap: '0.875rem', padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', transition: 'all 0.15s ease' },
+  checkbox: { width: '20px', height: '20px', minWidth: '20px', border: '2px solid var(--border)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', color: '#ffffff', marginTop: '2px', transition: 'all 0.15s ease' },
+  taskContent: { flex: 1, minWidth: 0 },
+  taskTitle: { fontSize: '15px', fontWeight: 500, color: 'var(--fg)', display: 'block', lineHeight: 1.4, wordBreak: 'break-word' as const },
+  taskDesc: { fontSize: '13px', color: 'var(--fg-dim)', margin: '0.375rem 0 0', lineHeight: 1.5, wordBreak: 'break-word' as const },
+  taskPriority: { fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, marginTop: '0.375rem', display: 'inline-block' },
+  deleteBtn: { background: 'transparent', color: 'var(--muted)', border: 'none', width: '28px', height: '28px', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', padding: 0 },
+  actions: { display: 'flex', gap: '0.5rem', marginTop: '1rem' },
+  authCard: { textAlign: 'center' as const, padding: '3rem 2rem', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' },
 }

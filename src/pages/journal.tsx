@@ -1,17 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/router'
-import AppShell from '@/components/layout/AppShell'
-import JournalCard, { TodayCard } from '@/components/cards/JournalCard'
-import JournalEditor from '@/components/editors/JournalEditor'
+import React, { useState, useEffect, useCallback, memo } from 'react'
+import { Nav } from '@/components/Nav'
 import { useAuth } from '@/lib/useAuth'
 import { useTheme } from '@/lib/ThemeContext'
-import type { JournalEntry, ListFilter } from '@/lib/jw-types'
+import { getRandomPrompt, PROMPT_CATEGORIES } from '@/lib/prompts'
+import type { JournalPrompt } from '@/lib/prompts'
+import type { JournalEntry } from '@/lib/jw-types'
 
-type View = 'list' | 'editor'
-
-const CACHE_KEY = (uid: string) => `jw:journal:${uid}`
-
-// ── Map raw snake_case DB row → JournalEntry camelCase ───────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toJournalEntry(raw: any): JournalEntry {
   return {
@@ -31,177 +25,433 @@ function toJournalEntry(raw: any): JournalEntry {
   }
 }
 
-// ── Tiny localStorage cache helpers ──────────────────────────────────────────
-function readCache(uid: string): JournalEntry[] {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY(uid))
-    return raw ? (JSON.parse(raw) as JournalEntry[]) : []
-  } catch {
-    return []
-  }
+const getMoodLabel = (mood: number) => {
+  if (mood <= 20) return 'Low'
+  if (mood <= 40) return 'Below Average'
+  if (mood <= 60) return 'Neutral'
+  if (mood <= 80) return 'Good'
+  return 'Great'
 }
 
-function writeCache(uid: string, data: JournalEntry[]) {
-  try {
-    localStorage.setItem(CACHE_KEY(uid), JSON.stringify(data.slice(0, 50)))
-  } catch { /* quota exceeded — ignore */ }
+// ── Entry card ──────────────────────────────────────────────────────────────
+const EntryCard = memo(function EntryCard({
+  entry,
+  onClick,
+}: {
+  entry: JournalEntry
+  onClick: (entry: JournalEntry) => void
+}) {
+  const date = new Date(entry.createdAt)
+  const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return (
+    <div style={cardStyles.card} onClick={() => onClick(entry)}>
+      <div style={cardStyles.meta}>
+        <span style={{ ...cardStyles.badge, background: 'var(--accent-glow)', color: 'var(--accent-bright)', border: '1px solid var(--accent)' }}>
+          {dateStr}
+        </span>
+        <span style={cardStyles.time}>{timeStr}</span>
+        {entry.mood !== undefined && entry.mood !== null && (
+          <span style={cardStyles.mood}>{getMoodLabel(entry.mood as unknown as number)}</span>
+        )}
+      </div>
+      {entry.title && (
+        <p style={{ ...cardStyles.preview, fontWeight: 600, color: 'var(--fg)' }}>{entry.title}</p>
+      )}
+      <p style={cardStyles.preview}>
+        {(entry.body ?? '').slice(0, 150)}{(entry.body ?? '').length > 150 ? '…' : ''}
+      </p>
+    </div>
+  )
+})
+
+const cardStyles: Record<string, React.CSSProperties> = {
+  card: {
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-md)',
+    padding: '1rem 1.25rem',
+    transition: 'all 0.15s ease',
+    cursor: 'pointer',
+  },
+  meta: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    marginBottom: '0.625rem',
+    fontSize: '12px',
+    flexWrap: 'wrap' as const,
+  },
+  badge: {
+    padding: '0.125rem 0.5rem',
+    borderRadius: '12px',
+    fontSize: '11px',
+    fontWeight: 500,
+  },
+  time: {
+    color: 'var(--muted)',
+  },
+  mood: {
+    color: 'var(--fg-dim)',
+    fontSize: '12px',
+  },
+  preview: {
+    fontSize: '14px',
+    lineHeight: 1.6,
+    color: 'var(--fg-dim)',
+    margin: '0 0 0.25rem',
+  },
 }
 
-const DEFAULT_FILTER: ListFilter = { query: '', showPrivate: true, sort: 'newest' }
+// ── Entry detail modal ───────────────────────────────────────────────────────
+const EntryModal = memo(function EntryModal({
+  entry,
+  onClose,
+  onUpdate,
+  onDelete,
+  token,
+}: {
+  entry: JournalEntry | null
+  onClose: () => void
+  onUpdate: (e: JournalEntry) => void
+  onDelete: (id: string) => void
+  token: string
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(entry?.body ?? '')
+  const [saving, setSaving] = useState(false)
 
-export default function JournalPage() {
-  const { user, token } = useAuth()
-  const { isDark } = useTheme()
-  const router = useRouter()
+  useEffect(() => {
+    if (entry) setEditContent(entry.body ?? '')
+  }, [entry])
 
-  // ── Start with cached data so the list renders immediately ──────────────────
-  const [entries, setEntries] = useState<JournalEntry[]>(() => {
-    if (typeof window === 'undefined') return []
-    const keys = Object.keys(localStorage).filter((k) => k.startsWith('jw:journal:'))
-    if (keys.length) {
-      try { return JSON.parse(localStorage.getItem(keys[0]) ?? '[]') } catch { return [] }
-    }
-    return []
-  })
-  // Only show skeleton when there is truly no cached data at all
-  const [loading, setLoading] = useState(entries.length === 0)
-  const [view, setView] = useState<View>('list')
-  const [activeEntry, setActiveEntry] = useState<Partial<JournalEntry> | null>(null)
-  const [filter] = useState<ListFilter>(DEFAULT_FILTER)
-  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
+  if (!entry) return null
 
-  // ── Fetch fresh entries (silent refresh if cached data already shown) ────────
-  const fetchEntries = useCallback(async () => {
-    if (!user || !token) return
+  const handleSave = async () => {
+    setSaving(true)
     try {
-      const res = await fetch('/api/entries?limit=50', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return
-      const data = await res.json()
-      const fresh: JournalEntry[] = (data.entries ?? []).map(toJournalEntry)
-      setEntries(fresh)
-      writeCache(user.id, fresh)
-    } catch { /* network error — keep showing cached */ }
-    finally { setLoading(false) }
-  }, [user, token])
-
-  useEffect(() => { fetchEntries() }, [fetchEntries])
-
-  // Handle ?new=1 (from FAB) — consume immediately to prevent reopen loop
-  useEffect(() => {
-    if (router.query.new === '1') {
-      setActiveEntry(null)
-      setView('editor')
-      router.replace('/journal', undefined, { shallow: true })
-    }
-  }, [router.query.new]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Handle ?id=<uuid> (from Connect deep link) — consume immediately to prevent reopen after onBack
-  useEffect(() => {
-    if (router.query.id && entries.length) {
-      const found = entries.find((e) => e.id === router.query.id)
-      if (found) {
-        setActiveEntry(found)
-        setView('editor')
-        router.replace('/journal', undefined, { shallow: true })
-      }
-    }
-  }, [router.query.id, entries]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const todayEntry = entries.find((e) => (e.createdAt ?? '').startsWith(todayStr))
-
-  const filtered = entries.filter((e) => {
-    if (!filter.query) return true
-    const q = filter.query.toLowerCase()
-    return (e.body ?? '').toLowerCase().includes(q) || (e.title ?? '').toLowerCase().includes(q)
-  })
-
-  const handleSave = async (data: { title?: string; body: string; isPrivate: boolean; mood?: number }) => {
-    if (!user || !token) return
-    if (activeEntry?.id) {
-      const res = await fetch(`/api/entries/${activeEntry.id}`, {
+      const res = await fetch(`/api/entries/${entry.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: data.body, mood: data.mood }),
+        body: JSON.stringify({ content: editContent }),
       })
       if (res.ok) {
         const { entry: updated } = await res.json()
-        setEntries((prev) => prev.map((e) => e.id === activeEntry.id
-          ? { ...e, body: updated.content ?? e.body, mood: updated.mood ?? e.mood }
-          : e
-        ))
+        onUpdate(toJournalEntry(updated))
+        setIsEditing(false)
       }
-    } else {
-      const res = await fetch('/api/entries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: data.body, source: 'text', mood: data.mood }),
-      })
-      if (res.ok) {
-        const { entry: created } = await res.json()
-        const mapped = toJournalEntry(created)
-        setEntries((prev) => {
-          const next = [mapped, ...prev]
-          writeCache(user.id, next)
-          return next
-        })
-        setActiveEntry(mapped)
-      }
+    } finally {
+      setSaving(false)
     }
   }
 
-  if (view === 'editor') {
-    return (
-      <JournalEditor
-        entry={activeEntry ?? undefined}
-        isDark={isDark}
-        onSave={handleSave}
-        onBack={() => { setView('list'); setActiveEntry(null); fetchEntries() }}
-      />
-    )
+  const handleDelete = async () => {
+    if (!confirm('Delete this entry?')) return
+    const res = await fetch(`/api/entries/${entry.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) {
+      onDelete(entry.id)
+      onClose()
+    }
   }
 
+  const date = new Date(entry.createdAt)
+
   return (
-    <AppShell activeTab="journal" isDark={isDark}>
-      <div className="px-4 pt-4 pb-2">
-        <h1
-          className="text-lg font-semibold mb-3"
-          style={{ color: isDark ? '#f5f5f5' : '#1a1a1a' }}
-        >
-          Journal
-        </h1>
-
-        <TodayCard
-          isDark={isDark}
-          hasEntry={!!todayEntry}
-          wordCount={todayEntry?.wordCount}
-          onClick={() => { setActiveEntry(todayEntry ?? null); setView('editor') }}
-        />
-      </div>
-
-      <div className="px-4 pt-3 pb-4 space-y-2">
-        {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-16 animate-pulse"
-                 style={{ background: isDark ? '#1a1a1a' : '#f0f0f0', borderRadius: '8px' }} />
-          ))
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '560px' }}>
+        <div className="modal-header">
+          <div>
+            <span className="entry-type-badge entry-type-journal">Journal</span>
+            <span style={{ marginLeft: '0.75rem', color: 'var(--muted)', fontSize: '13px' }}>
+              {date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+            </span>
+          </div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        {isEditing ? (
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            style={{ minHeight: '200px', marginBottom: '1rem' }}
+            autoFocus
+          />
         ) : (
-          filtered
-            .filter((e) => !(e.createdAt ?? '').startsWith(todayStr))
-            .map((entry) => (
-              <JournalCard
-                key={entry.id}
-                entry={entry}
-                isDark={isDark}
-                isUnlocked={unlockedIds.has(entry.id)}
-                onUnlock={() => setUnlockedIds((prev) => new Set(prev).add(entry.id))}
-                onClick={() => { setActiveEntry(entry); setView('editor') }}
-              />
-            ))
+          <div style={{
+            background: 'var(--input-bg)',
+            padding: '1.25rem',
+            borderRadius: 'var(--radius-md)',
+            marginBottom: '1rem',
+            whiteSpace: 'pre-wrap',
+            lineHeight: 1.7,
+            maxHeight: '300px',
+            overflow: 'auto',
+          }}>
+            {entry.body}
+          </div>
         )}
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {isEditing ? (
+            <>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button className="btn" onClick={() => { setIsEditing(false); setEditContent(entry.body ?? '') }}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn" onClick={() => setIsEditing(true)}>Edit</button>
+              <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
+            </>
+          )}
+        </div>
       </div>
-    </AppShell>
+    </div>
   )
+})
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function JournalPage() {
+  const { user, token } = useAuth()
+  const { isDark: _isDark } = useTheme()
+  const [content, setContent] = useState('')
+  const [mood, setMood] = useState(50)
+  const [entries, setEntries] = useState<JournalEntry[]>([])
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [dailyPrompts, setDailyPrompts] = useState<JournalPrompt[]>([])
+  const [promptAnswers, setPromptAnswers] = useState<string[]>(['', ''])
+  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null)
+  const [stats, setStats] = useState<{ stats: { currentStreak: number }; level: { current: number; title: string }; motivationalMessage?: string } | null>(null)
+
+  useEffect(() => {
+    if (user && token) {
+      fetchEntries()
+      fetchStats()
+      setDailyPrompts([getRandomPrompt(), getRandomPrompt()])
+    }
+  }, [user, token]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/stats', { headers: { Authorization: `Bearer ${token ?? ''}` } })
+      if (res.ok) setStats(await res.json())
+    } catch { /* ignore */ }
+  }, [token])
+
+  const fetchEntries = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/entries?limit=50', { headers: { Authorization: `Bearer ${token ?? ''}` } })
+      if (res.ok) {
+        const json = await res.json()
+        setEntries((json.entries ?? []).map(toJournalEntry))
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [token])
+
+  const handleSave = useCallback(async () => {
+    if (!content.trim() && promptAnswers.every((a) => !a.trim())) return
+    setSaving(true)
+    const answerParts = promptAnswers
+      .map((ans, i) => ans.trim() ? `**${dailyPrompts[i]?.text ?? ''}**\n${ans.trim()}` : '')
+      .filter(Boolean)
+    const fullContent = [content.trim(), ...answerParts].filter(Boolean).join('\n\n')
+    try {
+      const res = await fetch('/api/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+        body: JSON.stringify({ content: fullContent, mood, source: 'text' }),
+      })
+      if (res.ok) {
+        const { entry } = await res.json()
+        setEntries((prev) => [toJournalEntry(entry), ...prev])
+        setContent('')
+        setMood(50)
+        setPromptAnswers(['', ''])
+        fetchStats()
+      }
+    } finally {
+      setSaving(false)
+    }
+  }, [content, mood, promptAnswers, dailyPrompts, token, fetchStats])
+
+  const handleEntryUpdate = useCallback((updated: JournalEntry) => {
+    setEntries((prev) => prev.map((e) => e.id === updated.id ? updated : e))
+    setSelectedEntry(updated)
+  }, [])
+
+  const handleEntryDelete = useCallback((id: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id))
+  }, [])
+
+  return (
+    <>
+      <Nav />
+      <main style={styles.main}>
+        {/* Header */}
+        <header style={styles.header}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h1 style={styles.title}>Journal</h1>
+              <p style={styles.subtitle}>Write freely. Build new today.</p>
+            </div>
+            {stats && (
+              <div style={styles.statsWidget}>
+                <div style={styles.statItem}>
+                  <span style={styles.statValue}>{stats.stats.currentStreak}</span>
+                  <span style={styles.statLabel}>day streak</span>
+                </div>
+                <div style={styles.statItem}>
+                  <span style={styles.statValue}>Lv {stats.level.current}</span>
+                  <span style={styles.statLabel}>{stats.level.title}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          {stats?.motivationalMessage && (
+            <p style={styles.motivational}>{stats.motivationalMessage}</p>
+          )}
+        </header>
+
+        {/* Daily prompts */}
+        <section style={styles.promptSection}>
+          <div style={styles.promptHeader}>
+            <span style={styles.promptLabel}>Today&apos;s Prompts</span>
+            <button
+              className="btn btn-sm"
+              onClick={() => { setDailyPrompts([getRandomPrompt(), getRandomPrompt()]); setPromptAnswers(['', '']) }}
+              style={{ fontSize: '12px' }}
+            >
+              Surprise me
+            </button>
+          </div>
+          <div style={styles.promptList}>
+            {dailyPrompts.map((prompt, idx) => (
+              <div key={prompt.id + idx} style={styles.promptCard}>
+                <span style={styles.promptCategory}>
+                  {PROMPT_CATEGORIES.find((c) => c.id === prompt.category)?.label}
+                </span>
+                <p style={styles.promptText}>{prompt.text}</p>
+                <textarea
+                  value={promptAnswers[idx] ?? ''}
+                  onChange={(e) => {
+                    const next = [...promptAnswers]
+                    next[idx] = e.target.value
+                    setPromptAnswers(next)
+                  }}
+                  placeholder="Write your answer here..."
+                  style={styles.promptAnswerArea}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Free write */}
+        <section style={styles.editorSection}>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="What's on your mind?"
+            style={styles.textarea}
+          />
+          <div style={styles.moodSection}>
+            <label style={styles.moodLabel}>
+              <span>Mood</span>
+              <span style={{ marginLeft: '0.5rem', fontWeight: 500 }}>{getMoodLabel(mood)}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={mood}
+              onChange={(e) => setMood(Number(e.target.value))}
+              className="mood-slider"
+            />
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving || (!content.trim() && promptAnswers.every((a) => !a.trim()))}
+            className="btn btn-primary"
+            style={{ width: '100%', marginTop: '1rem' }}
+          >
+            {saving ? 'Saving…' : 'Save Entry'}
+          </button>
+        </section>
+
+        {/* Entries list */}
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>Your Entries</h2>
+            {!loading && <span style={styles.count}>{entries.length}</span>}
+          </div>
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
+              <div className="spinner" />
+            </div>
+          ) : entries.length === 0 ? (
+            <div style={styles.empty}>
+              <p style={styles.emptyTitle}>No entries yet</p>
+              <p style={styles.emptyHint}>Start writing above to create your first journal entry</p>
+            </div>
+          ) : (
+            <div style={styles.entryList}>
+              {entries.map((e) => (
+                <EntryCard key={e.id} entry={e} onClick={setSelectedEntry} />
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+
+      {selectedEntry && (
+        <EntryModal
+          entry={selectedEntry}
+          onClose={() => setSelectedEntry(null)}
+          onUpdate={handleEntryUpdate}
+          onDelete={handleEntryDelete}
+          token={token ?? ''}
+        />
+      )}
+    </>
+  )
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  main: { maxWidth: '720px', margin: '0 auto', padding: '2rem 1rem 4rem' },
+  header: { marginBottom: '1.5rem' },
+  title: { fontSize: 'clamp(22px, 5vw, 28px)', fontWeight: 700, margin: 0, color: 'var(--fg)', letterSpacing: '-0.02em' },
+  subtitle: { fontSize: '14px', color: 'var(--muted)', margin: '0.375rem 0 0' },
+  statsWidget: { display: 'flex', gap: '1rem', flexWrap: 'wrap' as const },
+  statItem: { display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', gap: '0.125rem' },
+  statValue: { fontSize: '16px', fontWeight: 700, color: 'var(--accent-bright)' },
+  statLabel: { fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
+  motivational: { fontSize: '13px', color: 'var(--fg-dim)', marginTop: '0.75rem', fontStyle: 'italic' as const },
+  promptSection: { marginBottom: '1.5rem' },
+  promptHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' },
+  promptLabel: { fontSize: '12px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
+  promptList: { display: 'flex', flexDirection: 'column' as const, gap: '1rem' },
+  promptCard: { background: 'var(--bg-card)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', borderLeft: '3px solid var(--accent)' },
+  promptCategory: { fontSize: '11px', fontWeight: 600, color: 'var(--accent-bright)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
+  promptText: { fontSize: '15px', lineHeight: 1.6, color: 'var(--fg)', margin: '0.625rem 0' },
+  promptAnswerArea: { width: '100%', minHeight: '80px', background: 'var(--input-bg)', color: 'var(--fg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '0.875rem', fontSize: '14px', lineHeight: 1.6, resize: 'vertical' as const, marginTop: '0.625rem' },
+  editorSection: { background: 'var(--bg-card)', padding: '1.25rem', borderRadius: 'var(--radius-lg)', marginBottom: '2rem', border: '1px solid var(--border)' },
+  textarea: { width: '100%', minHeight: '120px', background: 'var(--input-bg)', color: 'var(--fg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '1rem', fontSize: '15px', lineHeight: 1.6, resize: 'vertical' as const },
+  moodSection: { marginTop: '1rem', padding: '0.875rem', background: 'var(--bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' },
+  moodLabel: { display: 'flex', alignItems: 'center', marginBottom: '0.5rem', fontSize: '13px', color: 'var(--fg-dim)' },
+  section: { marginBottom: '2rem' },
+  sectionHeader: { display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' },
+  sectionTitle: { fontSize: '12px', fontWeight: 600, margin: 0, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
+  count: { fontSize: '12px', color: 'var(--accent-bright)', background: 'var(--accent-glow)', padding: '0.125rem 0.5rem', borderRadius: '12px', fontWeight: 500 },
+  entryList: { display: 'flex', flexDirection: 'column' as const, gap: '0.75rem' },
+  empty: { textAlign: 'center' as const, padding: '2.5rem 1.5rem', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)' },
+  emptyTitle: { fontSize: '16px', fontWeight: 500, color: 'var(--fg)', margin: '0 0 0.375rem' },
+  emptyHint: { fontSize: '14px', color: 'var(--muted)', margin: 0 },
 }

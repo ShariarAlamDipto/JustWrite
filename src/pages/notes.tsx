@@ -1,202 +1,333 @@
-import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/router'
-import AppShell from '@/components/layout/AppShell'
-import NoteCard, { NotesEmpty } from '@/components/cards/NoteCard'
-import NoteEditor from '@/components/editors/NoteEditor'
-import { useAuth } from '@/lib/useAuth'
-import { useTheme } from '@/lib/ThemeContext'
-import type { Note, NoteBlock } from '@/lib/jw-types'
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Nav } from '@/components/Nav';
+import { BlockEditor, Block } from '@/components/notes/BlockEditor';
+import { useAuth } from '@/lib/useAuth';
+import { useRouter } from 'next/router';
 
-type View = 'list' | 'editor'
+interface NoteListItem {
+  id: string;
+  title: string;
+  icon: string | null;
+  parent_id: string | null;
+  is_pinned: boolean;
+  is_locked: boolean;
+  updated_at: string;
+}
 
-// ── Map raw snake_case DB row → Note camelCase ─────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toNote(raw: any): Note {
-  return {
-    id:            raw.id,
-    userId:        raw.user_id ?? '',
-    createdAt:     raw.created_at ?? '',
-    updatedAt:     raw.updated_at ?? '',
-    isPrivate:     raw.is_locked ?? false,
-    isLocked:      raw.is_locked ?? false,
-    isPinned:      raw.is_pinned ?? false,
-    source:        raw.source ?? 'typed',
-    tags:          raw.tags ?? [],
-    title:         raw.title ?? 'Untitled',
-    icon:          raw.icon ?? '',
-    blocks:        raw.blocks ?? [],
-    coverUrl:      raw.cover_url ?? undefined,
-    parentId:      raw.parent_id ?? undefined,
-    linkedNoteIds: raw.linked_note_ids ?? [],
-    wordCount:     raw.word_count ?? 0,
-    segment:       'notes',
-  }
+interface NoteDetail extends NoteListItem {
+  blocks: Block[];
+  cover_url: string | null;
 }
 
 export default function NotesPage() {
-  const { user, token } = useAuth()
-  const { isDark } = useTheme()
-  const router = useRouter()
-  const [notes, setNotes] = useState<Note[]>([])
-  const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<View>('list')
-  const [activeNote, setActiveNote] = useState<Partial<Note> | null>(null)
-  const [startWithVoice, setStartWithVoice] = useState(false)
-  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
-  const [noteLoading, setNoteLoading] = useState(false)
+  const { user, token, loading: authLoading } = useAuth();
+  const router = useRouter();
 
-  // Fetch full note (with blocks) before opening editor — prevents empty-block autosave overwriting real content
-  const openNote = async (note: Note) => {
-    if (!token) return
-    setNoteLoading(true)
+  const [notes, setNotes] = useState<NoteListItem[]>([]);
+  const [selectedNote, setSelectedNote] = useState<NoteDetail | null>(null);
+  const [loadingList, setLoadingList] = useState(true);
+  const [loadingNote, setLoadingNote] = useState(false);
+  const [saving, setSaving] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [search, setSearch] = useState('');
+
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingChange = useRef<{ title: string; icon: string | null; blocks: Block[] } | null>(null);
+
+  useEffect(() => {
+    if (!authLoading && !user) router.replace('/auth/login');
+  }, [authLoading, user, router]);
+
+  const loadNotes = useCallback(async () => {
+    if (!user || !token) return;
     try {
-      const res = await fetch(`/api/notes/${note.id}`, {
+      const res = await fetch('/api/notes?parent_id=null', {
         headers: { Authorization: `Bearer ${token}` },
-      })
+      });
       if (res.ok) {
-        const { note: full } = await res.json()
-        setActiveNote(toNote(full))
-      } else {
-        setActiveNote(note) // fallback to list item
+        const { notes } = await res.json();
+        setNotes(notes || []);
       }
-    } catch {
-      setActiveNote(note) // fallback on network error
     } finally {
-      setNoteLoading(false)
-      setView('editor')
+      setLoadingList(false);
     }
-  }
-
-  // Handle ?new=1, ?voice=1 (from FAB) and ?id=<uuid> (from Connect deep link).
-  // Consume query params immediately via router.replace to prevent reopen on back+refetch.
-  useEffect(() => {
-    if (router.query.new === '1') {
-      setStartWithVoice(router.query.voice === '1')
-      setActiveNote(null)
-      setView('editor')
-      router.replace('/notes', undefined, { shallow: true })
-    }
-  }, [router.query.new]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, token]);
 
   useEffect(() => {
-    if (router.query.id && notes.length) {
-      const found = notes.find((n) => n.id === router.query.id)
-      if (found) {
-        router.replace('/notes', undefined, { shallow: true })
-        openNote(found)
-      }
-    }
-  }, [router.query.id, notes]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (user) loadNotes();
+  }, [user, loadNotes]);
 
-  useEffect(() => {
-    if (!user || !token) return
-    setLoading(true)
-    fetch('/api/notes', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.ok ? r.json() : { notes: [] })
-      .then((data) => setNotes((data.notes ?? []).map(toNote)))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [user, token])
-
-  const handleSave = async (data: {
-    title: string
-    blocks: NoteBlock[]
-    isPrivate: boolean
-    tags: string[]
-    icon?: string
-  }) => {
-    if (!user) return
-
-    if (activeNote?.id) {
-      const res = await fetch(`/api/notes/${activeNote.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        // Map isPrivate → is_locked (API field name)
-        body: JSON.stringify({ ...data, is_locked: data.isPrivate }),
-      })
+  const openNote = useCallback(async (id: string) => {
+    if (!user || !token) return;
+    setLoadingNote(true);
+    try {
+      const res = await fetch(`/api/notes/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
-        const { note: updated } = await res.json()
-        setNotes((prev) => prev.map((n) => n.id === activeNote.id ? toNote(updated) : n))
+        const { note } = await res.json();
+        setSelectedNote(note);
       }
-    } else {
+    } finally {
+      setLoadingNote(false);
+    }
+  }, [user, token]);
+
+  const createNote = useCallback(async () => {
+    if (!user || !token) return;
+    try {
       const res = await fetch('/api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        // Map isPrivate → is_locked (API field name)
-        body: JSON.stringify({ ...data, is_locked: data.isPrivate, source: startWithVoice ? 'voice' : 'typed' }),
-      })
-      if (res.ok) {
-        const { note: created } = await res.json()
-        const mapped = toNote(created)
-        setNotes((prev) => [mapped, ...prev])
-        setActiveNote(mapped)
-        setStartWithVoice(false)
+        body: JSON.stringify({ title: 'Untitled', blocks: [] }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({ error: 'Failed to create note' }));
+        alert(payload.error || 'Failed to create note');
+        return;
       }
+      const { note } = await res.json();
+      setNotes(prev => [note, ...prev]);
+      await openNote(note.id);
+    } catch {
+      alert('Failed to create note. Please try again.');
     }
-  }
+  }, [user, token, openNote]);
 
-  if (view === 'editor') {
-    return (
-      <NoteEditor
-        note={activeNote ?? undefined}
-        isDark={isDark}
-        onSave={handleSave}
-        onBack={() => { setView('list'); setActiveNote(null); setStartWithVoice(false) }}
-        startWithVoice={startWithVoice}
-      />
-    )
-  }
+  const deleteNote = useCallback(async (id: string) => {
+    if (!user || !token || !confirm('Delete this note?')) return;
+    const res = await fetch(`/api/notes/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      setNotes(prev => prev.filter(n => n.id !== id));
+      if (selectedNote?.id === id) setSelectedNote(null);
+    }
+  }, [user, token, selectedNote]);
 
-  // Sort: pinned first, then by updatedAt desc
-  const sorted = [...notes].sort((a, b) => {
-    if (a.isPinned && !b.isPinned) return -1
-    if (!a.isPinned && b.isPinned) return 1
-    return b.updatedAt > a.updatedAt ? 1 : -1
-  })
+  const togglePin = useCallback(async (id: string, pinned: boolean) => {
+    if (!user || !token) return;
+    await fetch(`/api/notes/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ is_pinned: !pinned }),
+    });
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, is_pinned: !pinned } : n));
+  }, [user, token]);
+
+  const handleEditorChange = useCallback((title: string, icon: string | null, blocks: Block[]) => {
+    if (!selectedNote || !user || !token) return;
+    pendingChange.current = { title, icon, blocks };
+    setSaving('saving');
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      const change = pendingChange.current;
+      if (!change || !selectedNote || !user || !token) return;
+      try {
+        const res = await fetch(`/api/notes/${selectedNote.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ title: change.title, icon: change.icon, blocks: change.blocks }),
+        });
+        if (res.ok) {
+          setSaving('saved');
+          setNotes(prev => prev.map(n =>
+            n.id === selectedNote.id
+              ? { ...n, title: change.title || 'Untitled', icon: change.icon }
+              : n
+          ));
+        } else {
+          setSaving('error');
+        }
+      } catch {
+        setSaving('error');
+      }
+    }, 1500);
+  }, [selectedNote, user, token]);
+
+  const filtered = notes.filter(n =>
+    !search || n.title.toLowerCase().includes(search.toLowerCase())
+  );
+  const pinned = filtered.filter(n => n.is_pinned);
+  const unpinned = filtered.filter(n => !n.is_pinned);
+
+  if (authLoading || !user) return null;
 
   return (
-    <AppShell activeTab="notes" isDark={isDark}>
-      <div className="pt-4 px-4 mb-2">
-        <h1
-          className="text-lg font-semibold"
-          style={{ color: isDark ? '#f5f5f5' : '#1a1a1a' }}
-        >
-          Notes
-        </h1>
+    <>
+      <Nav />
+      <div style={pageLayout}>
+        {/* Sidebar */}
+        <aside style={{ ...sidebar, ...(sidebarOpen ? {} : sidebarHidden) }}>
+          <div style={sidebarHeader}>
+            <span style={sidebarTitle}>Notes</span>
+            <button style={newNoteBtn} onClick={createNote} title="New note">+</button>
+          </div>
+          <div style={searchWrap}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search notes…"
+              style={searchInput}
+            />
+          </div>
+          <div style={noteList}>
+            {loadingList ? (
+              <div style={emptyMsg}>Loading…</div>
+            ) : filtered.length === 0 ? (
+              <div style={emptyMsg}>
+                {search ? 'No results' : 'No notes yet'}
+                {!search && (
+                  <button style={createFirstBtn} onClick={createNote}>
+                    Create your first note
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                {pinned.length > 0 && (
+                  <>
+                    <div style={sectionLabel}>Pinned</div>
+                    {pinned.map(n => (
+                      <NoteRow
+                        key={n.id}
+                        note={n}
+                        active={selectedNote?.id === n.id}
+                        onOpen={() => openNote(n.id)}
+                        onDelete={() => deleteNote(n.id)}
+                        onPin={() => togglePin(n.id, n.is_pinned)}
+                      />
+                    ))}
+                    <div style={sectionDivider} />
+                  </>
+                )}
+                {unpinned.map(n => (
+                  <NoteRow
+                    key={n.id}
+                    note={n}
+                    active={selectedNote?.id === n.id}
+                    onOpen={() => openNote(n.id)}
+                    onDelete={() => deleteNote(n.id)}
+                    onPin={() => togglePin(n.id, n.is_pinned)}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+        </aside>
+
+        {/* Editor pane */}
+        <main style={editorPane}>
+          <button
+            style={sidebarToggle}
+            onClick={() => setSidebarOpen(o => !o)}
+            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+          >
+            {sidebarOpen ? '◀' : '▶'}
+          </button>
+          {loadingNote ? (
+            <div style={centerMsg}><div className="spinner" /></div>
+          ) : selectedNote ? (
+            <>
+              <div style={saveStatus}>
+                {saving === 'saving' && <span style={{ color: 'var(--muted)' }}>Saving…</span>}
+                {saving === 'saved'  && <span style={{ color: 'var(--success)', opacity: 0.7 }}>Saved</span>}
+                {saving === 'error'  && <span style={{ color: 'var(--danger)' }}>Save failed</span>}
+              </div>
+              <div style={editorScroll}>
+                <BlockEditor
+                  key={selectedNote.id}
+                  noteId={selectedNote.id}
+                  title={selectedNote.title}
+                  icon={selectedNote.icon}
+                  blocks={selectedNote.blocks || []}
+                  onChange={handleEditorChange}
+                />
+              </div>
+            </>
+          ) : (
+            <div style={emptyEditor}>
+              <div style={emptyEditorIcon}>📝</div>
+              <div style={emptyEditorTitle}>Your second brain</div>
+              <div style={emptyEditorSub}>
+                Select a note or create a new one to start writing.
+              </div>
+              <button style={emptyEditorBtn} onClick={createNote}>
+                + New Note
+              </button>
+            </div>
+          )}
+        </main>
       </div>
 
-      <div className="px-4 pb-4 space-y-2">
-        {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-16 animate-pulse"
-              style={{ background: isDark ? '#1a1a1a' : '#f0f0f0', borderRadius: '8px' }}
-            />
-          ))
-        ) : sorted.length === 0 ? (
-          <NotesEmpty
-            isDark={isDark}
-            onCreate={() => {
-              setActiveNote(null)
-              setView('editor')
-            }}
-          />
-        ) : (
-          sorted.map((note) => (
-            <NoteCard
-              key={note.id}
-              note={note}
-              isDark={isDark}
-              isUnlocked={unlockedIds.has(note.id)}
-              onUnlock={() => setUnlockedIds((prev) => new Set(prev).add(note.id))}
-              onClick={() => openNote(note)}
-            />
-          ))
-        )}
-      </div>
-    </AppShell>
-  )
+      <style>{`
+        .drag-handle { opacity: 0 !important; }
+        div[draggable]:hover .drag-handle { opacity: 1 !important; }
+        .note-row-actions { opacity: 0 !important; }
+        .note-row:hover .note-row-actions { opacity: 1 !important; }
+        .note-row:hover { background: var(--bg-card) !important; }
+        textarea::placeholder { color: var(--muted); }
+        textarea:focus { outline: none; }
+        .note-row.active-note { background: var(--bg-card) !important; }
+      `}</style>
+    </>
+  );
 }
+
+function NoteRow({ note, active, onOpen, onDelete, onPin }: {
+  note: NoteListItem;
+  active: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+  onPin: () => void;
+}) {
+  return (
+    <div
+      className={`note-row${active ? ' active-note' : ''}`}
+      style={noteRowStyle}
+      onClick={onOpen}
+    >
+      <span style={noteRowIcon}>{note.icon || '📄'}</span>
+      <span style={noteRowTitle}>{note.title || 'Untitled'}</span>
+      <span className="note-row-actions" style={noteRowActions} onClick={e => e.stopPropagation()}>
+        <button style={rowAction} onClick={onPin} title={note.is_pinned ? 'Unpin' : 'Pin'}>
+          {note.is_pinned ? '📌' : '⊕'}
+        </button>
+        <button style={{ ...rowAction, color: 'var(--danger)' }} onClick={onDelete} title="Delete">
+          ×
+        </button>
+      </span>
+    </div>
+  );
+}
+
+const pageLayout: React.CSSProperties = { display: 'flex', height: 'calc(100vh - 56px)', overflow: 'hidden' };
+const sidebar: React.CSSProperties = { width: '240px', flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--bg-elevated)', transition: 'width 0.2s ease', overflow: 'hidden' };
+const sidebarHidden: React.CSSProperties = { width: 0, borderRight: 'none' };
+const sidebarHeader: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1rem 0.5rem', flexShrink: 0 };
+const sidebarTitle: React.CSSProperties = { fontSize: '13px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--muted)' };
+const newNoteBtn: React.CSSProperties = { background: 'transparent', border: '1px solid var(--border)', color: 'var(--fg)', width: '26px', height: '26px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 };
+const searchWrap: React.CSSProperties = { padding: '0.5rem 0.75rem', flexShrink: 0 };
+const searchInput: React.CSSProperties = { width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--fg)', fontSize: '12px', padding: '0.375rem 0.625rem', outline: 'none', fontFamily: 'inherit' };
+const noteList: React.CSSProperties = { flex: 1, overflowY: 'auto', padding: '0.25rem 0.5rem 1rem' };
+const sectionLabel: React.CSSProperties = { fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', padding: '0.5rem 0.5rem 0.25rem' };
+const sectionDivider: React.CSSProperties = { height: '1px', background: 'var(--border)', margin: '0.5rem 0.5rem' };
+const noteRowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', borderRadius: 'var(--radius-md)', cursor: 'pointer', transition: 'background 0.1s ease', position: 'relative' };
+const noteRowIcon: React.CSSProperties = { fontSize: '14px', flexShrink: 0 };
+const noteRowTitle: React.CSSProperties = { fontSize: '13px', color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 };
+const noteRowActions: React.CSSProperties = { display: 'flex', gap: '0.125rem', flexShrink: 0, transition: 'opacity 0.15s ease' };
+const rowAction: React.CSSProperties = { background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '14px', padding: '2px 4px', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit' };
+const emptyMsg: React.CSSProperties = { color: 'var(--muted)', fontSize: '13px', textAlign: 'center', padding: '2rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' };
+const createFirstBtn: React.CSSProperties = { background: 'var(--accent-bright)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', padding: '0.5rem 1rem', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+const editorPane: React.CSSProperties = { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' };
+const sidebarToggle: React.CSSProperties = { position: 'absolute', top: '0.75rem', left: '0.75rem', zIndex: 10, background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--muted)', borderRadius: 'var(--radius-md)', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '11px' };
+const saveStatus: React.CSSProperties = { position: 'absolute', top: '0.875rem', right: '1rem', fontSize: '12px', zIndex: 10 };
+const editorScroll: React.CSSProperties = { flex: 1, overflowY: 'auto', paddingTop: '2.5rem' };
+const centerMsg: React.CSSProperties = { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const emptyEditor: React.CSSProperties = { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', color: 'var(--fg-dim)' };
+const emptyEditorIcon: React.CSSProperties = { fontSize: '3rem', opacity: 0.4 };
+const emptyEditorTitle: React.CSSProperties = { fontSize: '1.25rem', fontWeight: 600, color: 'var(--fg)' };
+const emptyEditorSub: React.CSSProperties = { fontSize: '14px', color: 'var(--muted)', textAlign: 'center', maxWidth: '280px' };
+const emptyEditorBtn: React.CSSProperties = { marginTop: '0.5rem', background: 'var(--accent-bright)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', padding: '0.625rem 1.25rem', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+
