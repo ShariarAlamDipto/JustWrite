@@ -345,10 +345,14 @@ export default function FinancePage() {
   }
 
   const handleDeleteTxn = async (id: string) => {
-    await fetch(`/api/finance/txns/${id}`, {
+    const res = await fetch(`/api/finance/txns/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token ?? ''}` },
     })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error ?? 'Failed to delete transaction')
+    }
     await loadDays()
   }
 
@@ -444,8 +448,9 @@ function TodayView({
   onCloseDay: () => void
   onAddExpense: () => void
   onAddIncome: () => void
-  onDeleteTxn: (id: string) => void
+  onDeleteTxn: (id: string) => Promise<void>
 }) {
+  const [delErr, setDelErr] = useState('')
   const txns = day?.finance_txns ?? []
   const sorted = [...txns].sort((a, b) => b.created_at.localeCompare(a.created_at))
 
@@ -527,6 +532,7 @@ function TodayView({
             <span style={styles.sectionTitle}>Today&apos;s Log</span>
             <span style={styles.count}>{sorted.length}</span>
           </div>
+          {delErr && <p style={{ color: '#e53e3e', fontSize: '12px', marginBottom: '0.5rem' }}>{delErr}</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {sorted.map((t) => (
               <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
@@ -539,7 +545,7 @@ function TodayView({
                   {!t.category && !t.note && <span style={{ fontSize: '13px', color: 'var(--muted)' }}>{t.kind}</span>}
                 </div>
                 <button
-                  onClick={() => onDeleteTxn(t.id)}
+                  onClick={() => onDeleteTxn(t.id).catch((e: unknown) => setDelErr(e instanceof Error ? e.message : 'Failed to delete'))}
                   style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '2px 6px', fontSize: '16px' }}
                   aria-label="Delete"
                 >×</button>
