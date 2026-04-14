@@ -3,6 +3,7 @@ import 'package:justwrite_mobile/models/entry.dart';
 import 'package:justwrite_mobile/services/supabase_service.dart';
 import 'package:justwrite_mobile/services/compression_service.dart';
 import 'package:justwrite_mobile/services/encryption_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 // Top-level function required by compute() — runs in a background isolate.
@@ -100,8 +101,10 @@ class EntryProvider extends ChangeNotifier {
         return;
       }
 
-      // userId is embedded in every row — grab from first entry
-      final userId = rawMaps.first['user_id'] as String? ?? '';
+      // Prefer the authenticated user's ID; fall back to the value embedded in
+      // the first row only when the auth session is not available.
+      final userId = Supabase.instance.client.auth.currentUser?.id
+          ?? rawMaps.first['user_id'] as String? ?? '';
 
       // Offload all PBKDF2+AES-GCM work to a background isolate.
       // This is critical: 600k PBKDF2 iterations per entry would freeze
@@ -256,8 +259,9 @@ class EntryProvider extends ChangeNotifier {
 
   Future<void> deleteEntry(String entryId) async {
     // Optimistic delete: remove from local cache first
-    final removedEntry = _entries.firstWhere((e) => e.id == entryId);
     final removedIndex = _entries.indexWhere((e) => e.id == entryId);
+    if (removedIndex == -1) return; // already removed or unknown ID
+    final removedEntry = _entries[removedIndex];
     _entries.removeWhere((e) => e.id == entryId);
     _invalidateFilterCache();
     notifyListeners();

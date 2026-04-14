@@ -35,10 +35,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     if (req.method === 'PATCH') {
-      const { content, mood, activities, summary } = req.body;
-      
+      const { content, mood, summary } = req.body;
+
       const updates: any = {};
-      
+
       if (content !== undefined) {
         const isEncryptedPayload = typeof content === 'string' &&
           (content.startsWith('enc2:') || content.startsWith('enc:'));
@@ -50,16 +50,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
         updates.content = sanitizedContent;
       }
-      
+
       if (mood !== undefined) {
         const moodNum = Number(mood);
         updates.mood = Number.isFinite(moodNum) ? Math.min(100, Math.max(0, Math.round(moodNum))) : 5;
       }
-      
-      if (activities !== undefined) {
-        updates.activities = activities;
-      }
-      
+
       if (summary !== undefined) {
         updates.summary = sanitizeInput(summary);
       }

@@ -82,34 +82,47 @@ export async function listEntries(
   const safeLimit = Math.max(1, Math.min(200, options?.limit ?? 100));
 
   if (supabase) {
-    let query = supabase
-      .from('entries')
-      .select('id,content,source,created_at,updated_at,mood,is_locked,is_private,title,user_id,summary,word_count,tags')
-      .order('created_at', { ascending: false })
-      .limit(safeLimit);
+    const buildQuery = (selectCols: string) => {
+      let query = supabase!
+        .from('entries')
+        .select(selectCols)
+        .order('created_at', { ascending: false })
+        .limit(safeLimit);
 
-    // SECURITY: Filter by user_id when provided
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
+      // SECURITY: Filter by user_id when provided
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
 
-    // Filter by locked status when requested
-    if (options?.locked !== undefined) {
-      query = query.eq('is_locked', options.locked);
-    }
+      // Filter by locked status when requested
+      if (options?.locked !== undefined) {
+        query = query.eq('is_locked', options.locked);
+      }
 
-    if (options?.since) {
-      query = query.or(`updated_at.gte.${options.since},created_at.gte.${options.since}`);
-    }
+      if (options?.since) {
+        query = query.or(`updated_at.gte.${options.since},created_at.gte.${options.since}`);
+      }
 
-    if (options?.cursor) {
-      query = query.lt('created_at', options.cursor);
-    }
+      if (options?.cursor) {
+        query = query.lt('created_at', options.cursor);
+      }
 
-    const { data, error } = await query;
+      return query;
+    };
+
+    const specificCols = 'id,content,source,created_at,updated_at,mood,is_locked,is_private,title,user_id,summary,word_count,tags';
+    let { data, error } = await buildQuery(specificCols);
+
     if (error) {
-      console.error('Supabase listEntries error:', error.message);
-      return [];
+      // If the error is about a missing column (schema not yet migrated) fall back to *
+      if (error.message && /column.*does not exist/i.test(error.message)) {
+        console.warn('[storage] listEntries column missing, falling back to select(*): ', error.message);
+        ({ data, error } = await buildQuery('*'));
+      }
+      if (error) {
+        console.error('Supabase listEntries error:', error.message);
+        return [];
+      }
     }
     return data || [];
   }

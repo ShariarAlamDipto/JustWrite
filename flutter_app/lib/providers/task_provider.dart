@@ -101,6 +101,7 @@ class TaskProvider extends ChangeNotifier {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) {
         _tasks = [];
+        _lastFetch = DateTime.now();
         return;
       }
 
@@ -222,8 +223,9 @@ class TaskProvider extends ChangeNotifier {
 
   Future<void> deleteTask(String taskId) async {
     // Optimistic delete
-    final removedTask = _tasks.firstWhere((t) => t.id == taskId);
     final removedIndex = _tasks.indexWhere((t) => t.id == taskId);
+    if (removedIndex == -1) return; // already removed or unknown ID
+    final removedTask = _tasks[removedIndex];
     _tasks.removeWhere((t) => t.id == taskId);
     _invalidateCache();
     notifyListeners();
