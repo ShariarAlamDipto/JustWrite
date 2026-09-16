@@ -2,8 +2,9 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { withErrorHandler } from '../../../lib/apiHelpers';
 import { withAuth } from '../../../lib/withAuth';
 import { createClient } from '@supabase/supabase-js';
-import { sanitizeInput, sanitizeUrl, checkRateLimit } from '../../../lib/security';
+import { sanitizeInput, checkRateLimit } from '../../../lib/security';
 import { createListEtag, isNotModified, setRevalidateHeaders } from '../../../lib/httpCache';
+import { attachSignedAudioUrls } from '../../../lib/voiceStorage';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -32,7 +33,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
         let query = supabase
           .from('voice_entries')
-          .select('*')
+          .select('id, user_id, title, audio_duration, transcript, metadata, created_at, updated_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(limit);
@@ -46,6 +47,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         if (error) throw error;
         const voiceEntries = data || [];
 
+        // ETag is computed from the stored rows, before signed URLs are attached —
+        // those rotate on every request and would otherwise defeat revalidation.
         const etag = createListEtag(voiceEntries);
         setRevalidateHeaders(res, etag);
         if (isNotModified(req, etag)) {
@@ -57,7 +60,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           : null;
 
         return res.status(200).json({
-          voiceEntries,
+          voiceEntries: await attachSignedAudioUrls(supabase, voiceEntries),
           meta: {
             limit,
             nextCursor,
@@ -72,7 +75,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'POST') {
       // Create voice entry
       try {
-        const { title, audio_url, audio_duration, transcript, metadata } = req.body;
+        const { title, audio_duration, transcript, metadata } = req.body;
 
         // SECURITY: Validate and sanitize inputs
         if (!title || typeof title !== 'string') {
@@ -84,15 +87,26 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           return res.status(400).json({ error: 'Title is required' });
         }
 
+        // Audio lives in Storage, never in this row. Any inline payload a client
+        // sends (e.g. the legacy base64 `audio_data`) is dropped here so it can
+        // not bloat the table again.
+        const safeMetadata =
+          metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+            ? Object.fromEntries(
+                Object.entries(metadata as Record<string, unknown>)
+                  .filter(([key]) => key !== 'audio_data' && key !== 'storage_path')
+              )
+            : null;
+
         const { data, error } = await supabase
           .from('voice_entries')
           .insert({
             user_id: userId,
             title: sanitizedTitle,
-            audio_url: typeof audio_url === 'string' ? sanitizeUrl(audio_url) : null,
+            audio_url: null, // populated as a signed URL on read
             audio_duration: typeof audio_duration === 'number' ? audio_duration : null,
             transcript: transcript ? sanitizeInput(transcript) : null,
-            metadata: metadata || null, // metadata is JSON, validated by Supabase
+            metadata: safeMetadata,
           })
           .select()
           .single();

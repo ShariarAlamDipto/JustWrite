@@ -47,6 +47,9 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https: blob:",
+              // Voice playback streams from Supabase Storage signed URLs; without an
+              // explicit media-src these fall back to default-src 'self' and are blocked.
+              "media-src 'self' blob: data: https://*.supabase.co",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com https://api.openai.com https://api.groq.com",
               "frame-ancestors 'none'",
               "form-action 'self'",

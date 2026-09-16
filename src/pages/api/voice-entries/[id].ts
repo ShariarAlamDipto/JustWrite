@@ -3,6 +3,11 @@ import { withErrorHandler } from '../../../lib/apiHelpers';
 import { withAuth } from '../../../lib/withAuth';
 import { createClient } from '@supabase/supabase-js';
 import { isValidUUID, sanitizeInput } from '../../../lib/security';
+import {
+  VOICE_BUCKET,
+  storagePathFromMetadata,
+  isOwnedStoragePath,
+} from '../../../lib/voiceStorage';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -78,11 +83,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           .eq('user_id', userId)
           .single();
 
-        // Delete from storage if file exists
-        if (entry?.metadata?.file_name) {
-          await supabase.storage
-            .from('voice-recordings')
-            .remove([entry.metadata.file_name]);
+        // Delete the stored object first. The path is re-checked against the
+        // caller's own prefix so a tampered row can never remove someone else's file.
+        const storagePath = storagePathFromMetadata(entry?.metadata);
+        if (storagePath && isOwnedStoragePath(storagePath, userId)) {
+          await supabase.storage.from(VOICE_BUCKET).remove([storagePath]);
         }
 
         // Delete from database

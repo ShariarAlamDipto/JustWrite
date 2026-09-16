@@ -117,26 +117,35 @@ export default function VoiceEntriesPage() {
 
     setUploading(true);
     try {
-      const base64Audio = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(audioBlob);
-      });
-
+      // Create the row first, then stream the audio into Storage against its id.
       const res = await fetch('/api/voice-entries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           title,
           audio_duration: recordingTime,
-          metadata: { format: 'webm', recorded_on: 'web', audio_data: base64Audio },
+          metadata: { format: 'webm', recorded_on: 'web' },
         }),
       });
 
       if (!res.ok) throw new Error('Save failed');
       const json = await res.json();
       const saved: VoiceEntry = json.voiceEntry;
-      setEntries(prev => [saved, ...prev]);
+
+      const uploadForm = new FormData();
+      uploadForm.append('id', saved.id);
+      uploadForm.append('audio', audioBlob, 'recording.webm');
+
+      const uploadRes = await fetch('/api/voice-entries/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: uploadForm,
+      });
+
+      if (!uploadRes.ok) throw new Error('Upload failed');
+      const { audio_url, metadata } = await uploadRes.json();
+
+      setEntries(prev => [{ ...saved, audio_url, metadata }, ...prev]);
       setUploading(false);
 
       // Auto-transcribe immediately (don't block UI)
@@ -150,17 +159,18 @@ export default function VoiceEntriesPage() {
   const transcribeEntry = async (entryId: string, blob?: Blob) => {
     if (!token) return;
 
-    // Reconstruct blob from stored base64 if not passed directly
+    // Re-transcribing an older entry: pull the audio back from its signed URL.
     let audioBlob = blob;
     if (!audioBlob) {
       const entry = entries.find(e => e.id === entryId);
-      const b64 = entry?.metadata?.audio_data as string | undefined;
-      if (!b64) return;
-      const byteString = atob(b64.split(',')[1]);
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-      audioBlob = new Blob([ab], { type: 'audio/webm' });
+      if (!entry?.audio_url) return;
+      try {
+        const audioRes = await fetch(entry.audio_url);
+        if (!audioRes.ok) return;
+        audioBlob = await audioRes.blob();
+      } catch {
+        return;
+      }
     }
 
     setTranscribingId(entryId);
@@ -182,7 +192,11 @@ export default function VoiceEntriesPage() {
       });
       if (pRes.ok) {
         const patched = await pRes.json();
-        setEntries(prev => prev.map(e => e.id === entryId ? { ...e, ...patched.voiceEntry } : e));
+        // PATCH returns the stored row, where audio_url is null by design —
+        // keep the signed URL we already hold so playback keeps working.
+        setEntries(prev => prev.map(e => e.id === entryId
+          ? { ...e, ...patched.voiceEntry, audio_url: e.audio_url }
+          : e));
         setExpandedId(entryId);
       }
     } catch { /* transcription failure is silent — user can retry */ }
@@ -190,7 +204,7 @@ export default function VoiceEntriesPage() {
   };
 
   const playAudio = (entry: VoiceEntry) => {
-    const src = entry.metadata?.audio_data as string | undefined;
+    const src = entry.audio_url;
     if (!src) return;
     if (currentPlaying === entry.id) {
       audioRef.current?.pause();
@@ -320,13 +334,13 @@ export default function VoiceEntriesPage() {
                     {/* Play button */}
                     <button
                       onClick={() => playAudio(entry)}
-                      disabled={!entry.metadata?.audio_data}
+                      disabled={!entry.audio_url}
                       aria-label={currentPlaying === entry.id ? 'Pause' : 'Play'}
                       style={{
                         width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
                         background: currentPlaying === entry.id ? 'var(--accent)' : 'var(--border)',
                         border: 'none',
-                        cursor: entry.metadata?.audio_data ? 'pointer' : 'not-allowed',
+                        cursor: entry.audio_url ? 'pointer' : 'not-allowed',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}
                     >
@@ -362,7 +376,7 @@ export default function VoiceEntriesPage() {
                           Transcribing…
                         </span>
                       )}
-                      {!entry.transcript && !isTranscribing && entry.metadata?.audio_data && (
+                      {!entry.transcript && !isTranscribing && entry.audio_url && (
                         <button
                           onClick={() => transcribeEntry(entry.id)}
                           title="Generate transcript"
