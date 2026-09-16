@@ -7,51 +7,38 @@ class AuthProvider extends ChangeNotifier {
   User? _user;
   bool _isLoading = false;
   String? _error;
-  DateTime? _lastActivity;
-  
-  // Session timeout after 30 days of inactivity (1 month)
-  static const Duration sessionTimeout = Duration(days: 30);
 
+  // Session lifetime is owned by Supabase, not by this class.
+  //
+  // supabase_flutter persists the session to disk (HiveLocalStorage) and
+  // refreshes the access token automatically, including on app resume, so a
+  // signed-in phone stays signed in across restarts until the user taps Sign
+  // out or the refresh token is revoked server-side.
+  //
+  // There was previously a 30-day client-side inactivity timeout gating this
+  // getter, but its timestamp lived only in memory and was reset to "now" in
+  // the constructor, so it could never actually fire. Persisting it would have
+  // silently started logging people out, which is the opposite of what we
+  // want here, so the gate is gone and Supabase is the single source of truth.
   User? get user => _user;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  bool get isAuthenticated => _user != null && !_isSessionExpired();
+  bool get isAuthenticated => _user != null;
   String? get token => _supabaseService.token;
 
   AuthProvider() {
     _checkAuthStatus();
     _setupAuthListener();
-    _updateLastActivity();
-  }
-
-  // SECURITY: Check if session has timed out due to inactivity
-  bool _isSessionExpired() {
-    if (_lastActivity == null) return false;
-    return DateTime.now().difference(_lastActivity!) > sessionTimeout;
-  }
-  
-  // SECURITY: Update activity timestamp on user actions
-  void _updateLastActivity() {
-    _lastActivity = DateTime.now();
-  }
-  
-  // SECURITY: Call this on any user interaction to reset timeout
-  void recordActivity() {
-    _updateLastActivity();
   }
 
   void _checkAuthStatus() {
     _user = _supabaseService.currentUser;
-    _updateLastActivity();
     notifyListeners();
   }
 
   void _setupAuthListener() {
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       _user = data.session?.user;
-      if (_user != null) {
-        _updateLastActivity();
-      }
       notifyListeners();
     });
   }
@@ -65,7 +52,6 @@ class AuthProvider extends ChangeNotifier {
     try {
       final response = await _supabaseService.signInWithGoogle();
       _user = response.user;
-      _updateLastActivity();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -127,7 +113,6 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _supabaseService.verifyOtp(email.trim().toLowerCase(), token);
       _user = _supabaseService.currentUser;
-      _updateLastActivity();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -143,12 +128,10 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _supabaseService.signOut();
       _user = null;
-      _lastActivity = null;
       notifyListeners();
     } catch (e) {
       // SECURITY: Force clear user even if signOut fails
       _user = null;
-      _lastActivity = null;
       _error = 'Sign out completed';
       notifyListeners();
     }
