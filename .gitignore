@@ -8,3 +8,14 @@ coverage/
 *.log
 data/db.json
 prisma/.env
+
+# Android signing material — must never be committed (keystore leaked via
+# flutter_app/*.jks before these rules existed; key rotated 2026-09-16)
+*.jks
+*.keystore
+**/key.properties
+
+# Build artifacts
+tsconfig.tsbuildinfo
+.vscode/
+Screenshot/
