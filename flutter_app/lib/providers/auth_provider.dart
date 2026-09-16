@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:justwrite_mobile/services/supabase_service.dart';
+import 'package:justwrite_mobile/services/auth_error.dart';
 
 class AuthProvider extends ChangeNotifier {
   final _supabaseService = SupabaseService();
@@ -98,7 +99,7 @@ class AuthProvider extends ChangeNotifier {
         debugPrint('[AuthProvider] EXCEPTION: $e');
         debugPrint('[AuthProvider] Stack: $stackTrace');
       }
-      _error = 'Failed to send login code. Please check your email and try again.';
+      _error = describeAuthError(e);
       _isLoading = false;
       notifyListeners();
       rethrow;
@@ -116,8 +117,7 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      // SECURITY: Don't expose detailed error messages
-      _error = 'Verification failed. Please try again.';
+      _error = describeAuthError(e);
       _isLoading = false;
       notifyListeners();
       rethrow;

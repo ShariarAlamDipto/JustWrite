@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:justwrite_mobile/providers/auth_provider.dart';
+import 'package:justwrite_mobile/services/auth_error.dart';
 import 'package:justwrite_mobile/theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -79,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('We sent a 6-digit code to:'),
+                const Text('We sent a sign-in code to:'),
                 const SizedBox(height: 8),
                 Text(
                   email,
@@ -105,18 +106,12 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint('[Login] EXCEPTION caught: $e');
       if (!mounted) return;
       
-      String errorMessage = 'Failed to send confirmation link.';
-      final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('rate') || errorStr.contains('limit')) {
-        errorMessage = 'Too many attempts. Please wait a moment.';
-      } else if (errorStr.contains('network') || errorStr.contains('connection') || errorStr.contains('socket')) {
-        errorMessage = 'Network error. Check your internet connection.';
-      }
-      
+      // AuthProvider has already mapped this to something actionable.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(errorMessage),
+          content: Text(context.read<AuthProvider>().error ?? describeAuthError(e)),
           backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 8),
         ),
       );
     }
@@ -126,14 +121,19 @@ class _LoginScreenState extends State<LoginScreen> {
   void _verifyOtp() async {
     if (_otpController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter the 6-digit code')),
+        const SnackBar(content: Text('Please enter the code from your email')),
       );
       return;
     }
-    
-    if (_otpController.text.length != 6) {
+
+    // Supabase's email OTP length is a project setting and is not always 6 —
+    // this project currently issues 8 characters. Hard-coding 6 here (and in
+    // the field's maxLength) made the real code impossible to enter, so accept
+    // the documented range and let the server reject a genuinely wrong code.
+    final otp = _otpController.text.trim();
+    if (otp.length < 6 || otp.length > 10) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Code must be 6 digits')),
+        const SnackBar(content: Text('That code does not look right — check your email')),
       );
       return;
     }
@@ -149,15 +149,11 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       debugPrint('[Login] OTP verification failed: $e');
       if (!mounted) return;
-      String errorMessage = 'Invalid or expired code. Please try again.';
-      final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('expired')) {
-        errorMessage = 'Code expired. Please request a new one.';
-      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(errorMessage),
+          content: Text(context.read<AuthProvider>().error ?? describeAuthError(e)),
           backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 8),
         ),
       );
     }
@@ -256,7 +252,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'We sent a 6-digit code to:',
+                          'We sent a sign-in code to:',
                           style: TextStyle(
                             fontFamily: 'Times New Roman',
                             fontSize: 14,
@@ -319,7 +315,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _otpController,
                     keyboardType: TextInputType.number,
-                    maxLength: 6,
+                    maxLength: 10, // server-issued OTP length varies by project
                     autofocus: true,
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _verifyOtp(),
@@ -365,6 +361,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     );
                   },
                 ),
+
+                // The code entry is otherwise only reachable after a successful
+                // send. When the mail provider rate-limits us the send fails,
+                // which would strand anyone who already holds a valid code.
+                if (!_showOtpInput) ...[
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _showOtpInput = true;
+                      _sentToEmail = _emailController.text.trim();
+                    }),
+                    child: const Text(
+                      'Already have a code?',
+                      style: TextStyle(color: AppTheme.grey),
+                    ),
+                  ),
+                ],
 
                 // Change email / Resend code options
                 if (_showOtpInput) ...[
