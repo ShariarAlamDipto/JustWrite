@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import PrivacyToggle from '@/components/ui/PrivacyToggle'
 import MetaLabel from '@/components/ui/MetaLabel'
 import VoiceCapture from '@/components/voice/VoiceCapture'
@@ -23,7 +23,10 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
   const [showMood, setShowMood] = useState(false)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const wordCount = countWords(body)
+  // Keep onSave ref stable so scheduleSave doesn't recreate on every parent render
+  const onSaveRef = useRef(onSave)
+  useEffect(() => { onSaveRef.current = onSave }, [onSave])
+  const wordCount = useMemo(() => countWords(body), [body])
 
   // Auto-grow textarea
   useEffect(() => {
@@ -37,15 +40,15 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
     if (autoFocus) bodyRef.current?.focus()
   }, [autoFocus])
 
-  // Debounced auto-save
+  // Debounced auto-save — onSave accessed via ref so this never recreates on parent re-render
   const scheduleSave = useCallback(() => {
     setSaveStatus('saving')
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      onSave({ title: title || undefined, body, isPrivate, mood })
+      onSaveRef.current({ title: title || undefined, body, isPrivate, mood })
       setSaveStatus('saved')
     }, 1500)
-  }, [title, body, isPrivate, mood, onSave])
+  }, [title, body, isPrivate, mood])
 
   useEffect(() => {
     if (body || title) scheduleSave()
@@ -59,7 +62,7 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
 
   const handleDone = () => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    onSave({ title: title || undefined, body, isPrivate, mood })
+    onSaveRef.current({ title: title || undefined, body, isPrivate, mood })
     onBack()
   }
 

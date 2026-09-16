@@ -1,10 +1,14 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { withAuth } from '@/lib/withAuth';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import { checkRateLimit, isValidUUID } from '@/lib/security';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  return withAuth(req, res, async (req, res, userId) => {
+  return withAuth(req, res, async (req, res, userId, accessToken) => {
+    const supabase = getSupabaseServerClient(accessToken);
+    if (!supabase) {
+      return res.status(503).json({ error: 'Finance service is not configured.' });
+    }
 
     // Rate limit: 60 requests per minute per user
     const rl = checkRateLimit(`finance_txns_delete:${userId}`, 60, 60000);

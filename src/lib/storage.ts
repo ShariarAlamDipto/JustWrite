@@ -355,7 +355,7 @@ export async function getTaskById(id: string, userId?: string) {
 
 // SECURITY: Include user_id in task creation
 export async function createTask(task: any) {
-  const t = {
+  const t: Record<string, unknown> = {
     id: crypto.randomUUID(),
     title: task.title,
     description: task.description || '',
@@ -363,7 +363,8 @@ export async function createTask(task: any) {
     status: task.status || 'todo',
     entry_id: task.entry_id || null,
     user_id: task.user_id || null, // SECURITY: Associate task with user
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    ...(task.due ? { due: task.due } : {}),
   };
 
   if (supabase) {

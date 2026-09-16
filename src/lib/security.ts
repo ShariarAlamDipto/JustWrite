@@ -59,10 +59,10 @@ export function isValidEmail(email: string): boolean {
 }
 
 // Sanitize priority values
-export function sanitizePriority(priority: string): 'low' | 'medium' | 'high' {
-  const validPriorities = ['low', 'medium', 'high'];
+export function sanitizePriority(priority: string): 'low' | 'medium' | 'high' | 'urgent' {
+  const validPriorities = ['low', 'medium', 'high', 'urgent'];
   const lower = (priority || '').toLowerCase().trim();
-  return validPriorities.includes(lower) ? (lower as 'low' | 'medium' | 'high') : 'medium';
+  return validPriorities.includes(lower) ? (lower as 'low' | 'medium' | 'high' | 'urgent') : 'medium';
 }
 
 // Sanitize status values

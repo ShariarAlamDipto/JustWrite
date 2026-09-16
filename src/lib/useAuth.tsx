@@ -27,27 +27,14 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
 
     const initializeAuth = async () => {
       try {
-        // First, check if there's a hash with tokens (from magic link redirect)
-        if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
-          // Let Supabase process the URL hash automatically
-          // The onAuthStateChange will pick up the new session
-          console.log('Processing auth tokens from URL...');
-        }
-
         // Get the current session (from localStorage or freshly established)
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-        }
+        const { data: { session } } = await supabase.auth.getSession();
 
         if (mounted) {
           if (session) {
-            console.log('Session found, user:', session.user.email);
             setUser(session.user);
             setToken(session.access_token);
           } else {
-            console.log('No active session');
             setUser(null);
             setToken(null);
           }
@@ -68,9 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
 
     // Listen for auth state changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event);
-        
+      async (_event, session) => {
         if (mounted) {
           if (session) {
             setUser(session.user);

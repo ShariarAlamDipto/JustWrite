@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import PrivacyToggle from '@/components/ui/PrivacyToggle'
 import MetaLabel from '@/components/ui/MetaLabel'
 import { TagInput } from '@/components/ui/TagChip'
@@ -50,13 +50,16 @@ export default function NoteEditor({
   const titleRef = useRef<HTMLInputElement>(null)
   const blockRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const wordCount = countWords(blocksToText(blocks))
+  // Keep onSave ref stable so scheduleSave doesn't recreate on every parent render
+  const onSaveRef = useRef(onSave)
+  useEffect(() => { onSaveRef.current = onSave }, [onSave])
+  const wordCount = useMemo(() => countWords(blocksToText(blocks)), [blocks])
 
   useEffect(() => {
     if (!startWithVoice) titleRef.current?.focus()
   }, [startWithVoice])
 
-  // Auto-grow textarea to fit content
+  // Auto-grow a single textarea to fit its content
   const growBlock = useCallback((id: string) => {
     const el = blockRefs.current.get(id)
     if (!el) return
@@ -64,20 +67,30 @@ export default function NoteEditor({
     el.style.height = `${el.scrollHeight}px`
   }, [])
 
+  // Track known block IDs so we only grow newly added blocks, not all blocks on every change.
+  // onChange handlers already call growBlock(id) inline for typed changes.
+  const prevBlockIdsRef = useRef<Set<string>>(new Set())
   useEffect(() => {
-    blocks.forEach((b) => growBlock(b.id))
+    const prevIds = prevBlockIdsRef.current
+    for (const b of blocks) {
+      if (!prevIds.has(b.id)) {
+        growBlock(b.id)
+      }
+    }
+    prevBlockIdsRef.current = new Set(blocks.map((b) => b.id))
   }, [blocks, growBlock])
 
   // ── Auto-save ────────────────────────────────────────────────────────────────
 
+  // Debounced auto-save — onSave accessed via ref so this never recreates on parent re-render
   const scheduleSave = useCallback(() => {
     setSaveStatus('saving')
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      onSave({ title, blocks, isPrivate, tags, icon })
+      onSaveRef.current({ title, blocks, isPrivate, tags, icon })
       setSaveStatus('saved')
     }, 1200)
-  }, [title, blocks, isPrivate, tags, icon, onSave])
+  }, [title, blocks, isPrivate, tags, icon])
 
   useEffect(() => {
     if (title || blocks.some((b) => b.content)) scheduleSave()
@@ -86,7 +99,7 @@ export default function NoteEditor({
 
   const handleDone = () => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    onSave({ title, blocks, isPrivate, tags, icon })
+    onSaveRef.current({ title, blocks, isPrivate, tags, icon })
     onBack()
   }
 

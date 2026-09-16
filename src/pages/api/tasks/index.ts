@@ -39,19 +39,29 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     if (req.method === 'POST') {
-      const { title, description = '', priority = 'medium', entry_id = null } = req.body;
+      const { title, description = '', priority = 'medium', entry_id = null, due } = req.body;
 
       if (!title || typeof title !== 'string') {
         return res.status(400).json({ error: 'title required' });
       }
 
-      const sanitizedTitle = sanitizeInput(title).slice(0, 500);
+      // Skip HTML/JS injection scrubbing for encrypted payloads — same logic as entries API.
+      const isTitleEncrypted = title.startsWith('enc2:') || title.startsWith('enc:');
+      const sanitizedTitle = isTitleEncrypted
+        ? title.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').slice(0, 10000)
+        : sanitizeInput(title).slice(0, 500);
       if (sanitizedTitle.length === 0) {
         return res.status(400).json({ error: 'title required' });
       }
 
-      const sanitizedDescription = sanitizeInput(description).slice(0, 5000);
+      const isDescEncrypted = typeof description === 'string' && (description.startsWith('enc2:') || description.startsWith('enc:'));
+      const sanitizedDescription = isDescEncrypted
+        ? description.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').slice(0, 50000)
+        : sanitizeInput(description).slice(0, 5000);
       const sanitizedPriority = sanitizePriority(priority);
+
+      // Validate due date — accept ISO date string (YYYY-MM-DD) only
+      const sanitizedDue = typeof due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(due) ? due : undefined;
 
       const task = await createTask({
         title: sanitizedTitle,
@@ -59,6 +69,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         priority: sanitizedPriority,
         entry_id,
         user_id: userId,
+        ...(sanitizedDue ? { due: sanitizedDue } : {}),
       });
       return res.status(201).json({ task });
     }

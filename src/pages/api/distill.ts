@@ -115,8 +115,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             const parsed = JSON.parse(jsonText);
             summary = (parsed.summary || '').slice(0, 300); // cap at 300 chars
             tasks = (parsed.tasks || []).map((t: any) => ({ title: t.title, description: t.description || '', priority: t.priority || 'medium' }));
-          } catch (e) {
-            console.warn('Gemini JSON parse error, falling back to heuristic');
+          } catch {
             tasks = extractTasksFromText(contentToSummarize);
             summary = contentToSummarize.slice(0, 300) + (contentToSummarize.length > 300 ? '…' : '');
           }
@@ -219,7 +218,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         tasks.map(t => ({
           title: sanitizeInput(String(t.title || t)).slice(0, 500),
           description: sanitizeInput(String(t.description || '')).slice(0, 5000),
-          priority: ['low', 'medium', 'high'].includes(t.priority) ? t.priority : 'medium',
+          priority: ['low', 'medium', 'high', 'urgent'].includes(t.priority) ? t.priority : 'medium',
           status: 'todo',
         })),
         entryId,

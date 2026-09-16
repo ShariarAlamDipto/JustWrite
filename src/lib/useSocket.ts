@@ -27,13 +27,11 @@ export function useSocket() {
 
       socket.on('connect', () => {
         if (!mounted) return;
-        console.log('Connected to socket server');
         setIsConnected(true);
       });
 
       socket.on('disconnect', () => {
         if (!mounted) return;
-        console.log('Disconnected from socket server');
         setIsConnected(false);
       });
 
@@ -50,6 +48,12 @@ export function useSocket() {
 
     return () => {
       mounted = false;
+      // Remove listeners so they don't accumulate if the hook re-mounts
+      if (socket) {
+        socket.off('connect');
+        socket.off('disconnect');
+        socket.off('connect_error');
+      }
     };
   }, []);
 

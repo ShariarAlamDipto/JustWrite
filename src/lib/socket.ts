@@ -101,7 +101,6 @@ export function initSocket(httpServer: HTTPServer): SocketIOServer {
     const userRoom = `user:${userId}`;
     socket.join(userRoom);
 
-    console.log('Client connected:', socket.id);
 
     socket.on('entry:created', (entry: unknown) => {
       if (!isValidEventPayload(entry, userId)) return;
@@ -119,7 +118,7 @@ export function initSocket(httpServer: HTTPServer): SocketIOServer {
     });
 
     socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
+      // connection closed
     });
   });
 

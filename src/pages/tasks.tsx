@@ -211,7 +211,7 @@ const taskStyles: Record<string, React.CSSProperties> = {
 interface AddTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (task: { title: string; description: string; priority: string }) => void;
+  onAdd: (task: { title: string; description: string; priority: string; due?: string }) => void;
   loading: boolean;
 }
 
@@ -219,26 +219,37 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, loading }: AddTaskModalProps) =>
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
+  const [due, setDue] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    onAdd({ title: title.trim(), description: description.trim(), priority });
+    onAdd({ title: title.trim(), description: description.trim(), priority, due: due || undefined });
     setTitle('');
     setDescription('');
     setPriority('medium');
+    setDue('');
   };
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}
+           role="dialog" aria-modal="true" aria-labelledby="add-task-title">
         <div className="modal-header">
-          <h2 className="modal-title">Add New Task</h2>
-          <button className="modal-close" onClick={onClose}>&#x2715;</button>
+          <h2 id="add-task-title" className="modal-title">Add New Task</h2>
+          <button className="modal-close" onClick={onClose} aria-label="Close">&#x2715;</button>
         </div>
-        
+
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '1rem' }}>
             <label style={modalStyles.label}>Title *</label>
@@ -259,7 +270,17 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, loading }: AddTaskModalProps) =>
               value={description}
               onChange={e => setDescription(e.target.value)}
               placeholder="Add more details (optional)"
-              style={{ marginTop: '0.5rem', minHeight: '100px' }}
+              style={{ marginTop: '0.5rem', minHeight: '80px' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={modalStyles.label}>Due date</label>
+            <input
+              type="date"
+              value={due}
+              onChange={e => setDue(e.target.value)}
+              style={{ marginTop: '0.5rem' }}
             />
           </div>
 
@@ -418,7 +439,7 @@ export default function TasksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, token]);
 
-  const addTask = useCallback(async (taskData: { title: string; description: string; priority: string }) => {
+  const addTask = useCallback(async (taskData: { title: string; description: string; priority: string; due?: string }) => {
     if (!token) return;
     setAddLoading(true);
     try {
@@ -446,7 +467,8 @@ export default function TasksPage() {
           title: titleToSave,
           description: descToSave,
           priority: taskData.priority,
-          status: 'todo'
+          status: 'todo',
+          ...(taskData.due ? { due: taskData.due } : {}),
         })
       });
       if (res.ok) {

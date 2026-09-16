@@ -26,10 +26,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // SECURITY: Sanitize patch fields
       const sanitizedPatch: Record<string, any> = {};
       if (patch.title !== undefined) {
-        sanitizedPatch.title = sanitizeInput(patch.title).slice(0, 500);
+        const isTitleEncrypted = typeof patch.title === 'string' && (patch.title.startsWith('enc2:') || patch.title.startsWith('enc:'));
+        sanitizedPatch.title = isTitleEncrypted
+          ? patch.title.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').slice(0, 10000)
+          : sanitizeInput(patch.title).slice(0, 500);
       }
       if (patch.description !== undefined) {
-        sanitizedPatch.description = sanitizeInput(patch.description).slice(0, 5000);
+        const isDescEncrypted = typeof patch.description === 'string' && (patch.description.startsWith('enc2:') || patch.description.startsWith('enc:'));
+        sanitizedPatch.description = isDescEncrypted
+          ? patch.description.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').slice(0, 50000)
+          : sanitizeInput(patch.description).slice(0, 5000);
       }
       if (patch.priority !== undefined) {
         sanitizedPatch.priority = sanitizePriority(patch.priority);

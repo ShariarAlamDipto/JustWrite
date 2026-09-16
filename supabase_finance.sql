@@ -4,29 +4,29 @@
 -- ── Create tables (skips if already exist) ───────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS finance_days (
-  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id         UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  date            DATE        NOT NULL,
-  status          TEXT        NOT NULL DEFAULT 'open',
+  id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID          NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  date            DATE          NOT NULL,
+  status          TEXT          NOT NULL DEFAULT 'open',
   start_spendable NUMERIC(14,2) NOT NULL DEFAULT 0,
   end_spendable   NUMERIC(14,2),
   start_reserve   NUMERIC(14,2) NOT NULL DEFAULT 0,
   end_reserve     NUMERIC(14,2),
   notes           TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   UNIQUE(user_id, date)
 );
 
 CREATE TABLE IF NOT EXISTS finance_txns (
-  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id    UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  day_id     UUID        NOT NULL REFERENCES finance_days(id) ON DELETE CASCADE,
-  kind       TEXT        NOT NULL,
+  id         UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID          NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  day_id     UUID          NOT NULL REFERENCES finance_days(id) ON DELETE CASCADE,
+  kind       TEXT          NOT NULL,
   amount     NUMERIC(14,2) NOT NULL,
   category   TEXT,
   note       TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 -- ── Add missing columns if upgrading from an older schema ────────────────────
@@ -86,14 +86,23 @@ ALTER TABLE finance_txns ADD  CONSTRAINT finance_txns_note_length
 CREATE INDEX IF NOT EXISTS finance_days_user_date
   ON finance_days(user_id, date DESC);
 
--- Replace simple day_id index with a covering index (avoids heap lookups on
--- the nested txn fetch in GET /days which reads kind/amount/category/note/created_at)
+-- Covering index on finance_txns(day_id): avoids heap lookups on the nested
+-- txn fetch in GET /days (reads kind/amount/category/note/created_at).
+-- user_id is included so RLS evaluation (WHERE user_id = auth.uid()) can also
+-- be resolved index-only without a heap round-trip.
+-- FIX: old simple indexes dropped below; replaced by this covering + user index.
 DROP INDEX IF EXISTS finance_txns_day;
 DROP INDEX IF EXISTS finance_txns_user;
 
 CREATE INDEX IF NOT EXISTS finance_txns_day_covering
   ON finance_txns(day_id)
-  INCLUDE (kind, amount, category, note, created_at);
+  INCLUDE (kind, amount, category, note, created_at, user_id);
+
+-- FIX (missing index): finance_txns_user was dropped above but never replaced.
+-- Queries that filter by user_id directly (e.g. summary reports, RLS seq-scans)
+-- would otherwise do a full table scan.
+CREATE INDEX IF NOT EXISTS finance_txns_user_id
+  ON finance_txns(user_id);
 
 -- ── Auto-update updated_at trigger ───────────────────────────────────────────
 
@@ -141,6 +150,10 @@ CREATE POLICY "finance_days_delete" ON finance_days
   FOR DELETE USING      ((SELECT auth.uid()) = user_id);
 
 -- finance_txns
+-- FIX (security): INSERT and UPDATE policies previously only checked
+-- user_id = auth.uid(), which allowed a user to attach a transaction to a
+-- day_id owned by a different user (the FK only requires the row exists, not
+-- that it belongs to the same user). The EXISTS subquery closes this gap.
 DROP POLICY IF EXISTS "finance_txns_owner"  ON finance_txns;
 DROP POLICY IF EXISTS "finance_txns_select" ON finance_txns;
 DROP POLICY IF EXISTS "finance_txns_insert" ON finance_txns;
@@ -151,12 +164,26 @@ CREATE POLICY "finance_txns_select" ON finance_txns
   FOR SELECT USING      ((SELECT auth.uid()) = user_id);
 
 CREATE POLICY "finance_txns_insert" ON finance_txns
-  FOR INSERT WITH CHECK ((SELECT auth.uid()) = user_id);
+  FOR INSERT WITH CHECK (
+    (SELECT auth.uid()) = user_id
+    AND EXISTS (
+      SELECT 1 FROM finance_days
+      WHERE id = day_id
+        AND user_id = (SELECT auth.uid())
+    )
+  );
 
 CREATE POLICY "finance_txns_update" ON finance_txns
   FOR UPDATE
   USING      ((SELECT auth.uid()) = user_id)
-  WITH CHECK ((SELECT auth.uid()) = user_id);
+  WITH CHECK (
+    (SELECT auth.uid()) = user_id
+    AND EXISTS (
+      SELECT 1 FROM finance_days
+      WHERE id = day_id
+        AND user_id = (SELECT auth.uid())
+    )
+  );
 
 CREATE POLICY "finance_txns_delete" ON finance_txns
   FOR DELETE USING      ((SELECT auth.uid()) = user_id);

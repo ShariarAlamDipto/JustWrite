@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import PrivacyToggle from '@/components/ui/PrivacyToggle'
 import MetaLabel from '@/components/ui/MetaLabel'
 import { TagInput } from '@/components/ui/TagChip'
@@ -25,8 +25,11 @@ export default function IdeaEditor({
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const wordCount = countWords(body)
-  const derivedTitle = body ? autoTitle(body) : undefined
+  // Keep onSave ref stable so scheduleSave doesn't recreate on every parent render
+  const onSaveRef = useRef(onSave)
+  useEffect(() => { onSaveRef.current = onSave }, [onSave])
+  const wordCount = useMemo(() => countWords(body), [body])
+  const derivedTitle = useMemo(() => body ? autoTitle(body) : undefined, [body])
 
   useEffect(() => {
     if (bodyRef.current) {
@@ -39,14 +42,15 @@ export default function IdeaEditor({
     if (!startWithVoice) bodyRef.current?.focus()
   }, [startWithVoice])
 
+  // Debounced auto-save — onSave accessed via ref so this never recreates on parent re-render
   const scheduleSave = useCallback(() => {
     setSaveStatus('saving')
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      onSave({ title: derivedTitle, body, isPrivate, tags })
+      onSaveRef.current({ title: derivedTitle, body, isPrivate, tags })
       setSaveStatus('saved')
     }, 1200)
-  }, [body, tags, isPrivate, derivedTitle, onSave])
+  }, [body, tags, isPrivate, derivedTitle])
 
   useEffect(() => {
     if (body) scheduleSave()
@@ -61,7 +65,7 @@ export default function IdeaEditor({
 
   const handleDone = () => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    if (body.trim()) onSave({ title: derivedTitle, body, isPrivate, tags })
+    if (body.trim()) onSaveRef.current({ title: derivedTitle, body, isPrivate, tags })
     onBack()
   }
 
