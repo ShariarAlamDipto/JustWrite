@@ -3,7 +3,7 @@ import { withAuth } from '../../lib/withAuth';
 import { sanitizeInput, validateContentLength, checkRateLimit } from '../../lib/security';
 import { withErrorHandler } from '../../lib/apiHelpers';
 import { randomUUID } from 'crypto';
-import { GROQ_CHAT_MODEL } from '../../lib/llm';
+import { GROQ_CHAT_MODEL, GROQ_CHAT_URL } from '../../lib/llm';
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
@@ -48,13 +48,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     let tasks = [];
 
     // Try Groq
-    const groqUrl = process.env.GROQ_API_URL;
+    const groqUrl = process.env.GROQ_API_URL || GROQ_CHAT_URL;
     const groqKey = process.env.GROQ_API_KEY;
 
     // SECURITY: Removed debug logging
 
-    if (!groqUrl || !groqKey) {
-      console.error('[brainstorm] GROQ_API_URL/GROQ_API_KEY missing — returning keyword-heuristic tasks, not AI output');
+    if (!groqKey) {
+      console.error('[brainstorm] GROQ_API_KEY missing — returning keyword-heuristic tasks, not AI output');
     }
 
     if (groqUrl && groqKey) {

@@ -4,7 +4,7 @@ import { withAuth } from '../../lib/withAuth';
 import { sanitizeInput, validateContentLength, isValidUUID, checkRateLimit } from '../../lib/security';
 import { withErrorHandler } from '../../lib/apiHelpers';
 import { randomUUID } from 'crypto';
-import { groqChat, parseJsonObject, GROQ_CHAT_MODEL } from '../../lib/llm';
+import { groqChat, parseJsonObject, GROQ_CHAT_MODEL, GROQ_CHAT_URL } from '../../lib/llm';
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
@@ -78,9 +78,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: 'entryId or customText required' });
     }
 
-  // Provider priority: GEMINI (if GEMINI_API_KEY) -> GROQ (if GROQ_API_URL+GROQ_API_KEY) -> OpenAI (OPENAI_API_KEY) -> fallback heuristic
+  // Provider priority: GEMINI (if GEMINI_API_KEY) -> GROQ (if GROQ_API_KEY) -> OpenAI (OPENAI_API_KEY) -> fallback heuristic
   const geminiKey = process.env.GEMINI_API_KEY;
-  const groqUrl = process.env.GROQ_API_URL;
+  const groqUrl = process.env.GROQ_API_URL || GROQ_CHAT_URL;
   const groqKey = process.env.GROQ_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
   let summary = '';

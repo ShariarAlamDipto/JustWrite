@@ -12,6 +12,15 @@
  */
 export const GROQ_CHAT_MODEL = 'openai/gpt-oss-20b';
 
+/**
+ * Groq's chat endpoint is a fixed public URL, so it is a default rather than
+ * required config. It used to be read from GROQ_API_URL alone, which meant a
+ * deployment with GROQ_API_KEY set but GROQ_API_URL missing skipped the model
+ * call and silently served keyword-heuristic tasks that looked like bad AI.
+ * GROQ_API_URL still overrides this for a proxy or a self-hosted gateway.
+ */
+export const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
 /** Groq rejects any audio container outside this set with a 400. */
 export const GROQ_AUDIO_MODEL = 'whisper-large-v3-turbo';
 
