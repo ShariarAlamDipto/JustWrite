@@ -53,6 +53,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // SECURITY: Removed debug logging
 
+    if (!groqUrl || !groqKey) {
+      console.error('[brainstorm] GROQ_API_URL/GROQ_API_KEY missing — returning keyword-heuristic tasks, not AI output');
+    }
+
     if (groqUrl && groqKey) {
       try {
       const response = await fetchWithTimeout(groqUrl, {
@@ -104,6 +108,11 @@ If the user's text is extremely vague, make reasonable assumptions and proceed.`
         }),
       }, 15000);
 
+        if (!response.ok) {
+          const detail = await response.text().catch(() => '');
+          console.error(`[brainstorm] Groq request failed (${response.status}):`, detail.slice(0, 300));
+        }
+
         if (response.ok) {
           const data = await response.json();
           const content = data.choices?.[0]?.message?.content;
@@ -119,13 +128,13 @@ If the user's text is extremely vague, make reasonable assumptions and proceed.`
                 title: (t.title || '').slice(0, 200),
                 description: (t.description || '').slice(0, 1000)
               }));
-            } catch (e) {
-              // SECURITY: Silent fail, fall through to heuristic
+            } catch {
+              console.error('[brainstorm] Groq returned unparseable JSON:', content.slice(0, 300));
             }
           }
         }
       } catch (err) {
-        // SECURITY: Silent fail, fall through to heuristic
+        console.error('[brainstorm] Groq extraction failed:', err instanceof Error ? err.message : err);
       }
     }
 

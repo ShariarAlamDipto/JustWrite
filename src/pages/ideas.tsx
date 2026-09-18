@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Nav } from '@/components/Nav'
 import { useAuth } from '@/lib/useAuth'
+import { authFetch } from '@/lib/authFetch'
 import VoiceCapture from '@/components/voice/VoiceCapture'
 
 const priorityColors: Record<string, string> = {
@@ -11,7 +12,7 @@ const priorityColors: Record<string, string> = {
 }
 
 export default function IdeasPage() {
-  const { user, token } = useAuth()
+  const { user } = useAuth()
   const [freeText, setFreeText] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [generatedTasks, setGeneratedTasks] = useState<any[]>([])
@@ -24,9 +25,9 @@ export default function IdeasPage() {
     if (!freeText.trim()) return
     setLoading(true)
     try {
-      const res = await fetch('/api/brainstorm', {
+      const res = await authFetch('/api/brainstorm', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: freeText }),
       })
       if (res.ok) {
@@ -39,11 +40,11 @@ export default function IdeasPage() {
         setGeneratedTasks(tasksWithIds)
         setSelectedTasks(new Set(tasksWithIds.map((t: { id: string }) => t.id)))
       } else {
-        const err = await res.json()
+        const err = await res.json().catch(() => ({ error: `Request failed (${res.status})` }))
         alert(`Error: ${err.error}`)
       }
     } catch {
-      // ignore
+      alert('Could not reach the server. Check your connection and try again.')
     }
     setLoading(false)
   }
@@ -52,9 +53,9 @@ export default function IdeasPage() {
     if (!freeText.trim()) return
     setSavingIdea(true)
     try {
-      const res = await fetch('/api/entries', {
+      const res = await authFetch('/api/entries', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: freeText.trim(), source: 'idea', is_locked: false }),
       })
       if (res.ok) {
@@ -90,9 +91,9 @@ export default function IdeasPage() {
     try {
       const results = await Promise.all(
         toAdd.map((t) =>
-          fetch('/api/tasks', {
+          authFetch('/api/tasks', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: t.title, description: t.description, priority: t.priority, status: 'todo' }),
           })
         )
