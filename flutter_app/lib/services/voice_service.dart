@@ -166,7 +166,11 @@ class VoiceService {
 
       // Get storage directory for recording
       final storageDir = await _getVoiceStorageDir();
-      final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.aac';
+      // Must stay .m4a / aacMP4. Groq's transcription endpoint accepts only
+      // [flac mp3 mp4 mpeg mpga m4a ogg opus wav webm] and rejects raw AAC
+      // (.aac / aacADTS) with 400 unsupported_audio_format, which silently
+      // broke every transcription on Android.
+      final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       _currentRecordingPath = p.join(storageDir, fileName);
 
       debugPrint('[VoiceService] Starting recording to: $_currentRecordingPath');
@@ -174,7 +178,7 @@ class VoiceService {
       // Start recording with optimal settings
       await _recorder.startRecorder(
         toFile: _currentRecordingPath!,
-        codec: Codec.aacADTS,
+        codec: Codec.aacMP4,
         bitRate: 128000,
         sampleRate: 44100,
       );
@@ -308,7 +312,7 @@ class VoiceService {
         'transcript': null,
         'created_at': now.toIso8601String(),
         'updated_at': null,
-        'metadata': '{"file_size": $fileSize, "format": "aac"}',
+        'metadata': '{"file_size": $fileSize, "format": "m4a"}',
       };
 
       await db.insert('voice_entries', entryMap);
@@ -323,7 +327,7 @@ class VoiceService {
         transcript: null,
         createdAt: now,
         updatedAt: null,
-        metadata: {'file_size': fileSize, 'format': 'aac'},
+        metadata: {'file_size': fileSize, 'format': 'm4a'},
       );
 
       // Sync metadata to Supabase (non-blocking)
@@ -527,7 +531,7 @@ class VoiceService {
       final uri = Uri.parse('https://api.groq.com/openai/v1/audio/transcriptions');
       final request = http.MultipartRequest('POST', uri)
         ..headers['Authorization'] = 'Bearer $groqApiKey'
-        ..fields['model'] = 'whisper-large-v3'
+        ..fields['model'] = 'whisper-large-v3-turbo'
         ..fields['response_format'] = 'json'
         ..files.add(await http.MultipartFile.fromPath('file', filePath));
 

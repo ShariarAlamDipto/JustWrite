@@ -15,6 +15,13 @@ class _CacheEntry {
     DateTime.now().difference(timestamp) > const Duration(minutes: 5);
 }
 
+/// Groq chat model for task extraction.
+///
+/// Was hard-coded to llama-3.3-70b-versatile in two places; Groq
+/// decommissioned that model and every extraction call began failing.
+/// Check GET https://api.groq.com/openai/v1/models before changing.
+const groqChatModel = 'openai/gpt-oss-20b';
+
 class LLMService {
   static final LLMService _instance = LLMService._internal();
 
@@ -103,7 +110,7 @@ class LLMService {
         Uri.parse(groqUrl),
         headers: _headers,
         body: jsonEncode({
-          'model': 'llama-3.3-70b-versatile',
+          'model': groqChatModel,
           'messages': [
             {
               'role': 'system',
@@ -187,7 +194,7 @@ Extract every possible task - do not limit the number. Be thorough and capture a
         Uri.parse(groqUrl),
         headers: _headers,
         body: jsonEncode({
-          'model': 'llama-3.3-70b-versatile',
+          'model': groqChatModel,
           'messages': [
             {
               'role': 'system',

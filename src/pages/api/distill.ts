@@ -4,6 +4,7 @@ import { withAuth } from '../../lib/withAuth';
 import { sanitizeInput, validateContentLength, isValidUUID, checkRateLimit } from '../../lib/security';
 import { withErrorHandler } from '../../lib/apiHelpers';
 import { randomUUID } from 'crypto';
+import { groqChat, parseJsonObject, GROQ_CHAT_MODEL } from '../../lib/llm';
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
@@ -128,39 +129,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // Try GROQ provider if GEMINI didn't populate tasks
     if (!tasks.length && groqUrl && groqKey) {
       try {
-        const prompt = `Summarize and extract ALL actionable tasks from the following journal entry. Be thorough and detailed. Return strict JSON: {"summary": string, "tasks": [{"title": string, "description": string|null, "priority": "low"|"medium"|"high", "due": null|string}] }\\nEntry:\n'''${contentToSummarize}'''`;
-        const resp = await fetchWithTimeout(groqUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-          body: JSON.stringify({ prompt, input: contentToSummarize })
-        }, 15000);
+        // This previously POSTed { prompt, input } to Groq's chat/completions
+        // endpoint, which requires { model, messages }. Every call 400'd and
+        // silently fell through to the keyword heuristic, so "AI extraction"
+        // was never actually running.
+        const content = await groqChat({
+          url: groqUrl,
+          apiKey: groqKey,
+          systemPrompt: 'You output only valid JSON. No prose, no code fences.',
+          userPrompt: `Summarize and extract ALL actionable tasks from the following journal entry. Be thorough and detailed. Return strict JSON: {"summary": string, "tasks": [{"title": string, "description": string|null, "priority": "low"|"medium"|"high", "due": null|string}] }\nEntry:\n'''${contentToSummarize}'''`,
+          timeoutMs: 20000,
+          fetchImpl: fetchWithTimeout,
+        });
 
-        if (!resp.ok) {
-          throw new Error('Groq request failed');
-        }
-        const j = await resp.json();
-        // Expect provider to return JSON with summary and tasks, but be defensive
-        if (j && (j.summary || j.tasks)) {
-          summary = j.summary || '';
-          tasks = j.tasks || [];
-        } else if (typeof j === 'string') {
-          // try parse string
-          const jsonStart = j.indexOf('{');
-          const jsonText = jsonStart >= 0 ? j.slice(jsonStart) : j;
-          try {
-            const parsed = JSON.parse(jsonText);
-            summary = parsed.summary || '';
-            tasks = parsed.tasks || [];
-          } catch (e) {
-            // fallback
-            tasks = extractTasksFromText(contentToSummarize);
-            summary = contentToSummarize.slice(0, 300) + (contentToSummarize.length > 300 ? '…' : '');
-          }
-        } else {
-          tasks = extractTasksFromText(contentToSummarize);
-          summary = contentToSummarize.slice(0, 300) + (contentToSummarize.length > 300 ? '…' : '');
-        }
-      } catch {
+        const parsed = parseJsonObject<{ summary?: string; tasks?: any[] }>(content);
+        summary = parsed.summary || '';
+        tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+      } catch (err) {
+        console.error('[distill] Groq extraction failed:', err instanceof Error ? err.message : err);
         // fall through to next provider
       }
     }
@@ -209,7 +195,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // Only persist if we have a real entry ID and this is NOT a draft analysis
     try {
       const provider = geminiKey ? 'gemini' : (groqUrl && groqKey ? 'groq' : (openaiKey ? 'openai' : 'mock'));
-      const modelName = provider === 'gemini' ? 'gemini-1.5-flash' : (provider === 'openai' ? 'gpt-3.5-turbo' : (provider === 'groq' ? 'groq-inference' : 'heuristic'));
+      const modelName = provider === 'gemini' ? 'gemini-1.5-flash' : (provider === 'openai' ? 'gpt-3.5-turbo' : (provider === 'groq' ? GROQ_CHAT_MODEL : 'heuristic'));
       const ai_metadata = { provider, model: modelName, extracted_at: new Date().toISOString(), prompt_version: 'distill_v2' };
       // SECURITY: Pass userId to verify ownership
       await updateEntrySummary(entryId, summary, ai_metadata, userId);

@@ -4,6 +4,7 @@ import { checkRateLimit } from '../../../lib/security';
 import { withErrorHandler } from '../../../lib/apiHelpers';
 import { parseMultipart, isMultipartError } from '../../../lib/multipart';
 import { MAX_AUDIO_BYTES } from '../../../lib/voiceStorage';
+import { GROQ_AUDIO_MODEL, groqAudioExtension } from '../../../lib/llm';
 
 // Disable default body parser - we receive multipart form data
 export const config = { api: { bodyParser: false } };
@@ -57,9 +58,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     try {
       const formData = new FormData();
       const blob = new Blob([audioBuffer], { type: mimeType });
-      const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('mp3') ? 'mp3' : 'webm';
-      formData.append('file', blob, `audio.${ext}`);
-      formData.append('model', 'whisper-large-v3');
+      // Groq validates the filename extension and 400s on anything outside its
+      // supported set, so derive it from the mime type instead of defaulting
+      // unknown types to webm.
+      formData.append('file', blob, `audio.${groqAudioExtension(mimeType)}`);
+      formData.append('model', GROQ_AUDIO_MODEL);
       formData.append('response_format', 'json');
 
       const groqRes = await fetchWithTimeout('https://api.groq.com/openai/v1/audio/transcriptions', {

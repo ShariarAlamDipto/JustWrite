@@ -3,6 +3,7 @@ import { withAuth } from '../../lib/withAuth';
 import { sanitizeInput, validateContentLength, checkRateLimit } from '../../lib/security';
 import { withErrorHandler } from '../../lib/apiHelpers';
 import { randomUUID } from 'crypto';
+import { GROQ_CHAT_MODEL } from '../../lib/llm';
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
@@ -61,7 +62,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile', // Latest Groq model
+          model: GROQ_CHAT_MODEL,
           messages: [
             {
               role: 'system',
