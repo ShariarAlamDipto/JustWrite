@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:justwrite_mobile/models/note.dart';
 import 'package:justwrite_mobile/services/notes_service.dart';
+import 'package:justwrite_mobile/utils/content_patterns.dart';
 
 enum SaveStatus { saved, saving, error }
 
@@ -14,6 +15,13 @@ class NoteProvider extends ChangeNotifier {
   SaveStatus _saveStatus = SaveStatus.saved;
   String? _error;
   Timer? _saveTimer;
+  DateTime? _lastFetch;
+
+  // Matches the 60s cache used by EntryProvider / TaskProvider so re-entering
+  // the Notes screen doesn't re-hit the network on every navigation.
+  static const _cacheDuration = Duration(seconds: 60);
+  bool get _isCacheValid =>
+      _lastFetch != null && DateTime.now().difference(_lastFetch!) < _cacheDuration;
 
   List<Note> get notes => _notes;
   Note? get selectedNote => _selectedNote;
@@ -27,8 +35,7 @@ class NoteProvider extends ChangeNotifier {
   static List<String> extractTags(Note note) {
     final tags = <String>{};
     for (final block in note.blocks) {
-      final matches = RegExp(r'#(\w+)').allMatches(block.content);
-      for (final m in matches) {
+      for (final m in ContentPatterns.tag.allMatches(block.content)) {
         tags.add(m.group(1)!.toLowerCase());
       }
     }
@@ -39,8 +46,7 @@ class NoteProvider extends ChangeNotifier {
   static List<String> extractWikilinks(Note note) {
     final links = <String>{};
     for (final block in note.blocks) {
-      final matches = RegExp(r'\[\[([^\]]+)\]\]').allMatches(block.content);
-      for (final m in matches) {
+      for (final m in ContentPatterns.wikilink.allMatches(block.content)) {
         links.add(m.group(1)!.trim());
       }
     }
@@ -117,13 +123,15 @@ class NoteProvider extends ChangeNotifier {
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
-  Future<void> loadNotes() async {
+  Future<void> loadNotes({bool forceRefresh = false}) async {
+    if (!forceRefresh && _isCacheValid && _notes.isNotEmpty) return;
     if (_isLoading) return;
     _isLoading = true;
     _error = null;
     notifyListeners();
     try {
       _notes = await _service.listNotes();
+      _lastFetch = DateTime.now();
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -135,6 +143,15 @@ class NoteProvider extends ChangeNotifier {
   // ── Select ────────────────────────────────────────────────────────────────
 
   Future<void> selectNote(String id) async {
+    if (_selectedNote?.id == id) return;
+
+    // Flush any pending debounced save for the note we're leaving BEFORE we
+    // change the selection, otherwise the timer would later fire against the
+    // newly selected note and the previous note's edits would be lost.
+    if (_selectedNote != null && (_saveTimer?.isActive ?? false)) {
+      await saveNow();
+    }
+
     // Optimistic: show cached note immediately (safe null-check)
     final cached = _notes.where((n) => n.id == id).firstOrNull;
     if (cached != null) {
@@ -195,13 +212,19 @@ class NoteProvider extends ChangeNotifier {
     if (idx >= 0) _notes[idx] = _selectedNote!;
     notifyListeners();
 
+    // Capture the note snapshot so the timer persists THIS note even if the
+    // selection changes before it fires.
+    final noteToSave = _selectedNote!;
     _saveTimer?.cancel();
     _saveStatus = SaveStatus.saving;
-    _saveTimer = Timer(const Duration(milliseconds: 1500), _persistNote);
+    _saveTimer = Timer(
+      const Duration(milliseconds: 1500),
+      () => _persistNote(noteToSave),
+    );
   }
 
-  Future<void> _persistNote() async {
-    final note = _selectedNote;
+  Future<void> _persistNote([Note? target]) async {
+    final note = target ?? _selectedNote;
     if (note == null) return;
     try {
       final updated = await _service.updateNote(
@@ -211,7 +234,9 @@ class NoteProvider extends ChangeNotifier {
         blocks: note.blocks,
       );
       if (updated != null) {
-        _selectedNote = updated;
+        // Only move the selection forward if we're still on the same note;
+        // otherwise just refresh its entry in the list.
+        if (_selectedNote?.id == updated.id) _selectedNote = updated;
         final idx = _notes.indexWhere((n) => n.id == updated.id);
         if (idx >= 0) _notes[idx] = updated;
         _error = null;

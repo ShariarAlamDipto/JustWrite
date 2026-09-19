@@ -35,9 +35,15 @@ class EntryProvider extends ChangeNotifier {
   final _encryptionService = EncryptionService();
   List<Entry> _entries = [];
   bool _isLoading = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
   String? _error;
   DateTime? _lastFetch;
   bool _isCreating = false;
+
+  // Page size must match the default in getRawEntries so "there might be more"
+  // is inferred correctly (a full page returned ⇒ possibly more to fetch).
+  static const int _pageSize = 50;
   
   // Cached filtered lists
   List<Entry>? _cachedJournal;
@@ -70,10 +76,14 @@ class EntryProvider extends ChangeNotifier {
   }
   
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
+
+  /// Whether the last page fetched was full, i.e. older entries may still exist.
+  bool get hasMore => _hasMore;
   String? get error => _error;
 
   // Check if cache is valid
-  bool get _isCacheValid => 
+  bool get _isCacheValid =>
     _lastFetch != null && 
     DateTime.now().difference(_lastFetch!) < _cacheDuration;
 
@@ -91,10 +101,11 @@ class EntryProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Fetch raw JSON (avoids double-parse) — limited to 50 most-recent entries
-      final rawMaps = await _supabaseService.getRawEntries();
+      // Fetch first page of raw JSON (avoids double-parse).
+      final rawMaps = await _supabaseService.getRawEntries(limit: _pageSize);
       if (rawMaps.isEmpty) {
         _entries = [];
+        _hasMore = false;
         _lastFetch = DateTime.now();
         _invalidateFilterCache();
         return;
@@ -111,12 +122,53 @@ class EntryProvider extends ChangeNotifier {
           : rawMaps;
 
       _entries = decryptedMaps.map((m) => Entry.fromJson(m)).toList();
+      _hasMore = rawMaps.length == _pageSize;
       _invalidateFilterCache();
       _lastFetch = DateTime.now();
     } catch (e) {
       _error = e.toString();
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Append the next page of older entries. Uses a separate loading flag so it
+  /// doesn't trigger the full-screen loading state that [loadEntries] does.
+  Future<void> loadMoreEntries() async {
+    if (_isLoading || _isLoadingMore || !_hasMore) return;
+
+    _isLoadingMore = true;
+    notifyListeners();
+
+    try {
+      final rawMaps = await _supabaseService.getRawEntries(
+        limit: _pageSize,
+        offset: _entries.length,
+      );
+      if (rawMaps.isEmpty) {
+        _hasMore = false;
+        return;
+      }
+
+      final userId = rawMaps.first['user_id'] as String? ?? '';
+      final decryptedMaps = userId.isNotEmpty
+          ? await compute(_decryptEntriesBatch, {'entries': rawMaps, 'userId': userId})
+          : rawMaps;
+
+      // Guard against duplicates if a create/refresh raced with this fetch.
+      final existingIds = _entries.map((e) => e.id).toSet();
+      final newEntries = decryptedMaps
+          .map((m) => Entry.fromJson(m))
+          .where((e) => !existingIds.contains(e.id));
+      _entries.addAll(newEntries);
+
+      _hasMore = rawMaps.length == _pageSize;
+      _invalidateFilterCache();
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _isLoadingMore = false;
       notifyListeners();
     }
   }
@@ -145,8 +197,8 @@ class EntryProvider extends ChangeNotifier {
       // Only encrypt Journal entries (source = 'text'), not Ideas/Brainstorm
       // This allows Ideas to be viewed on any device without encryption key
       String processedContent;
-      final isJournal = source == 'text' || source == EntrySource.text;
-      
+      final isJournal = source == EntrySource.text;
+
       if (isJournal) {
         // Journal entries: compress then encrypt for privacy
         processedContent = _compressionService.compress(content);
@@ -222,7 +274,7 @@ class EntryProvider extends ChangeNotifier {
   Future<void> updateEntry(Entry entry) async {
     try {
       // Only encrypt Journal entries (source = 'text'), not Ideas/Brainstorm
-      final isJournal = entry.source == EntrySource.text || entry.source.toString() == 'text';
+      final isJournal = entry.isJournal;
       String processedContent;
       
       if (isJournal) {
@@ -255,10 +307,13 @@ class EntryProvider extends ChangeNotifier {
   }
 
   Future<void> deleteEntry(String entryId) async {
-    // Optimistic delete: remove from local cache first
-    final removedEntry = _entries.firstWhere((e) => e.id == entryId);
+    // Optimistic delete: remove from local cache first.
+    // Look up by index so a missing id (double-tap, already-deleted) is a safe
+    // no-op instead of a StateError from firstWhere.
     final removedIndex = _entries.indexWhere((e) => e.id == entryId);
-    _entries.removeWhere((e) => e.id == entryId);
+    if (removedIndex < 0) return;
+    final removedEntry = _entries[removedIndex];
+    _entries.removeAt(removedIndex);
     _invalidateFilterCache();
     notifyListeners();
     

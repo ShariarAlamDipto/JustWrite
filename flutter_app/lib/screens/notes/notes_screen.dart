@@ -6,6 +6,7 @@ import 'package:justwrite_mobile/providers/note_provider.dart';
 import 'package:justwrite_mobile/providers/theme_provider.dart';
 import 'package:justwrite_mobile/screens/notes/notes_graph_view.dart';
 import 'package:justwrite_mobile/screens/notes/notes_reading_view.dart';
+import 'package:justwrite_mobile/utils/content_patterns.dart';
 
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
@@ -1194,7 +1195,7 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
               _closeSlashMenu();
             }
             // Detect [[wikilink autocomplete
-            final wikiMatch = RegExp(r'\[\[([^\]]*)$').firstMatch(text);
+            final wikiMatch = ContentPatterns.wikilinkTypeahead.firstMatch(text);
             if (wikiMatch != null) {
               final query = wikiMatch.group(1) ?? '';
               if (_wikiBlockIdx == i) {
@@ -1224,7 +1225,7 @@ class _NoteEditorPaneState extends State<_NoteEditorPane> {
   Widget _buildTagsChips(Color mutedColor) {
     final tags = <String>{};
     for (final block in _blocks) {
-      for (final m in RegExp(r'#(\w+)').allMatches(block.content)) {
+      for (final m in ContentPatterns.tag.allMatches(block.content)) {
         tags.add(m.group(1)!.toLowerCase());
       }
     }

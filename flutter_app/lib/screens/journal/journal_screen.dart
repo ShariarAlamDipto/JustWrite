@@ -28,15 +28,19 @@ class _JournalScreenState extends State<JournalScreen> {
   }
 
   List<Entry> _filterEntries(List<Entry> entries) {
+    // Locked entries are web-private (biometric-protected) and must never
+    // surface in the mobile feed — exclude them from every filter, matching
+    // EntryProvider.journalEntries.
+    final visible = entries.where((e) => !e.isLocked);
     switch (_selectedFilter) {
       case 'journal':
-        return entries.where((e) => e.source == 'text').toList();
+        return visible.where((e) => e.source == 'text').toList();
       case 'ideas':
-        return entries.where((e) => e.source == 'brainstorm').toList();
+        return visible.where((e) => e.source == 'brainstorm').toList();
       case 'voice':
-        return entries.where((e) => e.source == 'voice').toList();
+        return visible.where((e) => e.source == 'voice').toList();
       default:
-        return entries;
+        return visible.toList();
     }
   }
 
@@ -50,7 +54,8 @@ class _JournalScreenState extends State<JournalScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => context.read<EntryProvider>().loadEntries(),
+            onPressed: () =>
+                context.read<EntryProvider>().loadEntries(forceRefresh: true),
           ),
         ],
       ),
@@ -159,11 +164,20 @@ class _JournalScreenState extends State<JournalScreen> {
                 }
 
                 return RefreshIndicator(
-                  onRefresh: () => provider.loadEntries(),
+                  onRefresh: () =>
+                      provider.loadEntries(forceRefresh: true),
                   child: ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                    itemCount: filteredEntries.length,
+                    itemCount:
+                        filteredEntries.length + (provider.hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
+                      // Footer: load-more control when more pages may exist.
+                      if (index >= filteredEntries.length) {
+                        return _LoadMoreButton(
+                          isLoading: provider.isLoadingMore,
+                          onPressed: () => provider.loadMoreEntries(),
+                        );
+                      }
                       final entry = filteredEntries[index];
                       return _EntryCard(
                         entry: entry,
@@ -256,6 +270,36 @@ class _FilterChip extends StatelessWidget {
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LoadMoreButton extends StatelessWidget {
+  final bool isLoading;
+  final VoidCallback onPressed;
+
+  const _LoadMoreButton({required this.isLoading, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: isLoading
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : OutlinedButton.icon(
+                onPressed: onPressed,
+                icon: const Icon(Icons.expand_more, size: 18),
+                label: const Text('Load older entries'),
+              ),
       ),
     );
   }

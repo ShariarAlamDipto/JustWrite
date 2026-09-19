@@ -138,12 +138,9 @@ class TaskProvider extends ChangeNotifier {
     String? ifThenPlan,
     DateTime? dueDate,
   }) async {
-    // Prevent concurrent creates with a short wait
+    // Prevent concurrent creates (same guard style as EntryProvider).
     if (_isCreating) {
-      await Future.delayed(const Duration(milliseconds: 50));
-      if (_isCreating) {
-        throw Exception('Task creation in progress');
-      }
+      throw Exception('Task creation already in progress');
     }
     _isCreating = true;
     
@@ -221,10 +218,12 @@ class TaskProvider extends ChangeNotifier {
   }
 
   Future<void> deleteTask(String taskId) async {
-    // Optimistic delete
-    final removedTask = _tasks.firstWhere((t) => t.id == taskId);
+    // Optimistic delete. Look up by index so a missing id is a safe no-op
+    // instead of a StateError from firstWhere.
     final removedIndex = _tasks.indexWhere((t) => t.id == taskId);
-    _tasks.removeWhere((t) => t.id == taskId);
+    if (removedIndex < 0) return;
+    final removedTask = _tasks[removedIndex];
+    _tasks.removeAt(removedIndex);
     _invalidateCache();
     notifyListeners();
     

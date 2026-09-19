@@ -25,14 +25,17 @@ List<InlineSpan> parseInline({
   List<TapGestureRecognizer>? recognizerCollector,
 }) {
   final spans = <InlineSpan>[];
-  // Order matters: longest/most specific patterns first
+  // Order matters: longest/most specific patterns first.
+  // `unicode: true` + \p{L}\p{N} keeps the #tag group consistent with
+  // ContentPatterns.tag so non-ASCII tags render as tags here too.
   final pattern = RegExp(
-    r'\[\[([^\]]+)\]\]'   // [[wikilink]]
-    r'|#(\w+)'            // #tag
-    r'|\*\*(.+?)\*\*'     // **bold**
-    r'|\*(.+?)\*'         // *italic*
-    r'|`(.+?)`'           // `code`
-    r'|==(.+?)==',        // ==highlight==
+    r'\[\[([^\]]+)\]\]'      // [[wikilink]]
+    r'|#([\p{L}\p{N}_]+)'    // #tag
+    r'|\*\*(.+?)\*\*'        // **bold**
+    r'|\*(.+?)\*'            // *italic*
+    r'|`(.+?)`'              // `code`
+    r'|==(.+?)==',           // ==highlight==
+    unicode: true,
   );
 
   int last = 0;

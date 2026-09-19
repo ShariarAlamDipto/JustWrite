@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:uuid/uuid.dart';
+
 // ─── Block Types ──────────────────────────────────────────────────────────────
 
 enum NoteBlockType {
@@ -85,10 +87,12 @@ class NoteBlock {
         icon: icon ?? this.icon,
       );
 
-  static String _generateId() {
-    final now = DateTime.now().microsecondsSinceEpoch;
-    return now.toRadixString(36);
-  }
+  // Blocks need collision-free ids: they key the editor's widget list
+  // (`ValueKey(block.id)`), and duplicate keys throw at build time. A
+  // microsecond timestamp collides when several blocks are created in the same
+  // tick (paste, rapid Enter, the divider-insert path), so use a UUID like the
+  // rest of the app's models do.
+  static String _generateId() => const Uuid().v4();
 }
 
 // ─── Note ─────────────────────────────────────────────────────────────────────

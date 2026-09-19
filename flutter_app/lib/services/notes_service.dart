@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:justwrite_mobile/models/note.dart';
+import 'package:justwrite_mobile/utils/content_patterns.dart';
 
 /// CRUD service for the [notes] Supabase table.
 class NotesService {
@@ -272,9 +273,8 @@ class NotesService {
   /// Extract [[wikilink]] titles from a list of note blocks.
   List<String> _extractWikilinks(List<NoteBlock> blocks) {
     final links = <String>{};
-    final pattern = RegExp(r'\[\[([^\]]+)\]\]');
     for (final block in blocks) {
-      for (final m in pattern.allMatches(block.content)) {
+      for (final m in ContentPatterns.wikilink.allMatches(block.content)) {
         final title = m.group(1)?.trim();
         if (title != null && title.isNotEmpty) links.add(title);
       }
@@ -305,28 +305,46 @@ class NotesService {
     if (targetTitles.isEmpty) return;
 
     try {
-      // Resolve target note IDs by title
-      final targets = await _supabase
+      // Resolve target note IDs by title. We fetch all of the user's notes and
+      // match in Dart so resolution is CASE-INSENSITIVE — the in-app graph and
+      // backlinks (note_provider) already match titles case-insensitively, and
+      // a DB `.in_('title', ...)` would only match exact case, leaving the
+      // persisted content_links out of sync with what the UI shows.
+      final allNotes = await _supabase
           .from('notes')
           .select('id, title')
-          .eq('user_id', userId)
-          .in_('title', targetTitles) as List;
+          .eq('user_id', userId) as List;
 
-      if (targets.isEmpty) return;
-
-      final rows = targets.map((t) {
+      // Map lowercased title -> first note id (first match wins, matching
+      // NoteProvider.getOutgoingLinks so duplicate titles resolve identically).
+      final idByLowerTitle = <String, String>{};
+      for (final t in allNotes) {
         final row = Map<String, dynamic>.from(t as Map);
-        return {
+        final title = (row['title'] as String?)?.toLowerCase().trim();
+        final id = row['id'] as String?;
+        if (title != null && title.isNotEmpty && id != null) {
+          idByLowerTitle.putIfAbsent(title, () => id);
+        }
+      }
+
+      final seen = <String>{};
+      final rows = <Map<String, dynamic>>[];
+      for (final target in targetTitles) {
+        final toId = idByLowerTitle[target.toLowerCase().trim()];
+        // Skip unresolved titles, self-links, and duplicate edges.
+        if (toId == null || toId == fromNoteId || !seen.add(toId)) continue;
+        rows.add({
           'user_id': userId,
           'from_type': 'note',
           'from_id': fromNoteId,
           'to_type': 'note',
-          'to_id': row['id'] as String,
+          'to_id': toId,
           'link_type': 'wikilink',
           'weight': 1.0,
-        };
-      }).toList();
+        });
+      }
 
+      if (rows.isEmpty) return;
       await _supabase.from('content_links').insert(rows);
     } catch (e) {
       debugPrint('[NotesService] saveWikilinks error: $e');

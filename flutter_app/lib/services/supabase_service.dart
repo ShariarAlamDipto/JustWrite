@@ -157,8 +157,12 @@ class SupabaseService {
   }
 
   /// Returns raw JSON maps (no model parsing) for background-isolate decryption.
-  /// Limited to 50 most-recent entries to keep initial load fast.
-  Future<List<Map<String, dynamic>>> getRawEntries() async {
+  /// Paged newest-first: [offset] rows are skipped and up to [limit] returned,
+  /// so the journal can lazily load older entries beyond the first page.
+  Future<List<Map<String, dynamic>>> getRawEntries({
+    int limit = 50,
+    int offset = 0,
+  }) async {
     final userId = _userId;
     if (userId == null) return [];
 
@@ -167,7 +171,7 @@ class SupabaseService {
         .select()
         .eq('user_id', userId)
         .order('created_at', ascending: false)
-        .limit(50);
+        .range(offset, offset + limit - 1);
 
     return (response as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
