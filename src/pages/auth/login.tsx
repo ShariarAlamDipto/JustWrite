@@ -23,8 +23,8 @@ export default function LoginPage() {
   if (authLoading) {
     return (
       <div style={styles.container}>
-        <div style={styles.card}>
-          <p style={{ color: 'var(--accent)', textAlign: 'center' }}>Checking session...</p>
+        <div className="jw-receipt" style={styles.card}>
+          <p style={{ color: 'var(--fg-dim)', textAlign: 'center' }}>Checking session…</p>
         </div>
       </div>
     );
@@ -34,8 +34,8 @@ export default function LoginPage() {
   if (user) {
     return (
       <div style={styles.container}>
-        <div style={styles.card}>
-          <p style={{ color: 'var(--accent)', textAlign: 'center' }}>Already logged in! Redirecting...</p>
+        <div className="jw-receipt" style={styles.card}>
+          <p style={{ color: 'var(--fg-dim)', textAlign: 'center' }}>Already signed in — redirecting…</p>
         </div>
       </div>
     );
@@ -94,9 +94,14 @@ export default function LoginPage() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>JustWrite</h1>
-        <p style={styles.subtitle}>Sign in to continue</p>
+      <div className="jw-receipt" style={styles.card}>
+        <div className="jw-receipt-head">
+          <span className="jw-receipt-label">JustWrite</span>
+          <span className="jw-receipt-meta">Sign in</span>
+        </div>
+
+        <h1 style={styles.title}>Welcome back</h1>
+        <p style={styles.subtitle}>No password needed — pick a way in.</p>
 
         <button
           type="button"
@@ -135,8 +140,9 @@ export default function LoginPage() {
         {error && <p style={styles.error}>{error}</p>}
         {message && <p style={styles.success}>{message}</p>}
 
+        <div style={styles.footerRule} />
         <p style={styles.hint}>
-          No password needed — sign in with Google or get a magic link by email.
+          A magic link signs you in straight from your inbox — nothing to remember.
         </p>
       </div>
     </div>
@@ -151,96 +157,97 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100vh',
     background: 'var(--bg)',
     color: 'var(--fg)',
-    fontFamily: '"Press Start 2P", monospace',
-    padding: '1rem',
+    padding: '1.5rem',
   },
   card: {
-    background: 'var(--card)',
-    border: '3px solid var(--accent)',
-    padding: '2rem',
-    maxWidth: '400px',
+    maxWidth: '420px',
     width: '100%',
-    boxShadow: '0 0 20px rgba(0, 255, 213, 0.5)',
   },
   title: {
-    fontSize: '1.5rem',
-    marginBottom: '0.5rem',
-    color: 'var(--accent)',
-    textAlign: 'center',
+    fontSize: '26px',
+    fontWeight: 600,
+    marginBottom: '0.35rem',
+    color: 'var(--fg)',
+    letterSpacing: '-0.01em',
   },
   subtitle: {
-    fontSize: '0.75rem',
+    fontSize: '15px',
     marginBottom: '1.5rem',
-    textAlign: 'center',
-    color: 'var(--muted)',
+    color: 'var(--fg-dim)',
   },
   form: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '1rem',
+    gap: '0.875rem',
   },
   input: {
-    background: 'var(--bg)',
-    color: 'var(--fg)',
-    border: '2px solid var(--accent)',
-    padding: '0.75rem',
-    fontFamily: 'monospace',
-    fontSize: '0.75rem',
+    width: '100%',
   },
   button: {
-    background: 'var(--accent)',
-    color: 'var(--bg)',
+    background: 'var(--accent-warm)',
+    color: '#1a1206',
     border: 'none',
-    padding: '0.75rem',
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.65rem',
+    padding: '0.875rem',
+    borderRadius: 'var(--radius-md)',
+    fontFamily: 'inherit',
+    fontSize: '15px',
+    fontWeight: 700,
+    letterSpacing: '0.02em',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    minHeight: '46px',
+    transition: 'all 0.15s ease',
   },
   error: {
-    color: '#ff3bff',
-    fontSize: '0.75rem',
+    color: 'var(--danger)',
+    fontSize: '14px',
     marginTop: '1rem',
-    textAlign: 'center',
   },
   success: {
-    color: 'var(--accent)',
-    fontSize: '0.75rem',
+    color: 'var(--success)',
+    fontSize: '14px',
     marginTop: '1rem',
-    textAlign: 'center',
+  },
+  footerRule: {
+    borderTop: '1.5px dashed var(--border)',
+    marginTop: '1.75rem',
+    paddingTop: '0.25rem',
   },
   hint: {
-    fontSize: '0.65rem',
+    fontSize: '13px',
     color: 'var(--muted)',
-    marginTop: '1.5rem',
-    lineHeight: '1.5',
+    marginTop: '0.75rem',
+    lineHeight: 1.6,
   },
   googleButton: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    padding: '0.75rem',
-    background: '#fff',
-    color: '#333',
-    border: '2px solid var(--accent)',
-    fontFamily: 'monospace',
-    fontSize: '0.75rem',
+    padding: '0.875rem',
+    background: 'transparent',
+    color: 'var(--fg)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-md)',
+    fontFamily: 'inherit',
+    fontSize: '15px',
+    fontWeight: 600,
     cursor: 'pointer',
-    transition: 'all 0.2s',
-    fontWeight: '600',
+    minHeight: '46px',
+    transition: 'all 0.15s ease',
   },
   divider: {
     display: 'flex',
     alignItems: 'center',
-    margin: '1rem 0',
-    gap: '0.5rem',
+    margin: '1.25rem 0',
+    gap: '0.75rem',
   },
   dividerText: {
     color: 'var(--muted)',
-    fontSize: '0.65rem',
-    whiteSpace: 'nowrap' as const,
+    fontSize: '12px',
+    letterSpacing: '0.18em',
+    textTransform: 'uppercase',
+    whiteSpace: 'nowrap',
     flex: 1,
-    textAlign: 'center' as const,
+    textAlign: 'center',
   },
 };

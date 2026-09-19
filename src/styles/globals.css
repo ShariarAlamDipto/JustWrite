@@ -95,6 +95,11 @@
   --accent-bright: #3182ce;
   --accent-2: #805ad5;
   --accent-2-glow: rgba(128, 90, 213, 0.15);
+
+  /* Warm CTA — deliberately not blue, so sign-in/primary actions stand apart
+     from the navy accent and from the ambient gradient behind them. */
+  --accent-warm: #e3a857;
+  --accent-warm-strong: #f0b96a;
   
   /* Priority colors */
   --priority-urgent: #e53e3e;
@@ -139,6 +144,8 @@
   --accent: #1a365d;
   --accent-glow: rgba(26, 54, 93, 0.1);
   --accent-bright: #2c5282;
+  --accent-warm: #c9821f;
+  --accent-warm-strong: #a56614;
 }
 
 /* Reset */
@@ -170,8 +177,9 @@ body {
   font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
   font-optical-sizing: auto;
   font-weight: 400;
-  font-size: 16px;
-  line-height: 1.7;
+  font-size: 18px;
+  line-height: 1.85;
+  letter-spacing: 0.012em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -231,7 +239,7 @@ a:hover {
   justify-content: center;
   gap: var(--space-sm);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   padding: 0.625rem 1.25rem;
   border: 1px solid var(--border);
@@ -356,6 +364,9 @@ a:hover {
   padding: var(--space-md);
 }
 
+/* Modal forms share the receipt language: perforated rules and the same
+   stacked paper shadow. They scroll, so the torn edges are drawn inset via a
+   repeating border image rather than overflowing pseudo-elements. */
 .modal-card {
   width: 100%;
   max-width: 560px;
@@ -363,10 +374,15 @@ a:hover {
   color: var(--fg);
   padding: var(--space-xl);
   border: 1px solid var(--border);
+  border-top: 3px double var(--border);
+  border-bottom: 3px double var(--border);
   border-radius: var(--radius-lg);
   animation: slideUp 0.2s ease-out;
   max-height: 85vh;
   overflow-y: auto;
+  box-shadow:
+    0 40px 60px -28px rgba(0, 0, 0, 0.5),
+    0 14px 24px -14px rgba(0, 0, 0, 0.32);
 }
 
 .modal-header {
@@ -375,11 +391,11 @@ a:hover {
   align-items: center;
   margin-bottom: var(--space-lg);
   padding-bottom: var(--space-md);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1.5px dashed var(--border);
 }
 
 .modal-title {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--fg);
 }
@@ -445,8 +461,9 @@ textarea {
   border-radius: var(--radius-md);
   padding: var(--space-md);
   font-family: inherit;
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: 17px;
+  line-height: 1.8;
+  letter-spacing: 0.012em;
   transition: var(--transition-fast);
   width: 100%;
 }
@@ -569,9 +586,9 @@ input[type="checkbox"]:checked::after {
 /* Responsive */
 @media (max-width: 768px) {
   body {
-    font-size: 14px;
+    font-size: 16px;
   }
-  
+
   .container {
     padding: var(--space-md);
   }
@@ -591,7 +608,8 @@ input[type="checkbox"]:checked::after {
   input,
   textarea {
     padding: var(--space-md);
-    font-size: 16px; /* Prevents iOS zoom */
+    font-size: 16px; /* Prevents iOS zoom — do not lower */
+    line-height: 1.8;
   }
   
   .fab {
@@ -606,7 +624,7 @@ input[type="checkbox"]:checked::after {
 /* Extra small screens */
 @media (max-width: 480px) {
   body {
-    font-size: 14px;
+    font-size: 16px;
   }
   
   .container {
@@ -631,11 +649,11 @@ input[type="checkbox"]:checked::after {
   }
   
   h1 {
-    font-size: 22px !important;
+    font-size: 26px !important;
   }
-  
+
   h2 {
-    font-size: 18px !important;
+    font-size: 21px !important;
   }
 }
 
@@ -666,7 +684,7 @@ input[type="checkbox"]:checked::after {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
 }
 
 .entry-type-journal {
@@ -677,4 +695,148 @@ input[type="checkbox"]:checked::after {
 .entry-type-idea {
   background: rgba(128, 90, 213, 0.15);
   color: var(--accent-2);
+}
+
+/* ============================================
+   AMBIENT GRADIENT — peaceful, slow-drifting color
+   fields that fill the empty margins on either side
+   of the centered 800px content column. Confined to
+   the margin area geometrically so it never competes
+   with content for stacking order.
+   ============================================ */
+.jw-ambient {
+  /* Half the 800px content column, plus how far the gradient fades toward it */
+  --ambient-half: 400px;
+  --ambient-fade: 90px;
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  /* Opaque base so the grain layer blends against a known colour, and so the
+     margins stay visually identical to the page when nothing is drawn. */
+  background: var(--bg);
+  /* Reveal only the empty margins either side of the content column. */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(50% - var(--ambient-half) - var(--ambient-fade)),
+    transparent calc(50% - var(--ambient-half)),
+    transparent calc(50% + var(--ambient-half)),
+    #000 calc(50% + var(--ambient-half) + var(--ambient-fade)),
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(50% - var(--ambient-half) - var(--ambient-fade)),
+    transparent calc(50% - var(--ambient-half)),
+    transparent calc(50% + var(--ambient-half)),
+    #000 calc(50% + var(--ambient-half) + var(--ambient-fade)),
+    #000 100%
+  );
+}
+
+.jw-ambient-canvas {
+  position: absolute;
+  top: -8%;
+  left: -8%;
+  width: 116%;
+  height: 116%;
+  filter: blur(36px);
+  opacity: 0.62;
+}
+
+/* Film grain — overlay keeps it invisible over the near-black base and lets it
+   bite only where there is colour, which is how the reference reads. */
+.jw-ambient-grain {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  opacity: 0.38;
+  mix-blend-mode: overlay;
+}
+
+[data-theme="light"] .jw-ambient-canvas {
+  opacity: 0.32;
+  filter: blur(44px) saturate(0.9);
+}
+
+[data-theme="light"] .jw-ambient-grain {
+  opacity: 0.18;
+}
+
+/* ============================================
+   RECEIPT CARD — the primary writing surfaces
+   (Journal / Ideas / Notes) styled like a slip of
+   paper: torn top & bottom edges, a stamped label
+   header, and a dashed tear-line beneath it.
+   ============================================ */
+.jw-receipt {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 30px 28px 26px;
+  box-shadow:
+    0 40px 60px -28px rgba(0, 0, 0, 0.45),
+    0 14px 24px -14px rgba(0, 0, 0, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="light"] .jw-receipt {
+  box-shadow:
+    0 40px 60px -30px rgba(26, 54, 93, 0.18),
+    0 12px 20px -12px rgba(26, 54, 93, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.jw-receipt::before,
+.jw-receipt::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 11px;
+  background:
+    linear-gradient(-45deg, transparent 6px, var(--bg) 6px) 0 0 / 12px 12px repeat-x,
+    linear-gradient(45deg, transparent 6px, var(--bg) 6px) 0 0 / 12px 12px repeat-x;
+}
+
+.jw-receipt::before {
+  top: -11px;
+}
+
+.jw-receipt::after {
+  bottom: -11px;
+  transform: rotate(180deg);
+}
+
+.jw-receipt-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+  border-bottom: 1.5px dashed var(--border);
+}
+
+.jw-receipt-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  white-space: nowrap;
+}
+
+.jw-receipt-meta {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  white-space: nowrap;
 }

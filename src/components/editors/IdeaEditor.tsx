@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import PrivacyToggle from '@/components/ui/PrivacyToggle'
 import MetaLabel from '@/components/ui/MetaLabel'
+import ReceiptCard from '@/components/ui/ReceiptCard'
 import { TagInput } from '@/components/ui/TagChip'
 import VoiceCapture from '@/components/voice/VoiceCapture'
 import { countWords, autoTitle } from '@/lib/jw-utils'
@@ -153,40 +154,45 @@ export default function IdeaEditor({
       )}
 
       {/* ── Writing surface ────────────────────────────────────────────────── */}
-      <div className="flex-1 px-5 pt-4 pb-24">
-        {/* Auto-derived title preview */}
-        {derivedTitle && body.length > 20 && (
-          <p
-            className="text-xs mb-3 animate-fade-in"
-            style={{ color: '#3182ce', letterSpacing: '0.04em' }}
-          >
-            IDEA · {derivedTitle}
-          </p>
-        )}
+      <div className="flex-1 px-4 sm:px-6 pt-5 pb-24">
+        <div className="max-w-[640px] mx-auto w-full">
+          <ReceiptCard label="Idea" meta={`${wordCount} word${wordCount === 1 ? '' : 's'}`}>
+            {/* Auto-derived title preview */}
+            {derivedTitle && body.length > 20 && (
+              <p
+                className="text-xs mb-3 animate-fade-in"
+                style={{ color: '#3182ce', letterSpacing: '0.04em' }}
+              >
+                {derivedTitle}
+              </p>
+            )}
 
-        <textarea
-          ref={bodyRef}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="What's the idea?"
-          className="jw-input w-full resize-none leading-relaxed"
-          style={{
-            fontSize: '17px',
-            color: isDark ? '#D8D5CF' : '#2A2824',
-            lineHeight: 1.7,
-            minHeight: '50vh',
-          }}
-        />
+            <textarea
+              ref={bodyRef}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="What's the idea?"
+              className="jw-input w-full resize-none leading-relaxed"
+              style={{
+                fontSize: '18px',
+                color: isDark ? '#D8D5CF' : '#2A2824',
+                lineHeight: 1.9,
+                letterSpacing: '0.012em',
+                minHeight: '45vh',
+              }}
+            />
 
-        {/* Tag input */}
-        <div className="mt-4">
-          <TagInput
-            tags={tags}
-            onChange={setTags}
-            isDark={isDark}
-            accent="#3182ce"
-            placeholder="Add tags…"
-          />
+            {/* Tag input */}
+            <div className="mt-4">
+              <TagInput
+                tags={tags}
+                onChange={setTags}
+                isDark={isDark}
+                accent="#3182ce"
+                placeholder="Add tags…"
+              />
+            </div>
+          </ReceiptCard>
         </div>
       </div>
 

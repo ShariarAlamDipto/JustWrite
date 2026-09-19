@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import PrivacyToggle from '@/components/ui/PrivacyToggle'
 import MetaLabel from '@/components/ui/MetaLabel'
+import ReceiptCard from '@/components/ui/ReceiptCard'
 import VoiceCapture from '@/components/voice/VoiceCapture'
 import { countWords } from '@/lib/jw-utils'
 import type { JournalEntry } from '@/lib/jw-types'
@@ -179,35 +180,43 @@ export default function JournalEditor({ entry, isDark, onSave, onBack, autoFocus
       )}
 
       {/* ── Writing surface ────────────────────────────────────────────── */}
-      <div className="flex-1 px-5 pt-4 pb-24">
-        {/* Optional title */}
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Title (optional)"
-          className="jw-input w-full mb-3 font-semibold"
-          style={{
-            fontSize: '22px',
-            color: isDark ? '#f5f5f5' : '#1a1a1a',
-            letterSpacing: '-0.015em',
-          }}
-        />
+      <div className="flex-1 px-4 sm:px-6 pt-5 pb-24">
+        <div className="max-w-[640px] mx-auto w-full">
+          <ReceiptCard
+            label="Journal Entry"
+            meta={new Date(entry?.createdAt ?? Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+          >
+            {/* Optional title */}
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title (optional)"
+              className="jw-input w-full mb-3 font-semibold"
+              style={{
+                fontSize: '26px',
+                color: isDark ? '#f5f5f5' : '#1a1a1a',
+                letterSpacing: '-0.01em',
+              }}
+            />
 
-        {/* Body — the main writing area */}
-        <textarea
-          ref={bodyRef}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Start writing…"
-          className="jw-input w-full resize-none leading-relaxed"
-          style={{
-            fontSize: '16px',
-            color: isDark ? '#D8D5CF' : '#2A2824',
-            lineHeight: 1.75,
-            minHeight: '60vh',
-          }}
-        />
+            {/* Body — the main writing area */}
+            <textarea
+              ref={bodyRef}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Start writing…"
+              className="jw-input w-full resize-none leading-relaxed"
+              style={{
+                fontSize: '18px',
+                color: isDark ? '#D8D5CF' : '#2A2824',
+                lineHeight: 1.9,
+                letterSpacing: '0.012em',
+                minHeight: '55vh',
+              }}
+            />
+          </ReceiptCard>
+        </div>
       </div>
 
       {/* ── Passive footer ─────────────────────────────────────────────── */}

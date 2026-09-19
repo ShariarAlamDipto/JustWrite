@@ -5,6 +5,10 @@ import { useTheme } from '@/lib/ThemeContext'
 import { getRandomPrompt, PROMPT_CATEGORIES } from '@/lib/prompts'
 import type { JournalPrompt } from '@/lib/prompts'
 import type { JournalEntry } from '@/lib/jw-types'
+import StreakBox from '@/components/ui/StreakBox'
+
+type WritingMode = 'guided' | 'blank'
+const WRITING_MODE_KEY = 'jw-journal-writing-mode'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toJournalEntry(raw: any): JournalEntry {
@@ -226,7 +230,22 @@ export default function JournalPage() {
   const [dailyPrompts, setDailyPrompts] = useState<JournalPrompt[]>([])
   const [promptAnswers, setPromptAnswers] = useState<string[]>(['', ''])
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null)
-  const [stats, setStats] = useState<{ stats: { currentStreak: number }; level: { current: number; title: string }; motivationalMessage?: string } | null>(null)
+  const [stats, setStats] = useState<{
+    stats: { currentStreak: number; longestStreak: number }
+    level: { current: number; title: string }
+    motivationalMessage?: string
+    yearCalendar: Record<string, number>
+  } | null>(null)
+  const [writingMode, setWritingMode] = useState<WritingMode>('guided')
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(WRITING_MODE_KEY)
+    if (saved === 'guided' || saved === 'blank') setWritingMode(saved)
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(WRITING_MODE_KEY, writingMode)
+  }, [writingMode])
 
   useEffect(() => {
     if (user && token) {
@@ -320,47 +339,79 @@ export default function JournalPage() {
           )}
         </header>
 
+        {stats && (
+          <StreakBox
+            calendar={stats.yearCalendar}
+            currentStreak={stats.stats.currentStreak}
+            longestStreak={stats.stats.longestStreak}
+          />
+        )}
+
+        {/* Guided vs. blank-page mode */}
+        <div style={styles.modeToggle} role="tablist" aria-label="Writing mode">
+          <button
+            role="tab"
+            aria-selected={writingMode === 'guided'}
+            className="btn btn-sm"
+            onClick={() => setWritingMode('guided')}
+            style={writingMode === 'guided' ? styles.modeButtonActive : styles.modeButton}
+          >
+            Guided Prompts
+          </button>
+          <button
+            role="tab"
+            aria-selected={writingMode === 'blank'}
+            className="btn btn-sm"
+            onClick={() => setWritingMode('blank')}
+            style={writingMode === 'blank' ? styles.modeButtonActive : styles.modeButton}
+          >
+            Blank Page
+          </button>
+        </div>
+
         {/* Daily prompts */}
-        <section style={styles.promptSection}>
-          <div style={styles.promptHeader}>
-            <span style={styles.promptLabel}>Today&apos;s Prompts</span>
-            <button
-              className="btn btn-sm"
-              onClick={() => { setDailyPrompts([getRandomPrompt(), getRandomPrompt()]); setPromptAnswers(['', '']) }}
-              style={{ fontSize: '12px' }}
-            >
-              Surprise me
-            </button>
-          </div>
-          <div style={styles.promptList}>
-            {dailyPrompts.map((prompt, idx) => (
-              <div key={prompt.id + idx} style={styles.promptCard}>
-                <span style={styles.promptCategory}>
-                  {PROMPT_CATEGORIES.find((c) => c.id === prompt.category)?.label}
-                </span>
-                <p style={styles.promptText}>{prompt.text}</p>
-                <textarea
-                  value={promptAnswers[idx] ?? ''}
-                  onChange={(e) => {
-                    const next = [...promptAnswers]
-                    next[idx] = e.target.value
-                    setPromptAnswers(next)
-                  }}
-                  placeholder="Write your answer here..."
-                  style={styles.promptAnswerArea}
-                />
-              </div>
-            ))}
-          </div>
-        </section>
+        {writingMode === 'guided' && (
+          <section style={styles.promptSection}>
+            <div style={styles.promptHeader}>
+              <span style={styles.promptLabel}>Today&apos;s Prompts</span>
+              <button
+                className="btn btn-sm"
+                onClick={() => { setDailyPrompts([getRandomPrompt(), getRandomPrompt()]); setPromptAnswers(['', '']) }}
+                style={{ fontSize: '12px' }}
+              >
+                Surprise me
+              </button>
+            </div>
+            <div style={styles.promptList}>
+              {dailyPrompts.map((prompt, idx) => (
+                <div key={prompt.id + idx} style={styles.promptCard}>
+                  <span style={styles.promptCategory}>
+                    {PROMPT_CATEGORIES.find((c) => c.id === prompt.category)?.label}
+                  </span>
+                  <p style={styles.promptText}>{prompt.text}</p>
+                  <textarea
+                    value={promptAnswers[idx] ?? ''}
+                    onChange={(e) => {
+                      const next = [...promptAnswers]
+                      next[idx] = e.target.value
+                      setPromptAnswers(next)
+                    }}
+                    placeholder="Write your answer here..."
+                    style={styles.promptAnswerArea}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Free write */}
         <section style={styles.editorSection}>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="What's on your mind?"
-            style={styles.textarea}
+            placeholder={writingMode === 'blank' ? 'Write anything you want. No prompts, no rules.' : "What's on your mind?"}
+            style={writingMode === 'blank' ? { ...styles.textarea, minHeight: '320px' } : styles.textarea}
           />
           <div style={styles.moodSection}>
             <label style={styles.moodLabel}>
@@ -434,6 +485,9 @@ const styles: Record<string, React.CSSProperties> = {
   statValue: { fontSize: '16px', fontWeight: 700, color: 'var(--accent-bright)' },
   statLabel: { fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
   motivational: { fontSize: '13px', color: 'var(--fg-dim)', marginTop: '0.75rem', fontStyle: 'italic' as const },
+  modeToggle: { display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' },
+  modeButton: { fontSize: '13px' },
+  modeButtonActive: { fontSize: '13px', borderColor: 'var(--accent)', color: 'var(--accent-bright)', background: 'var(--accent-glow)' },
   promptSection: { marginBottom: '1.5rem' },
   promptHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' },
   promptLabel: { fontSize: '12px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },

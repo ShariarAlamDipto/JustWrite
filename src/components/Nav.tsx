@@ -131,47 +131,58 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'background-color 0.2s ease, border-color 0.2s ease',
   },
   inner: {
-    maxWidth: '800px',
+    maxWidth: '1240px',
     margin: '0 auto',
-    padding: '0 1rem',
+    padding: '0 1.5rem',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: '56px',
+    flexWrap: 'nowrap',
+    gap: '1.5rem',
+    height: '64px',
   },
   logo: {
     display: 'flex',
     alignItems: 'center',
-    color: 'var(--fg)',
+    color: '#ffffff',
     textDecoration: 'none',
+    flexShrink: 0,
   },
   logoText: {
-    fontSize: '18px',
+    fontSize: '20px',
     fontWeight: 700,
-    letterSpacing: '-0.02em',
+    letterSpacing: '0.01em',
+    whiteSpace: 'nowrap',
   },
   desktopNav: {
     display: 'none',
-    gap: '0.25rem',
+    gap: '0.5rem',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
   },
   navLink: {
-    color: 'var(--muted)',
+    color: '#ffffff',
     textDecoration: 'none',
-    padding: '0.5rem 1rem',
+    padding: '0.5rem 0.875rem',
     borderRadius: 'var(--radius-md)',
     transition: 'all 0.15s ease',
-    fontWeight: 500,
-    fontSize: '14px',
+    fontWeight: 700,
+    fontSize: '15px',
+    letterSpacing: '0.02em',
+    whiteSpace: 'nowrap',
+    opacity: 0.72,
   },
   navLinkActive: {
-    color: 'var(--fg)',
+    color: '#ffffff',
     background: 'var(--bg-card)',
-    fontWeight: 600,
+    fontWeight: 700,
+    opacity: 1,
   },
   rightSection: {
     display: 'none',
     alignItems: 'center',
-    gap: '0.75rem',
+    gap: '0.875rem',
+    flexShrink: 0,
   },
   userArea: {
     display: 'flex',
@@ -179,9 +190,10 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0.5rem',
   },
   userName: {
-    color: 'var(--fg-dim)',
-    fontSize: '13px',
-    maxWidth: '100px',
+    color: '#ffffff',
+    fontSize: '14px',
+    fontWeight: 600,
+    maxWidth: '120px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -202,14 +214,22 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.15s ease',
   },
   signInLink: {
-    color: 'var(--accent-bright)',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#1a1206',
+    background: 'var(--accent-warm)',
     textDecoration: 'none',
-    padding: '0.375rem 0.75rem',
-    border: '1px solid var(--accent)',
+    padding: '0 1.125rem',
+    height: '38px',
+    border: 'none',
     borderRadius: 'var(--radius-md)',
     transition: 'all 0.15s ease',
-    fontWeight: 500,
-    fontSize: '13px',
+    fontWeight: 700,
+    fontSize: '14px',
+    letterSpacing: '0.02em',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
   },
   menuBtn: {
     display: 'flex',
@@ -275,14 +295,17 @@ const styles: Record<string, React.CSSProperties> = {
 if (typeof window !== 'undefined') {
   const style = document.createElement('style');
   style.textContent = `
-    @media (min-width: 640px) {
+    /* Eight links plus the logo and actions need real room — below this the
+       hamburger menu takes over rather than letting the bar wrap. */
+    @media (min-width: 1120px) {
       nav > div > div:nth-child(2) { display: flex !important; }
       nav > div > div:nth-child(3) { display: flex !important; }
       nav > div > button:last-child { display: none !important; }
     }
+    nav a:hover { opacity: 1 !important; }
   `;
-  if (!document.getElementById('nav-responsive-v2')) {
-    style.id = 'nav-responsive-v2';
+  if (!document.getElementById('nav-responsive-v3')) {
+    style.id = 'nav-responsive-v3';
     document.head.appendChild(style);
   }
 }

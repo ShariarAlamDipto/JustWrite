@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/next';
 import '../styles/globals.css';
 import { AuthProvider } from '@/lib/useAuth';
 import { ThemeProvider } from '@/lib/ThemeContext';
+import AmbientGradient from '@/components/layout/AmbientGradient';
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
@@ -29,6 +30,7 @@ export default function App({ Component, pageProps }: AppProps) {
       </Head>
       <ThemeProvider>
         <AuthProvider>
+          <AmbientGradient />
           <Component {...pageProps} />
         </AuthProvider>
       </ThemeProvider>

@@ -123,6 +123,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
       });
 
+      // Daily entry counts for the last 371 days (53 weeks), for the GitHub-style streak box
+      const yearAgo = new Date(now.getTime() - 371 * 86400000);
+      const yearCalendar: Record<string, number> = {};
+      for (let i = 0; i < 371; i++) {
+        const date = new Date(now.getTime() - i * 86400000);
+        yearCalendar[date.toISOString().split('T')[0]] = 0;
+      }
+      entries
+        .filter((e: any) => new Date(e.created_at) >= yearAgo)
+        .forEach((entry: any) => {
+          const dateStr = new Date(entry.created_at).toISOString().split('T')[0];
+          if (yearCalendar[dateStr] !== undefined) {
+            yearCalendar[dateStr]++;
+          }
+        });
+
       // Get earned badges with full info
       const earnedBadges = stats.badges.map(badgeId => {
         const badge = getBadgeById(badgeId);
@@ -178,6 +194,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           .map(([activity, count]) => ({ activity, count })),
         keywords: topKeywords,
         calendar: dailyCounts,
+        yearCalendar,
         badges: {
           earned: earnedBadges,
           next: unearnedBadges,

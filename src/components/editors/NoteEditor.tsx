@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import PrivacyToggle from '@/components/ui/PrivacyToggle'
 import MetaLabel from '@/components/ui/MetaLabel'
+import ReceiptCard from '@/components/ui/ReceiptCard'
 import { TagInput } from '@/components/ui/TagChip'
 import VoiceCapture from '@/components/voice/VoiceCapture'
 import { countWords } from '@/lib/jw-utils'
@@ -210,11 +211,11 @@ export default function NoteEditor({
   // ── Block styles ─────────────────────────────────────────────────────────────
 
   const blockStyle = (type: NoteBlock['type']): React.CSSProperties => {
-    const base: React.CSSProperties = { color: isDark ? '#D8D5CF' : '#2A2824', lineHeight: 1.75 }
-    if (type === 'heading1') return { ...base, fontSize: '22px', fontWeight: 700, letterSpacing: '-0.02em', color: isDark ? '#f5f5f5' : '#1a1a1a' }
-    if (type === 'heading2') return { ...base, fontSize: '18px', fontWeight: 600, letterSpacing: '-0.01em', color: isDark ? '#f5f5f5' : '#1a1a1a' }
-    if (type === 'quote') return { ...base, fontSize: '16px', fontStyle: 'italic', color: isDark ? '#9ca3af' : '#525252' }
-    return { ...base, fontSize: '16px' }
+    const base: React.CSSProperties = { color: isDark ? '#D8D5CF' : '#2A2824', lineHeight: 1.9, letterSpacing: '0.012em' }
+    if (type === 'heading1') return { ...base, fontSize: '26px', fontWeight: 700, letterSpacing: '-0.02em', color: isDark ? '#f5f5f5' : '#1a1a1a' }
+    if (type === 'heading2') return { ...base, fontSize: '21px', fontWeight: 600, letterSpacing: '-0.01em', color: isDark ? '#f5f5f5' : '#1a1a1a' }
+    if (type === 'quote') return { ...base, fontSize: '18px', fontStyle: 'italic', color: isDark ? '#9ca3af' : '#525252' }
+    return { ...base, fontSize: '18px' }
   }
 
   const blockClassName = (type: NoteBlock['type']) => {
@@ -307,7 +308,9 @@ export default function NoteEditor({
         )}
 
         {/* ── Writing surface ──────────────────────────────────────────────────── */}
-        <div className="flex-1 px-5 pt-5 pb-24" style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex-1 px-4 sm:px-6 pt-5 pb-24" style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div className="max-w-[640px] mx-auto w-full">
+        <ReceiptCard label="Note" meta={`${wordCount} word${wordCount === 1 ? '' : 's'}`}>
 
           {/* Icon + Title row */}
           <div className="flex items-start gap-3 mb-4">
@@ -361,9 +364,9 @@ export default function NoteEditor({
               placeholder="Untitled"
               className="jw-input flex-1 font-semibold select-text"
               style={{
-                fontSize: '24px',
+                fontSize: '28px',
                 color: isDark ? '#f5f5f5' : '#1a1a1a',
-                letterSpacing: '-0.02em',
+                letterSpacing: '-0.01em',
                 paddingTop: '8px',
                 touchAction: 'manipulation',
               }}
@@ -478,6 +481,8 @@ export default function NoteEditor({
           <div className="mt-6">
             <TagInput tags={tags} onChange={setTags} isDark={isDark} accent="#3182ce" placeholder="Add tags…" />
           </div>
+        </ReceiptCard>
+        </div>
         </div>
 
         {/* ── Footer ──────────────────────────────────────────────────────────── */}

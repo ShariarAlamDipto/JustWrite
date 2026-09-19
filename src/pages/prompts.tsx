@@ -166,9 +166,12 @@ export default function Prompts() {
 
         {/* New Prompt Form */}
         {showForm && (
-          <form onSubmit={handleCreate} className="card" style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '14px', marginBottom: '1rem' }}>Create New Prompt</h3>
-            
+          <form onSubmit={handleCreate} className="jw-receipt" style={{ marginBottom: '1.5rem' }}>
+            <div className="jw-receipt-head">
+              <span className="jw-receipt-label">New Prompt</span>
+              <span className="jw-receipt-meta">{newPromptText.length}/500</span>
+            </div>
+
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', fontSize: '12px', color: '#ffffff', marginBottom: '0.5rem', opacity: 0.9 }}>
                 Prompt Text

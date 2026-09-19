@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "WebFetch(domain:help.obsidian.md)",
+      "WebFetch(domain:obsidian.md)",
+      "WebFetch(domain:forum.obsidian.md)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:www.eleanorkonik.com)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(npm install:*)",
+      "Bash(flutter pub:*)",
+      "Bash(grep -r 'class Note' /c/Users/shari/JustWrite/flutter_app/lib --include=*.dart)",
+      "Bash(find /c/Users/shari/JustWrite -type f -name *note* -o -name *Note*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"NoteDetail\\\\|BlockType\\\\|Block interface\" /c/Users/shari/JustWrite/src --include=*.ts --include=*.tsx -l)",
+      "Bash(flutter analyze:*)",
+      "Bash(find /c/Users/shari/JustWrite -name *.sql)",
+      "Bash(flutter build:*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\shari\\.claude\\projects\\c--Users-shari-JustWrite\\memory"
+    ]
+  }
+}
