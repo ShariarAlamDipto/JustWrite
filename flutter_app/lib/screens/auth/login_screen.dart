@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:justwrite_mobile/providers/auth_provider.dart';
 import 'package:justwrite_mobile/services/auth_error.dart';
 import 'package:justwrite_mobile/theme/app_theme.dart';
+import 'package:justwrite_mobile/widgets/google_logo.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -166,6 +167,32 @@ class _LoginScreenState extends State<LoginScreen> {
     _sendMagicLink();
   }
 
+  void _signInWithGoogle() async {
+    // Capture these before awaiting: AuthProvider.signInWithGoogle flips the
+    // global isLoading flag, which makes the root Consumer in main.dart swap
+    // this whole screen for a spinner and dispose our State. The messenger and
+    // provider live above that Consumer, so grabbing them now keeps error
+    // reporting working even after this widget unmounts.
+    final messenger = ScaffoldMessenger.of(context);
+    final auth = context.read<AuthProvider>();
+
+    try {
+      debugPrint('[Login] Starting Google sign-in...');
+      await auth.signInWithGoogle();
+      debugPrint('[Login] Google sign-in succeeded — main.dart will navigate.');
+      // On success AuthProvider sets `user`; main.dart routes to HomeScreen.
+    } catch (e) {
+      debugPrint('[Login] Google sign-in failed: $e');
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(auth.error ?? 'Google sign-in failed. Please try again.'),
+          backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -292,6 +319,57 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
+                ],
+
+                // Continue with Google — primary social sign-in. Hidden once
+                // the user is entering an email OTP code to keep that step focused.
+                if (!_showOtpInput) ...[
+                  Consumer<AuthProvider>(
+                    builder: (context, auth, _) {
+                      return SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: auth.isLoading ? null : _signInWithGoogle,
+                          icon: const GoogleLogo(size: 20),
+                          label: const Text('Continue with Google'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.navy,
+                            backgroundColor: Colors.white,
+                            side: const BorderSide(color: AppTheme.greyLight, width: 1.5),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  // "or" divider between social and email sign-in
+                  const Row(
+                    children: [
+                      Expanded(child: Divider(color: AppTheme.greyLight, thickness: 1)),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'OR',
+                          style: TextStyle(
+                            color: AppTheme.grey,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: AppTheme.greyLight, thickness: 1)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
                 ],
 
                 // Email input (always visible, but disabled after sending)
