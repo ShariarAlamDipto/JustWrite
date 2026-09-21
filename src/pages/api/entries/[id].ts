@@ -3,6 +3,7 @@ import { withErrorHandler } from '../../../lib/apiHelpers';
 import { getEntryById, updateEntry, deleteEntry } from '../../../lib/storage';
 import { withAuth } from '../../../lib/withAuth';
 import { sanitizeInput, validateContentLength, isValidUUID, checkRateLimit } from '../../../lib/security';
+import { normalizeMood } from '../../../lib/mood';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
@@ -52,8 +53,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
       
       if (mood !== undefined) {
-        const moodNum = Number(mood);
-        updates.mood = Number.isFinite(moodNum) ? Math.min(100, Math.max(0, Math.round(moodNum))) : 5;
+        // entries.mood is CHECK-constrained to 1..10 - see lib/mood.ts
+        updates.mood = normalizeMood(mood);
       }
       
       if (activities !== undefined) {

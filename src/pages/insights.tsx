@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
+import { MOOD_MAX } from '../lib/mood';
 
 // Mood Line Chart (CSS-based)
 const MoodLineChart = ({ moodHistory }: { moodHistory: { date: string; mood: number }[] }) => {
@@ -8,7 +9,8 @@ const MoodLineChart = ({ moodHistory }: { moodHistory: { date: string; mood: num
     return <p style={{ color: 'var(--muted)', fontSize: '13px' }}>No mood data yet</p>;
   }
   
-  const maxMood = 100;
+  const maxMood = MOOD_MAX;
+  const yTicks = [0, 2, 4, 6, 8, 10];
   const chartHeight = 140;
   const chartWidth = 320;
   const paddingLeft = 50; // More space for Y-axis label
@@ -47,7 +49,7 @@ const MoodLineChart = ({ moodHistory }: { moodHistory: { date: string; mood: num
         </text>
         
         {/* Y-axis tick labels */}
-        {[0, 25, 50, 75, 100].map(v => {
+        {yTicks.map(v => {
           const y = paddingTop + plotHeight - ((v / maxMood) * plotHeight);
           return (
             <text key={`label-${v}`} x={paddingLeft - 8} y={y + 3} fill="var(--muted)" fontSize="9" textAnchor="end">
@@ -57,7 +59,7 @@ const MoodLineChart = ({ moodHistory }: { moodHistory: { date: string; mood: num
         })}
         
         {/* Grid lines */}
-        {[0, 25, 50, 75, 100].map(v => {
+        {yTicks.map(v => {
           const y = paddingTop + plotHeight - ((v / maxMood) * plotHeight);
           return (
             <line key={v} x1={paddingLeft} y1={y} x2={chartWidth - paddingRight} y2={y} 
@@ -148,9 +150,9 @@ const MoodPieChart = ({ distribution }: { distribution: { veryLow: number; low: 
 };
 
 // Simple bar for mood visualization
-const MoodBar = ({ value, max = 100 }: { value: number; max?: number }) => {
+const MoodBar = ({ value, max = MOOD_MAX }: { value: number; max?: number }) => {
   const percent = Math.round((value / max) * 100);
-  const color = value <= 25 ? '#e53e3e' : value <= 50 ? '#d69e2e' : value <= 75 ? '#38a169' : '#3182ce';
+  const color = percent <= 25 ? '#e53e3e' : percent <= 50 ? '#d69e2e' : percent <= 75 ? '#38a169' : '#3182ce';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
       <div style={{
@@ -338,7 +340,7 @@ export default function Insights() {
               )}
             </div>
             {stats.mood.trend && stats.mood.trend !== 'stable' && (
-              <p style={{ fontSize: '13px', color: stats.mood.trend === 'up' ? 'var(--success)' : 'var(--error)', marginTop: '0.75rem' }}>
+              <p style={{ fontSize: '13px', color: stats.mood.trend === 'up' ? 'var(--success)' : 'var(--danger)', marginTop: '0.75rem' }}>
                 Mood trending {stats.mood.trend === 'up' ? 'upward' : 'downward'} this week
               </p>
             )}

@@ -141,18 +141,30 @@ export async function listEntries(
     .slice(0, safeLimit);
 }
 
+/**
+ * Word count for an entry body. Encrypted payloads are opaque, so they count
+ * as 0 rather than counting base64 noise as words.
+ */
+function countWords(content: string): number {
+  if (!content || content.startsWith('enc2:') || content.startsWith('enc:')) return 0;
+  const words = content.trim().split(/\s+/).filter(Boolean);
+  return words.length;
+}
+
 // SECURITY: Include user_id in entry creation
-export async function createEntry({ content, source = 'text', created_at, user_id, mood, is_locked }: any) {
+export async function createEntry({ content, title, source = 'text', created_at, user_id, mood, is_locked }: any) {
   const hasLockedColumn = await checkIsLockedColumn();
   
   // Build entry object, only include is_locked if column exists
   const entry: any = {
     id: crypto.randomUUID(),
     content,
+    title: title ?? null,
     source,
     user_id: user_id || null, // SECURITY: Associate entry with user
     created_at: created_at || new Date().toISOString(),
     mood: mood !== undefined ? mood : null,
+    word_count: countWords(content),
     summary: null,
     ai_metadata: null
   };
@@ -274,6 +286,11 @@ export async function deleteEntry(id: string, userId?: string) {
   return true;
 }
 
+// Tasks are stored with a `due_date` column but the UI reads `task.due`,
+// so every read aliases it back. Keep all task selects on this list.
+const TASK_COLUMNS =
+  'id,title,description,priority,status,entry_id,user_id,created_at,updated_at,due:due_date';
+
 // SECURITY: Filter tasks by user_id
 export async function listTasks(
   userId?: string,
@@ -284,7 +301,7 @@ export async function listTasks(
   if (supabase) {
     let query = supabase
       .from('tasks')
-      .select('id,title,description,priority,status,entry_id,user_id,created_at,updated_at')
+      .select(TASK_COLUMNS)
       .order('created_at', { ascending: false })
       .limit(safeLimit);
 
@@ -336,7 +353,7 @@ export async function getTaskById(id: string, userId?: string) {
   if (supabase) {
     let query = supabase
       .from('tasks')
-      .select('*')
+      .select(TASK_COLUMNS)
       .eq('id', id);
 
     if (userId) {
@@ -364,14 +381,15 @@ export async function createTask(task: any) {
     entry_id: task.entry_id || null,
     user_id: task.user_id || null, // SECURITY: Associate task with user
     created_at: new Date().toISOString(),
-    ...(task.due ? { due: task.due } : {}),
+    // The column is due_date; a bare `due` key made every dated task fail to insert.
+    ...(task.due ? { due_date: task.due } : {}),
   };
 
   if (supabase) {
     const { data, error } = await supabase
       .from('tasks')
       .insert(t)
-      .select()
+      .select(TASK_COLUMNS)
       .single();
     if (error) {
       console.error('Supabase createTask error:', error.message);
@@ -404,7 +422,7 @@ export async function createTasksBulk(tasks: any[], entryId?: string, userId?: s
     const { data, error } = await supabase
       .from('tasks')
       .insert(tasksToInsert)
-      .select();
+      .select(TASK_COLUMNS);
     
     if (error) {
       console.error('Supabase createTasksBulk error:', error.message);

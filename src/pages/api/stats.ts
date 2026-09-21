@@ -4,6 +4,7 @@ import { withAuth } from '../../lib/withAuth';
 import { calculateStats, getLevelFromPoints, getLevelProgress, BADGES, getBadgeById, getMotivationalMessage } from '../../lib/gamification';
 import { checkRateLimit } from '../../lib/security';
 import { setCacheHeaders, withErrorHandler } from '../../lib/apiHelpers';
+import { getMoodBucket } from '../../lib/mood';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
@@ -49,12 +50,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // Mood distribution for pie chart (categorize into 5 ranges)
       const moodDistribution = { veryLow: 0, low: 0, neutral: 0, good: 0, great: 0 };
       entriesWithMood.forEach((e: any) => {
-        const m = e.mood;
-        if (m <= 20) moodDistribution.veryLow++;
-        else if (m <= 40) moodDistribution.low++;
-        else if (m <= 60) moodDistribution.neutral++;
-        else if (m <= 80) moodDistribution.good++;
-        else moodDistribution.great++;
+        moodDistribution[getMoodBucket(e.mood)]++;
       });
 
       // Mood history for line chart (last 14 days, one average per day)

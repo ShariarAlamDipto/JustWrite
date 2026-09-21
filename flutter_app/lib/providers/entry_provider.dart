@@ -32,7 +32,6 @@ List<Map<String, dynamic>> _decryptEntriesBatch(Map<String, dynamic> params) {
 class EntryProvider extends ChangeNotifier {
   final _supabaseService = SupabaseService();
   final _compressionService = CompressionService();
-  final _encryptionService = EncryptionService();
   List<Entry> _entries = [];
   bool _isLoading = false;
   bool _isLoadingMore = false;
@@ -194,17 +193,21 @@ class EntryProvider extends ChangeNotifier {
     debugPrint('[EntryProvider] Creating entry...');
     
     try {
-      // Only encrypt Journal entries (source = 'text'), not Ideas/Brainstorm
-      // This allows Ideas to be viewed on any device without encryption key
+      // Journal entries (source = 'text') are stored as plain text.
+      //
+      // They used to be compressed and then encrypted. Both were dropped because
+      // the web app reads the same rows and could render neither, and because
+      // server-side features (AI distill/brainstorm, keyword + graph extraction)
+      // can only work on readable content. Reads still decrypt and decompress,
+      // so anything written by an older build keeps working.
+      //
+      // Ideas/Brainstorm stay compressed - they are not affected by this change.
       String processedContent;
       final isJournal = source == EntrySource.text;
 
       if (isJournal) {
-        // Journal entries: compress then encrypt for privacy
-        processedContent = _compressionService.compress(content);
-        processedContent = _encryptionService.encrypt(processedContent, userId);
+        processedContent = content;
       } else {
-        // Ideas/Brainstorm: only compress for storage efficiency (no encryption)
         processedContent = _compressionService.compress(content);
       }
       
@@ -273,16 +276,14 @@ class EntryProvider extends ChangeNotifier {
 
   Future<void> updateEntry(Entry entry) async {
     try {
-      // Only encrypt Journal entries (source = 'text'), not Ideas/Brainstorm
+      // Journal entries are stored as plain text - see createEntry for why.
+      // Editing an entry written by an older build rewrites it in the clear.
       final isJournal = entry.isJournal;
       String processedContent;
-      
+
       if (isJournal) {
-        // Journal entries: compress then encrypt for privacy
-        processedContent = _compressionService.compress(entry.content);
-        processedContent = _encryptionService.encrypt(processedContent, entry.userId);
+        processedContent = entry.content;
       } else {
-        // Ideas/Brainstorm: only compress (no encryption)
         processedContent = _compressionService.compress(entry.content);
       }
       

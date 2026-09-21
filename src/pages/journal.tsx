@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, memo } from 'react'
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react'
+import { useRouter } from 'next/router'
 import { Nav } from '@/components/Nav'
 import { useAuth } from '@/lib/useAuth'
 import { useTheme } from '@/lib/ThemeContext'
@@ -6,6 +7,8 @@ import { getRandomPrompt, PROMPT_CATEGORIES } from '@/lib/prompts'
 import type { JournalPrompt } from '@/lib/prompts'
 import type { JournalEntry } from '@/lib/jw-types'
 import StreakBox from '@/components/ui/StreakBox'
+import { MOOD_MIN, MOOD_MAX, MOOD_DEFAULT, getMoodLabel } from '@/lib/mood'
+import { decryptContent } from '@/lib/clientEncryption'
 
 type WritingMode = 'guided' | 'blank'
 const WRITING_MODE_KEY = 'jw-journal-writing-mode'
@@ -29,12 +32,34 @@ function toJournalEntry(raw: any): JournalEntry {
   }
 }
 
-const getMoodLabel = (mood: number) => {
-  if (mood <= 20) return 'Low'
-  if (mood <= 40) return 'Below Average'
-  if (mood <= 60) return 'Neutral'
-  if (mood <= 80) return 'Good'
-  return 'Great'
+/**
+ * Journal entries are stored as plain text. A phone still running an older
+ * build writes them gzip-compressed and encrypted, so reads normalise both
+ * formats and the list stays readable throughout the rollout. Plain text is
+ * returned untouched, with no key derivation.
+ */
+async function toReadableText(raw: string, userId?: string): Promise<string> {
+  if (!raw || !userId) return raw ?? ''
+  const isLegacyFormat =
+    raw.startsWith('enc2:') || raw.startsWith('enc:') || raw.startsWith('gz:')
+  if (!isLegacyFormat) return raw
+  try {
+    return await decryptContent(raw, userId)
+  } catch {
+    return raw
+  }
+}
+
+/** Best-effort error text from a failed API response. */
+async function readApiError(res: Response, fallback: string): Promise<string> {
+  try {
+    const json = await res.json()
+    if (json?.error && typeof json.error === 'string') return json.error
+  } catch {
+    // Non-JSON body (e.g. a proxy error page) — fall through.
+  }
+  if (res.status === 401) return 'Your session expired. Please sign in again.'
+  return `${fallback} (${res.status})`
 }
 
 // ── Entry card ──────────────────────────────────────────────────────────────
@@ -124,26 +149,33 @@ const EntryModal = memo(function EntryModal({
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(entry?.body ?? '')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (entry) setEditContent(entry.body ?? '')
+    setError(null)
   }, [entry])
 
   if (!entry) return null
 
   const handleSave = async () => {
     setSaving(true)
+    setError(null)
     try {
       const res = await fetch(`/api/entries/${entry.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ content: editContent }),
       })
-      if (res.ok) {
-        const { entry: updated } = await res.json()
-        onUpdate(toJournalEntry(updated))
-        setIsEditing(false)
+      if (!res.ok) {
+        setError(await readApiError(res, 'Could not save your changes.'))
+        return
       }
+      const { entry: updated } = await res.json()
+      onUpdate(toJournalEntry(updated))
+      setIsEditing(false)
+    } catch {
+      setError('Could not reach the server. Your changes are still here — try again.')
     } finally {
       setSaving(false)
     }
@@ -196,6 +228,7 @@ const EntryModal = memo(function EntryModal({
             {entry.body}
           </div>
         )}
+        {error && <p style={styles.error} role="alert">{error}</p>}
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           {isEditing ? (
             <>
@@ -223,13 +256,15 @@ export default function JournalPage() {
   const { user, token } = useAuth()
   const { isDark: _isDark } = useTheme()
   const [content, setContent] = useState('')
-  const [mood, setMood] = useState(50)
+  const [mood, setMood] = useState(MOOD_DEFAULT)
   const [entries, setEntries] = useState<JournalEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [dailyPrompts, setDailyPrompts] = useState<JournalPrompt[]>([])
   const [promptAnswers, setPromptAnswers] = useState<string[]>(['', ''])
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null)
+  const router = useRouter()
   const [stats, setStats] = useState<{
     stats: { currentStreak: number; longestStreak: number }
     level: { current: number; title: string }
@@ -268,16 +303,41 @@ export default function JournalPage() {
       const res = await fetch('/api/entries?limit=50', { headers: { Authorization: `Bearer ${token ?? ''}` } })
       if (res.ok) {
         const json = await res.json()
-        setEntries((json.entries ?? []).map(toJournalEntry))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const normalized = await Promise.all((json.entries ?? []).map(async (raw: any) => {
+          const entry = toJournalEntry(raw)
+          return {
+            ...entry,
+            body: await toReadableText(entry.body ?? '', user?.id),
+            title: entry.title ? await toReadableText(entry.title, user?.id) : entry.title,
+          }
+        }))
+        setEntries(normalized)
       }
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [token, user?.id])
+
+  // Deep link: /journal?id=<entryId> (used by Connect) opens that entry.
+  // Journal loads the most recent 50 entries; an older one simply isn't in
+  // range, and the page still lands on the journal list.
+  const openedFromQuery = useRef<string | null>(null)
+  useEffect(() => {
+    if (!router.isReady || !entries.length) return
+    const { id } = router.query
+    const entryId = typeof id === 'string' ? id : null
+    if (!entryId || openedFromQuery.current === entryId) return
+    const match = entries.find((e) => e.id === entryId)
+    if (!match) return
+    openedFromQuery.current = entryId
+    setSelectedEntry(match)
+  }, [router.isReady, router.query, entries])
 
   const handleSave = useCallback(async () => {
     if (!content.trim() && promptAnswers.every((a) => !a.trim())) return
     setSaving(true)
+    setSaveError(null)
     const answerParts = promptAnswers
       .map((ans, i) => ans.trim() ? `**${dailyPrompts[i]?.text ?? ''}**\n${ans.trim()}` : '')
       .filter(Boolean)
@@ -288,14 +348,19 @@ export default function JournalPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
         body: JSON.stringify({ content: fullContent, mood, source: 'text' }),
       })
-      if (res.ok) {
-        const { entry } = await res.json()
-        setEntries((prev) => [toJournalEntry(entry), ...prev])
-        setContent('')
-        setMood(50)
-        setPromptAnswers(['', ''])
-        fetchStats()
+      if (!res.ok) {
+        // Never clear the editor on failure — the draft is the only copy.
+        setSaveError(await readApiError(res, 'Could not save your entry.'))
+        return
       }
+      const { entry } = await res.json()
+      setEntries((prev) => [toJournalEntry(entry), ...prev])
+      setContent('')
+      setMood(MOOD_DEFAULT)
+      setPromptAnswers(['', ''])
+      fetchStats()
+    } catch {
+      setSaveError('Could not reach the server. Your entry is still here — try again.')
     } finally {
       setSaving(false)
     }
@@ -420,13 +485,14 @@ export default function JournalPage() {
             </label>
             <input
               type="range"
-              min="0"
-              max="100"
+              min={MOOD_MIN}
+              max={MOOD_MAX}
               value={mood}
               onChange={(e) => setMood(Number(e.target.value))}
               className="mood-slider"
             />
           </div>
+          {saveError && <p style={styles.error} role="alert">{saveError}</p>}
           <button
             onClick={handleSave}
             disabled={saving || (!content.trim() && promptAnswers.every((a) => !a.trim()))}
@@ -500,6 +566,14 @@ const styles: Record<string, React.CSSProperties> = {
   textarea: { width: '100%', minHeight: '120px', background: 'var(--input-bg)', color: 'var(--fg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '1rem', fontSize: '15px', lineHeight: 1.6, resize: 'vertical' as const },
   moodSection: { marginTop: '1rem', padding: '0.875rem', background: 'var(--bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' },
   moodLabel: { display: 'flex', alignItems: 'center', marginBottom: '0.5rem', fontSize: '13px', color: 'var(--fg-dim)' },
+  error: {
+    fontSize: '13px',
+    color: 'var(--danger)',
+    border: '1px solid var(--danger)',
+    borderRadius: 'var(--radius-md)',
+    padding: '0.625rem 0.875rem',
+    margin: '1rem 0 0',
+  },
   section: { marginBottom: '2rem' },
   sectionHeader: { display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' },
   sectionTitle: { fontSize: '12px', fontWeight: 600, margin: 0, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },

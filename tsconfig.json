@@ -19,6 +19,7 @@
       "@/*": ["src/*"]
     }
   },
-  "exclude": ["node_modules"],
+  // tests/ are run directly by node --experimental-strip-types, not by next build.
+  "exclude": ["node_modules", "tests"],
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"]
 }

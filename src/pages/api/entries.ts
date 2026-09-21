@@ -4,6 +4,7 @@ import { withAuth } from '../../lib/withAuth';
 import { sanitizeInput, validateContentLength, checkRateLimit } from '../../lib/security';
 import { withErrorHandler } from '../../lib/apiHelpers';
 import { createListEtag, isNotModified, setRevalidateHeaders } from '../../lib/httpCache';
+import { normalizeMood } from '../../lib/mood';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   return withAuth(req, res, async (req, res, userId) => {
@@ -45,7 +46,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     if (req.method === 'POST') {
-      const { content, source = 'text', created_at, mood, is_locked } = req.body;
+      const { content, source = 'text', created_at, mood, is_locked, title } = req.body;
 
       if (!content || typeof content !== 'string') {
         return res.status(400).json({ error: 'content required' });
@@ -62,12 +63,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         return res.status(400).json({ error: 'Content too long' });
       }
 
+      // Titles follow the same encrypted-payload rule as content.
+      let sanitizedTitle: string | null = null;
+      if (typeof title === 'string' && title.length > 0) {
+        const isEncryptedTitle = title.startsWith('enc2:') || title.startsWith('enc:');
+        sanitizedTitle = (isEncryptedTitle
+          ? title.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+          : sanitizeInput(title)
+        ).slice(0, 500) || null;
+      }
+
       const entry = await createEntry({
         content: sanitizedContent,
+        title: sanitizedTitle,
         source: sanitizeInput(source).slice(0, 50),
         created_at,
         user_id: userId,
-        mood: typeof mood === 'number' ? Math.min(100, Math.max(0, mood)) : null,
+        // entries.mood is CHECK-constrained to 1..10 — see lib/mood.ts
+        mood: normalizeMood(mood),
         is_locked: is_locked === true,
       });
       return res.status(201).json({ entry });

@@ -3,15 +3,8 @@ import { useRouter } from 'next/router';
 import { Nav } from '../components/Nav';
 import { useAuth } from '../lib/useAuth';
 import { encryptContent, decryptContent, isEncrypted } from '../lib/clientEncryption';
+import { MOOD_MIN, MOOD_MAX, MOOD_DEFAULT, getMoodLabel } from '../lib/mood';
 
-// Mood level mapping
-const getMoodLabel = (mood: number) => {
-  if (mood <= 20) return 'Low';
-  if (mood <= 40) return 'Below Average';
-  if (mood <= 60) return 'Neutral';
-  if (mood <= 80) return 'Good';
-  return 'Great';
-};
 
 // SECURITY: Cryptographically secure PIN hashing using PBKDF2
 // Uses 600,000 iterations as recommended by OWASP 2023
@@ -500,8 +493,8 @@ const MoodSlider = ({ value, onChange }: { value: number; onChange: (v: number) 
       </div>
       <input
         type="range"
-        min="0"
-        max="100"
+        min={MOOD_MIN}
+        max={MOOD_MAX}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
         className="mood-slider"
@@ -519,7 +512,7 @@ export default function LockedJournal() {
   // States
   const [entries, setEntries] = useState<any[]>([]);
   const [content, setContent] = useState('');
-  const [mood, setMood] = useState(50);
+  const [mood, setMood] = useState(MOOD_DEFAULT);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   
@@ -652,7 +645,7 @@ export default function LockedJournal() {
         }
         setEntries(prev => [json.entry, ...prev]);
         setContent('');
-        setMood(50);
+        setMood(MOOD_DEFAULT);
       }
     } catch {
       alert('Failed to save entry. Please try again.');
